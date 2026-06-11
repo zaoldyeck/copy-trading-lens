@@ -612,27 +612,48 @@
 
   function inferStrategy(summary, orders) {
     const labels = [];
-    let family = t("familyInsufficient");
+    let family = summary.closedTrades >= 30 ? t("familyNoMajorPattern") : t("familyInsufficient");
     const adverseRate = orders.adverseAddRate || 0;
     const highFrequency = orders.openOrders >= 200 || (summary.closedTrades >= 100 && summary.avgWinHoldHours < 3);
+    const veryHighFrequency = orders.openOrders >= 500 || (summary.closedTrades >= 300 && summary.avgWinHoldHours > 0 && summary.avgWinHoldHours < 1);
     const longLossHold = summary.avgLossHoldHours > Math.max(12, summary.avgWinHoldHours * 1.5);
     const poorPayoff = summary.payoffRatio !== null && summary.payoffRatio < 0.5;
     const strongPayoff = summary.payoffRatio !== null && summary.payoffRatio >= 1.5;
+    const addSizeExpansion = orders.initialOrderMedian > 0 && orders.addOrderMedian > orders.initialOrderMedian * 1.2;
+    const layeredAdds = orders.maxLayers >= 3 || adverseRate >= 0.2;
+    const tightGridSteps = orders.adverseStepMedianBps > 0 && orders.adverseStepMedianBps <= 120;
+    const shortHolds = summary.avgWinHoldHours > 0 && summary.avgWinHoldHours < 3;
+    const tinyTakeProfit = summary.tpMedianBps > 0 && summary.tpMedianBps <= 35;
+    const cleanTrendLike = summary.closedTrades >= 30
+      && adverseRate < 0.1
+      && strongPayoff
+      && summary.avgLossHoldHours > 0
+      && summary.avgLossHoldHours < summary.avgWinHoldHours;
 
-    if (adverseRate >= 0.35 && longLossHold) {
-      family = t("familyMartingaleGrid");
-      labels.push(t("labelAdverseAdd"), t("labelLongLossHold"));
+    if (adverseRate >= 0.35 && (addSizeExpansion || longLossHold || poorPayoff) && orders.maxLayers >= 3) {
+      family = t("familyMartingale");
+      labels.push(t("labelMartingale"), t("labelAdverseAdd"));
+      if (longLossHold) labels.push(t("labelLongLossHold"));
+    } else if (layeredAdds && tightGridSteps && highFrequency) {
+      family = t("familyGrid");
+      labels.push(t("labelGrid"), t("labelDca"), t("labelLeftSide"));
     } else if (adverseRate >= 0.35 && strongPayoff && summary.avgLossHoldHours < 1) {
       family = t("familyMeanReversionStop");
-      labels.push(t("labelAllowAdds"), t("labelFastLossClose"));
-    } else if (highFrequency && adverseRate < 0.1) {
-      family = t("familyBatchScalping");
-      labels.push(t("labelHighFreq"), t("labelSamePriceSplits"));
+      labels.push(t("labelDca"), t("labelLeftSide"), t("labelFastLossClose"));
     } else if (adverseRate >= 0.2) {
-      family = t("familyLayeredMeanReversion");
-      labels.push(t("labelLayeredAdds"));
+      family = t("familyDcaLeft");
+      labels.push(t("labelDca"), t("labelLeftSide"), t("labelLayeredAdds"));
+    } else if (veryHighFrequency && shortHolds && tinyTakeProfit && adverseRate < 0.1) {
+      family = t("familyMarketMaking");
+      labels.push(t("labelMarketMaking"), t("labelHighFreq"));
+    } else if (highFrequency && adverseRate < 0.1) {
+      family = t("familyScalping");
+      labels.push(t("labelScalping"), t("labelHighFreq"));
+    } else if (cleanTrendLike) {
+      family = t("familyRightTrend");
+      labels.push(t("labelRightSide"), t("labelFastLossClose"));
     } else if (summary.closedTrades >= 30 && summary.avgWinHoldHours > 24) {
-      family = t("familyLowFreqSwing");
+      family = t("familySwing");
       labels.push(t("labelLongHold"));
     }
 
@@ -652,6 +673,10 @@
     const copierPnlToAum = safeDivide(meta.copierPnl, meta.aum, 0);
     const adverseRate = orders.adverseAddRate || 0;
     const poorPayoff = summary.payoffRatio !== null && summary.payoffRatio < 0.5;
+    const strongPayoff = summary.payoffRatio !== null && summary.payoffRatio >= 1;
+    const lowMdd = Number.isFinite(meta.mdd) && meta.mdd < 15;
+    const enoughHistory = meta.days >= 60 && summary.closedTrades >= 50;
+    const cleanOpenRisk = live.openUnrealizedLossToMargin < 0.02 && live.openUnrealizedLoss < 2000;
     const destructiveMartingale = (
       adverseRate > 0.35
       && summary.avgLossHoldHours > 12
@@ -703,6 +728,9 @@
     } else if (cautions.length >= 3 || meta.mdd >= 30 || adverseRate >= 0.35 || poorPayoff) {
       level = "risky";
       title = t("verdictRisky");
+    } else if (enoughHistory && lowMdd && strongPayoff && adverseRate < 0.15 && cleanOpenRisk) {
+      level = "preferred";
+      title = t("verdictPreferred");
     } else if (meta.days >= 30 && summary.closedTrades >= 30) {
       level = "followable";
       title = t("verdictFollowSmall");
