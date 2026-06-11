@@ -4,11 +4,11 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
+const supportedLocales = ["en", "zh_TW", "zh_CN", "ja"];
 const requiredFiles = [
   "manifest.json",
   "popup.html",
-  "_locales/en/messages.json",
-  "_locales/zh_TW/messages.json",
+  ...supportedLocales.map((locale) => `_locales/${locale}/messages.json`),
   "src/i18n.js",
   "src/analysis.js",
   "src/providers.js",
@@ -22,6 +22,8 @@ const requiredFiles = [
   "assets/icons/icon128.png",
   "README.md",
   "README.zh-TW.md",
+  "README.zh-CN.md",
+  "README.ja.md",
   "PRIVACY.md"
 ];
 
@@ -46,6 +48,22 @@ if (!Array.isArray(manifest.host_permissions)) fail("manifest must include host_
 for (const host of manifest.host_permissions) {
   if (!["https://www.binance.com/*", "https://www.okx.com/*"].includes(host)) {
     fail(`unexpected host permission ${host}`);
+  }
+}
+
+const localeMessages = new Map();
+for (const locale of supportedLocales) {
+  const file = `_locales/${locale}/messages.json`;
+  const messages = JSON.parse(readFileSync(join(root, file), "utf8"));
+  localeMessages.set(locale, messages);
+}
+const defaultKeys = Object.keys(localeMessages.get("en")).sort();
+for (const locale of supportedLocales.filter((name) => name !== "en")) {
+  const keys = Object.keys(localeMessages.get(locale)).sort();
+  const missing = defaultKeys.filter((key) => !keys.includes(key));
+  const extra = keys.filter((key) => !defaultKeys.includes(key));
+  if (missing.length || extra.length) {
+    fail(`${locale} locale key mismatch; missing=[${missing.join(", ")}], extra=[${extra.join(", ")}]`);
   }
 }
 
