@@ -154,6 +154,7 @@
 
 .ctl-verdict.is-avoid { background: rgba(239, 68, 68, 0.18); border-color: rgba(239, 68, 68, 0.42); }
 .ctl-verdict.is-risky { background: rgba(245, 158, 11, 0.16); border-color: rgba(245, 158, 11, 0.38); }
+.ctl-verdict.is-preferred { background: rgba(20, 184, 166, 0.19); border-color: rgba(20, 184, 166, 0.48); }
 .ctl-verdict.is-followable { background: rgba(16, 185, 129, 0.14); border-color: rgba(16, 185, 129, 0.36); }
 .ctl-verdict.is-watch { background: rgba(59, 130, 246, 0.13); border-color: rgba(59, 130, 246, 0.32); }
 

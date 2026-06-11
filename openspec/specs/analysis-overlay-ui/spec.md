@@ -26,11 +26,23 @@ The extension SHALL keep the overlay collapsible and avoid blocking the exchange
 - **THEN** the overlay shrinks to a small launcher without covering the main page content
 
 ### Requirement: Provide actionable copy-trading guidance
-The overlay SHALL include practical setup guidance focused on follower safety, including avoiding immediate copy of existing positions when risky, using fixed ratio copy where supported, and using account-level stop loss. Strategy-family text SHALL explain the concrete copy-trading risk in plain language instead of relying on internal trading jargon.
+The overlay SHALL include practical setup guidance focused on follower safety, including avoiding immediate copy of existing positions when risky, using fixed ratio copy where supported, and using account-level stop loss. Strategy-family text SHALL use recognizable trading-style terms such as martingale, grid, DCA, left-side trading, right-side trading, scalping, market-making, and swing trading when supported by the data, and SHALL pair those terms with the concrete copy-trading risk or implication.
 
 #### Scenario: Current floating loss detected
 - **WHEN** current positions contain material unrealized losses
 - **THEN** the overlay warns against copying existing positions immediately
+
+#### Scenario: Cleaner trader passes positive thresholds
+- **WHEN** a trader has enough history, low MDD, acceptable payoff ratio, low adverse-add behavior, and no material current floating loss
+- **THEN** the overlay may display a stronger positive candidate verdict while still avoiding guaranteed-profit language
+
+#### Scenario: Sufficient history without a specific risk pattern
+- **WHEN** a trader has enough closed trades but no specific high-risk trading pattern is detected
+- **THEN** the strategy-family text states that no obvious high-risk pattern was detected instead of saying trade history is insufficient
+
+#### Scenario: Trading-style term is shown
+- **WHEN** the overlay classifies a trader as martingale, grid, DCA, left-side trading, right-side trading, scalping, market-making tendency, or swing trading
+- **THEN** the displayed text includes both the strategy term and why that style matters to a copier
 
 ### Requirement: Avoid investment guarantees
 The UI MUST NOT claim guaranteed profit, guaranteed safety, or definitive detection of every bad trader.
