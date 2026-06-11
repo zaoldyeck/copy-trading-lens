@@ -26,7 +26,7 @@ The extension SHALL keep the overlay collapsible and avoid blocking the exchange
 - **THEN** the overlay shrinks to a small launcher without covering the main page content
 
 ### Requirement: Provide actionable copy-trading guidance
-The overlay SHALL include practical setup guidance focused on follower safety, including avoiding immediate copy of existing positions when risky, using fixed ratio copy where supported, and using account-level stop loss.
+The overlay SHALL include practical setup guidance focused on follower safety, including avoiding immediate copy of existing positions when risky, using fixed ratio copy where supported, and using account-level stop loss. Strategy-family text SHALL explain the concrete copy-trading risk in plain language instead of relying on internal trading jargon.
 
 #### Scenario: Current floating loss detected
 - **WHEN** current positions contain material unrealized losses
