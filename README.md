@@ -9,15 +9,17 @@ Copy Trading Lens 是一個 Chrome Extension，用來在 Binance / OKX 個別跟
 - 支援 Binance 跟單員頁面：`/copy-trading/lead-details/<portfolioId>`
 - 支援 OKX 跟單員頁面：`/copy-trading/account/<uniqueName>`
 - 進入個別帶單員頁面後自動分析，不使用靜態帶單員名單
+- Binance 主績效優先由當下抓到的歷史交易、轉帳紀錄與目前帶單資金重建，不依賴頁面目前選到 7D/30D/90D/180D
 - 只在你的瀏覽器本機運算，沒有後端服務
 - 不收集、不上傳、不儲存 cookie、header、API key、帳戶資料
 - 顯示可解釋證據，而不是只給黑盒分數
 
 ## 分析內容
 
-Extension 會根據當前頁面能取得的資料，檢查：
+Extension 會根據當前頁面即時能取得的資料，檢查：
 
-- ROI / MDD / 交易天數 / 跟單者 PnL/AUM
+- 全期間 ROI / 全期間 PnL / MDD / 交易天數 / 跟單者 PnL/AUM
+- Binance 7D / 30D / 90D / 180D / 365D 交易所時間窗交叉檢查
 - 勝率、平均獲利、平均虧損、盈虧比、每筆期望值
 - 獲利單與虧損單持倉時間
 - 歷史訂單中的逆勢加倉、分層、最大層數與高頻拆單特徵
@@ -97,6 +99,8 @@ openspec/changes/build-copy-trading-lens-extension/
 ## 限制
 
 - 交易所 API 或頁面結構可能改版，導致部分資料暫時抓不到。
+- Binance 全期間 ROI 是用「目前帶單資金 + 已提領 - 已投入」重建；若 Binance 沒提供完整歷史轉帳或歷史倉位，面板會標示資料不完整或 `N/A`。
+- Binance 標準視窗 ROI/MDD 來自當下 live `query-list` API，只作交叉檢查，不作為靜態資料庫。
 - 未登入時，某些 Binance 資料可能不可見。
 - OKX 公開資料不像 Binance 訂單/轉帳資料那麼完整，因此部分判斷會比較保守。
 - Hidden positions 本身不會被當作負面訊號；只會標示資料不足。

@@ -77,22 +77,205 @@
     };
   }
 
+  function normalizeWindowMetric(row) {
+    if (!row || typeof row !== "object") return null;
+    const roi = num(row.roi, null);
+    const mdd = num(row.mdd, null);
+    return {
+      timeRange: row.timeRange || "",
+      roi,
+      mdd,
+      pnl: num(row.pnl, null),
+      startTime: num(row.startTime, null),
+      chartPoints: Array.isArray(row.chartItems) ? row.chartItems.length : 0,
+      lookupSource: row.lookupSource || "",
+      searchedPages: row.searchedPages || 0
+    };
+  }
+
+  function extractPerformanceWindows(raw) {
+    const windows = {};
+    for (const [timeRange, row] of Object.entries(raw.performanceWindows || {})) {
+      const metric = normalizeWindowMetric({ ...row, timeRange });
+      if (metric) windows[timeRange] = metric;
+    }
+    return windows;
+  }
+
+  function timeRangeDays(timeRange) {
+    const match = String(timeRange || "").match(/^(\d+)D$/);
+    return match ? Number(match[1]) : 0;
+  }
+
+  function pickLongestWindow(windows, days) {
+    const ordered = Object.keys(windows)
+      .map((timeRange) => ({ timeRange, days: timeRangeDays(timeRange) }))
+      .filter((item) => item.days > 0)
+      .sort((a, b) => b.days - a.days);
+    const supported = ordered.find((item) => !days || item.days <= days + 0.5);
+    return supported?.timeRange || ordered[0]?.timeRange || "";
+  }
+
+  function transferDirection(row) {
+    const type = String(row.transType || row.type || "").toUpperCase();
+    const from = String(row.from || "").toLowerCase();
+    const to = String(row.to || "").toLowerCase();
+    if (type.includes("WITHDRAW") || (from.includes("lead") && !to.includes("lead"))) return "out";
+    if (type.includes("INVEST") || type.includes("DEPOSIT") || (!from.includes("lead") && to.includes("lead"))) return "in";
+    return "";
+  }
+
+  function reconstructBinanceAllPeriodPerformance(raw, pageMetrics) {
+    const detail = raw.detail || {};
+    const positions = Array.isArray(raw.positionHistory) ? raw.positionHistory : [];
+    const transfers = Array.isArray(raw.transferHistory) ? raw.transferHistory : [];
+    const marginBalance = num(firstDefined(detail.marginBalance, detail.marginAsset), null);
+    const historyStatus = raw.historyStatus || {};
+    const events = [];
+    let grossDeposits = 0;
+    let withdrawals = 0;
+    let currentEquityFromEvents = 0;
+    let firstEventTime = Infinity;
+    let lastEventTime = 0;
+
+    for (const transfer of transfers) {
+      const ts = num(firstDefined(transfer.time, transfer.ts, transfer.cTime), 0);
+      const amount = Math.abs(num(firstDefined(transfer.amount, transfer.amt), 0));
+      if (!ts || !amount) continue;
+      const direction = transferDirection(transfer);
+      if (!direction) continue;
+      firstEventTime = Math.min(firstEventTime, ts);
+      lastEventTime = Math.max(lastEventTime, ts);
+      events.push({ ts, kind: "transfer", direction, amount });
+      if (direction === "in") grossDeposits += amount;
+      if (direction === "out") withdrawals += amount;
+    }
+
+    let realizedPnl = 0;
+    for (const position of positions) {
+      const closed = num(firstDefined(position.closed, position.closeTime, position.updateTime), 0);
+      const opened = num(firstDefined(position.opened, position.openTime, position.createTime), 0);
+      const pnl = binancePositionPnl(position);
+      if (opened) firstEventTime = Math.min(firstEventTime, opened);
+      if (closed) {
+        firstEventTime = Math.min(firstEventTime, closed);
+        lastEventTime = Math.max(lastEventTime, closed);
+        events.push({ ts: closed, kind: "pnl", amount: pnl });
+      }
+      realizedPnl += pnl;
+    }
+
+    events.sort((a, b) => a.ts - b.ts);
+    let equity = 0;
+    let cumulativeIn = 0;
+    let cumulativeOut = 0;
+    let peakReturn = null;
+    let reconstructedMdd = 0;
+    const curve = [];
+
+    for (const event of events) {
+      if (event.kind === "transfer") {
+        if (event.direction === "in") {
+          equity += event.amount;
+          cumulativeIn += event.amount;
+        } else {
+          equity -= event.amount;
+          cumulativeOut += event.amount;
+        }
+      } else if (event.kind === "pnl") {
+        equity += event.amount;
+      }
+      currentEquityFromEvents = equity;
+      if (cumulativeIn > 0) {
+        const returnPct = (equity + cumulativeOut - cumulativeIn) / cumulativeIn * 100;
+        if (peakReturn === null) peakReturn = returnPct;
+        peakReturn = Math.max(peakReturn, returnPct);
+        reconstructedMdd = Math.max(reconstructedMdd, peakReturn - returnPct);
+        curve.push({ ts: event.ts, returnPct });
+      }
+    }
+
+    const currentEquity = Number.isFinite(marginBalance) ? marginBalance : currentEquityFromEvents;
+    if (cumulativeIn > 0 && Number.isFinite(currentEquity)) {
+      const finalReturn = (currentEquity + cumulativeOut - cumulativeIn) / cumulativeIn * 100;
+      if (peakReturn === null) peakReturn = finalReturn;
+      peakReturn = Math.max(peakReturn, finalReturn);
+      reconstructedMdd = Math.max(reconstructedMdd, peakReturn - finalReturn);
+      curve.push({ ts: Date.now(), returnPct: finalReturn });
+    }
+
+    const netProfit = Number.isFinite(currentEquity)
+      ? currentEquity + withdrawals - grossDeposits
+      : null;
+    const roi = grossDeposits > 0 && Number.isFinite(netProfit)
+      ? netProfit / grossDeposits * 100
+      : null;
+
+    const detailStart = num(firstDefined(detail.startTime, pageMetrics.tradingDays ? Date.now() - pageMetrics.tradingDays * DAY_MS : 0), 0);
+    const firstAt = Number.isFinite(firstEventTime) ? firstEventTime : detailStart;
+    const startGapDays = detailStart && firstAt ? Math.max(0, (firstAt - detailStart) / DAY_MS) : 0;
+    const complete = Boolean(
+      historyStatus.positionHistory?.complete
+      && historyStatus.transferHistory?.complete
+    );
+    const reliable = Boolean(
+      Number.isFinite(roi)
+      && grossDeposits > 0
+      && complete
+      && (!detailStart || startGapDays <= 2)
+    );
+
+    return {
+      roi,
+      mdd: curve.length >= 2 ? reconstructedMdd : null,
+      netProfit,
+      realizedPnl,
+      grossDeposits,
+      withdrawals,
+      currentEquity: Number.isFinite(currentEquity) ? currentEquity : null,
+      currentEquityFromEvents,
+      firstEventTime: firstAt || null,
+      lastEventTime: lastEventTime || null,
+      closedTrades: positions.length,
+      curvePoints: curve.length,
+      complete,
+      reliable,
+      startGapDays,
+      source: "cash-flow-reconstruction"
+    };
+  }
+
   function extractBinanceMeta(raw, pageMetrics) {
     const detail = raw.detail || {};
     const listItem = raw.listItem || {};
-    const startTime = num(firstDefined(listItem.startTime, detail.startTime), 0);
+    const performanceWindows = extractPerformanceWindows(raw);
+    const reconstructed = reconstructBinanceAllPeriodPerformance(raw, pageMetrics);
+    const startTime = num(firstDefined(detail.startTime, listItem.startTime, reconstructed.firstEventTime), 0);
     const daysFromStart = startTime > 0 ? (Date.now() - startTime) / DAY_MS : 0;
-    const roi = num(firstDefined(listItem.roi, detail.roi, detail.yieldRate, pageMetrics.roi), 0);
-    const mdd = num(firstDefined(listItem.mdd, detail.mdd, detail.maxDrawdown, pageMetrics.mdd), 0);
+    const days = num(firstDefined(detail.tradeDays, detail.runningDays, detail.leadDays, pageMetrics.tradingDays), daysFromStart);
+    const primaryWindow = pickLongestWindow(performanceWindows, days);
+    const primaryWindowMetric = primaryWindow ? performanceWindows[primaryWindow] : null;
+    const worstWindowMdd = Object.values(performanceWindows)
+      .map((metric) => metric.mdd)
+      .filter((value) => Number.isFinite(value))
+      .reduce((maxValue, value) => Math.max(maxValue, value), null);
+    const roi = num(firstDefined(reconstructed.roi, primaryWindowMetric?.roi, detail.roi, detail.yieldRate, pageMetrics.roi), null);
+    const mdd = num(firstDefined(worstWindowMdd, reconstructed.mdd, detail.mdd, detail.maxDrawdown, pageMetrics.mdd), null);
+    const performanceSource = Number.isFinite(reconstructed.roi)
+      ? "歷史現金流重建"
+      : (primaryWindow ? `交易所 ${primaryWindow} 視窗` : "頁面/API fallback");
+    const performanceQuality = reconstructed.reliable
+      ? "完整"
+      : (Number.isFinite(reconstructed.roi) ? "可重建但需看完整度" : "不可重建");
     return {
       name: String(firstDefined(detail.nickname, listItem.nickname, raw.pageTitle, "Unknown Binance Lead")),
       id: raw.id,
       exchange: "Binance",
       url: raw.url,
-      days: num(firstDefined(detail.tradeDays, detail.runningDays, detail.leadDays, pageMetrics.tradingDays), daysFromStart),
+      days,
       roi,
       mdd,
-      pnl: num(firstDefined(listItem.pnl, detail.pnl, pageMetrics.pnl), 0),
+      pnl: num(firstDefined(reconstructed.netProfit, listItem.pnl, detail.pnl, pageMetrics.pnl), null),
       copierPnl: num(firstDefined(detail.copierPnl, pageMetrics.copierPnl), 0),
       aum: num(firstDefined(detail.aumAmount, listItem.aum), 0),
       marginBalance: num(firstDefined(detail.marginBalance, detail.marginAsset), 0),
@@ -105,7 +288,12 @@
       positionShow: detail.positionShow,
       lastTradeTime: num(detail.lastTradeTime, 0),
       description: String(firstDefined(detail.description, detail.descTranslate, "")),
-      pageMetrics
+      pageMetrics,
+      performanceSource,
+      performanceQuality,
+      primaryWindow,
+      allPeriodPerformance: reconstructed,
+      performanceWindows
     };
   }
 
@@ -403,8 +591,11 @@
     if (summary.closedTrades >= 50) positives.push(`已平倉樣本 ${summary.closedTrades} 筆，可初步判讀交易行為。`);
     if (summary.payoffRatio !== null && summary.payoffRatio >= 1) positives.push(`平均盈虧比 ${summary.payoffRatio.toFixed(2)}，不是典型贏小賠大。`);
     if (summary.avgLossHoldHours > 0 && summary.avgLossHoldHours < summary.avgWinHoldHours) positives.push("虧損單平均持倉短於獲利單，停損行為相對乾淨。");
+    if (meta.allPeriodPerformance?.reliable) positives.push("全期間績效可由歷史現金流與目前資金重建，主 ROI 不依賴目前頁面時間範圍。");
 
     if (meta.days > 0 && meta.days < 30) cautions.push(`交易天數只有 ${meta.days.toFixed(1)} 天，還沒滿最低 30 天觀察門檻。`);
+    if (!Number.isFinite(meta.roi)) cautions.push("全期間 ROI 目前無法可靠重建，不能只看頁面局部時間窗。");
+    if (Number.isFinite(meta.roi) && !meta.allPeriodPerformance?.reliable) cautions.push("全期間 ROI 是用可取得資料重建，但歷史完整度或起始點仍需留意。");
     if (summary.closedTrades > 0 && summary.closedTrades < 30) cautions.push(`已平倉樣本只有 ${summary.closedTrades} 筆，單筆交易會嚴重影響結論。`);
     if (meta.mdd >= 30) cautions.push(`頁面/排行可見 MDD 約 ${formatPct(meta.mdd)}，新跟單者可能一開始就承受大回撤。`);
     if (summary.maxLossHoldHours >= 72) cautions.push(`歷史虧損單最長持倉 ${formatHours(summary.maxLossHoldHours)}，有死扛風險。`);
@@ -474,7 +665,9 @@
         positionHistory: (raw.positionHistory || []).length,
         orderHistory: (raw.orderHistory || []).length,
         transferHistory: (raw.transferHistory || []).length,
-        livePositions: (raw.livePositions || []).length
+        livePositions: (raw.livePositions || []).length,
+        performanceWindows: Object.keys(raw.performanceWindows || {}).length,
+        historyStatus: raw.historyStatus || {}
       }
     };
   }
