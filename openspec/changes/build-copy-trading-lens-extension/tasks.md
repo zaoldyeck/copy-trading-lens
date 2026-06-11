@@ -36,6 +36,6 @@
 ## 6. Verification, GitHub, And Handoff
 
 - [x] 6.1 Run extension validation, JavaScript syntax checks, and package generation.
-- [ ] 6.2 Initialize git, commit the public extension project, and verify tracked files contain no private header/cookie/cache data.
-- [ ] 6.3 Create or update the public GitHub repository and push the current branch.
-- [ ] 6.4 Report the GitHub URL, Chrome Web Store zip path, validation commands, and any remaining limitations.
+- [x] 6.2 Initialize git, commit the public extension project, and verify tracked files contain no private header/cookie/cache data.
+- [x] 6.3 Create or update the public GitHub repository and push the current branch.
+- [x] 6.4 Report the GitHub URL, Chrome Web Store zip path, validation commands, and any remaining limitations.
