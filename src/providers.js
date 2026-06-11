@@ -4,6 +4,8 @@
   const BINANCE_BASE = "https://www.binance.com";
   const OKX_BASE = "https://www.okx.com";
   const PAGE_SIZE = 100;
+  const LIST_PAGE_SIZE = 30;
+  const BINANCE_TIME_RANGES = ["7D", "30D", "90D", "180D", "365D"];
 
   function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
@@ -74,8 +76,11 @@
     return asArray(response?.data?.list);
   }
 
-  async function fetchBinancePaged(path, portfolioId, maxPages = 6) {
+  async function fetchBinancePagedDetailed(path, portfolioId, maxPages = 80) {
     const rows = [];
+    let total = null;
+    let pages = 0;
+    let lastPageWasShort = false;
     for (let pageNumber = 1; pageNumber <= maxPages; pageNumber += 1) {
       const response = await postBinance(path, {
         portfolioId,
@@ -86,37 +91,91 @@
         throw new Error(`Binance ${path} returned code ${response.code}`);
       }
       const pageRows = binanceDataList(response);
+      pages = pageNumber;
+      if (response?.data?.total !== undefined && response?.data?.total !== null) {
+        total = Number(response.data.total);
+      }
       rows.push(...pageRows);
-      if (pageRows.length < PAGE_SIZE) break;
+      lastPageWasShort = pageRows.length < PAGE_SIZE;
+      if (lastPageWasShort) break;
+      if (Number.isFinite(total) && rows.length >= total) break;
       await sleep(120);
     }
-    return rows;
+    const complete = Number.isFinite(total)
+      ? rows.length >= total
+      : lastPageWasShort;
+    return {
+      rows,
+      total: Number.isFinite(total) ? total : rows.length,
+      fetched: rows.length,
+      pages,
+      complete,
+      maxPagesReached: !complete && pages >= maxPages
+    };
   }
 
-  async function fetchBinanceListItem(portfolioId, timeRange = "30D") {
-    const maxPages = 6;
+  async function fetchBinanceListPage(timeRange, pageNumber, nickname = "") {
+    const response = await postBinance("/bapi/futures/v1/friendly/future/copy-trade/home-page/query-list", {
+      pageNumber,
+      pageSize: LIST_PAGE_SIZE,
+      timeRange,
+      dataType: "ROI",
+      favoriteOnly: false,
+      hideFull: false,
+      nickname,
+      order: "DESC",
+      userAsset: 0
+    });
+    if (response?.code && response.code !== "000000") {
+      throw new Error(`Binance list returned code ${response.code}`);
+    }
+    return {
+      total: Number(response?.data?.total ?? 0),
+      rows: asArray(response?.data?.list)
+    };
+  }
+
+  async function fetchBinanceListItem(portfolioId, timeRange = "30D", nickname = "") {
+    if (nickname) {
+      const filtered = await fetchBinanceListPage(timeRange, 1, nickname);
+      const found = filtered.rows.find((row) => String(row.leadPortfolioId) === String(portfolioId));
+      if (found) return { item: found, source: "nickname", searchedPages: 1, total: filtered.total };
+    }
+
+    const maxPages = 20;
     for (let pageNumber = 1; pageNumber <= maxPages; pageNumber += 1) {
-      const response = await postBinance("/bapi/futures/v1/friendly/future/copy-trade/home-page/query-list", {
-        pageNumber,
-        pageSize: 30,
-        timeRange,
-        dataType: "ROI",
-        favoriteOnly: false,
-        hideFull: false,
-        nickname: "",
-        order: "DESC",
-        userAsset: 0
-      });
-      if (response?.code && response.code !== "000000") {
-        throw new Error(`Binance list returned code ${response.code}`);
-      }
-      const rows = asArray(response?.data?.list);
+      const page = await fetchBinanceListPage(timeRange, pageNumber, "");
+      const rows = page.rows;
       const found = rows.find((row) => String(row.leadPortfolioId) === String(portfolioId));
-      if (found) return found;
-      if (rows.length < 30) break;
+      if (found) return { item: found, source: "scan", searchedPages: pageNumber, total: page.total };
+      if (rows.length < LIST_PAGE_SIZE) break;
       await sleep(120);
     }
     return null;
+  }
+
+  async function fetchBinancePerformanceWindows(portfolioId, detail) {
+    const nickname = String(detail?.nickname || detail?.nicknameTranslate || "").trim();
+    const endpointResults = {};
+    const windows = {};
+
+    await Promise.all(BINANCE_TIME_RANGES.map(async (timeRange) => {
+      const result = await safeFetch(`performance:${timeRange}`, () =>
+        fetchBinanceListItem(portfolioId, timeRange, nickname)
+      );
+      endpointResults[`performance:${timeRange}`] = result;
+      if (result.ok && result.data?.item) {
+        windows[timeRange] = {
+          ...result.data.item,
+          timeRange,
+          lookupSource: result.data.source,
+          searchedPages: result.data.searchedPages,
+          total: result.data.total
+        };
+      }
+    }));
+
+    return { windows, endpointResults };
   }
 
   async function fetchBinanceLead(context) {
@@ -130,38 +189,68 @@
     );
     endpointResults.detail = detailResult;
 
-    const [listItem, live, positionHistory, orderHistory, transferHistory] = await Promise.all([
-      safeFetch("listItem", () => fetchBinanceListItem(portfolioId)),
+    const detailData = detailResult.ok ? (detailResult.data?.data || {}) : {};
+    const performance = await fetchBinancePerformanceWindows(portfolioId, detailData);
+    Object.assign(endpointResults, performance.endpointResults);
+
+    const [live, positionHistory, orderHistory, transferHistory] = await Promise.all([
       safeFetch("livePositions", () =>
         getBinance(`/bapi/futures/v1/friendly/future/copy-trade/lead-data/positions?portfolioId=${encodeURIComponent(portfolioId)}`)
       ),
       safeFetch("positionHistory", () =>
-        fetchBinancePaged("/bapi/futures/v1/friendly/future/copy-trade/lead-portfolio/position-history", portfolioId, 15)
+        fetchBinancePagedDetailed("/bapi/futures/v1/friendly/future/copy-trade/lead-portfolio/position-history", portfolioId, 120)
       ),
       safeFetch("orderHistory", () =>
-        fetchBinancePaged("/bapi/futures/v1/friendly/future/copy-trade/lead-portfolio/order-history", portfolioId, 15)
+        fetchBinancePagedDetailed("/bapi/futures/v1/friendly/future/copy-trade/lead-portfolio/order-history", portfolioId, 120)
       ),
       safeFetch("transferHistory", () =>
-        fetchBinancePaged("/bapi/futures/v1/friendly/future/copy-trade/lead-portfolio/transfer-history", portfolioId, 6)
+        fetchBinancePagedDetailed("/bapi/futures/v1/friendly/future/copy-trade/lead-portfolio/transfer-history", portfolioId, 120)
       )
     ]);
-    endpointResults.listItem = listItem;
     endpointResults.livePositions = live;
     endpointResults.positionHistory = positionHistory;
     endpointResults.orderHistory = orderHistory;
     endpointResults.transferHistory = transferHistory;
+
+    const positionData = positionHistory.ok ? positionHistory.data : {};
+    const orderData = orderHistory.ok ? orderHistory.data : {};
+    const transferData = transferHistory.ok ? transferHistory.data : {};
 
     return {
       id: portfolioId,
       url: location.href,
       pageTitle,
       visibleText,
-      detail: detailResult.ok ? (detailResult.data?.data || {}) : {},
-      listItem: listItem.ok ? (listItem.data || {}) : {},
+      detail: detailData,
+      performanceWindows: performance.windows,
+      listItem: performance.windows["30D"] || performance.windows["365D"] || {},
       livePositions: live.ok ? binanceDataList(live.data) : [],
-      positionHistory: positionHistory.ok ? positionHistory.data : [],
-      orderHistory: orderHistory.ok ? orderHistory.data : [],
-      transferHistory: transferHistory.ok ? transferHistory.data : [],
+      positionHistory: positionHistory.ok ? asArray(positionData.rows) : [],
+      orderHistory: orderHistory.ok ? asArray(orderData.rows) : [],
+      transferHistory: transferHistory.ok ? asArray(transferData.rows) : [],
+      historyStatus: {
+        positionHistory: positionHistory.ok ? {
+          total: positionData.total,
+          fetched: positionData.fetched,
+          pages: positionData.pages,
+          complete: positionData.complete,
+          maxPagesReached: positionData.maxPagesReached
+        } : { total: 0, fetched: 0, pages: 0, complete: false, error: positionHistory.error },
+        orderHistory: orderHistory.ok ? {
+          total: orderData.total,
+          fetched: orderData.fetched,
+          pages: orderData.pages,
+          complete: orderData.complete,
+          maxPagesReached: orderData.maxPagesReached
+        } : { total: 0, fetched: 0, pages: 0, complete: false, error: orderHistory.error },
+        transferHistory: transferHistory.ok ? {
+          total: transferData.total,
+          fetched: transferData.fetched,
+          pages: transferData.pages,
+          complete: transferData.complete,
+          maxPagesReached: transferData.maxPagesReached
+        } : { total: 0, fetched: 0, pages: 0, complete: false, error: transferHistory.error }
+      },
       endpointResults
     };
   }

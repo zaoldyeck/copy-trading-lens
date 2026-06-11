@@ -85,6 +85,43 @@
     return h("ul", { class: "ctl-list" }, list.slice(0, 8).map((item) => h("li", { text: item })));
   }
 
+  function performanceWindowTable(meta, fmt) {
+    const windows = meta.performanceWindows || {};
+    const ordered = ["7D", "30D", "90D", "180D", "365D"].filter((range) => windows[range]);
+    if (!ordered.length) return h("p", { class: "ctl-muted", text: "沒有抓到交易所標準時間窗資料。" });
+    return h("table", { class: "ctl-table" }, [
+      h("thead", {}, h("tr", {}, [
+        h("th", { text: "時間窗" }),
+        h("th", { text: "ROI" }),
+        h("th", { text: "MDD" }),
+        h("th", { text: "來源" })
+      ])),
+      h("tbody", {}, ordered.map((range) => {
+        const metric = windows[range] || {};
+        return h("tr", {}, [
+          h("td", { text: range }),
+          h("td", { text: fmt.formatPct(metric.roi) }),
+          h("td", { text: fmt.formatPct(metric.mdd) }),
+          h("td", { text: metric.lookupSource || "API" })
+        ]);
+      }))
+    ]);
+  }
+
+  function historyCompleteness(raw) {
+    const status = raw.historyStatus || {};
+    const items = [
+      ["倉位歷史", status.positionHistory],
+      ["訂單歷史", status.orderHistory],
+      ["轉帳歷史", status.transferHistory]
+    ];
+    return items.map(([label, item]) => {
+      if (!item) return `${label}: N/A`;
+      const state = item.complete ? "完整" : "部分";
+      return `${label}: ${item.fetched || 0}/${item.total || 0} ${state}`;
+    }).join("；");
+  }
+
   function settingAdvice(analysis) {
     const cautions = [];
     if (analysis.live.openUnrealizedLoss > 0) {
@@ -179,8 +216,9 @@
         ]),
         strategy.labels?.length ? h("div", { class: "ctl-tags" }, strategy.labels.map((label) => h("span", { text: label }))) : null,
         h("div", { class: "ctl-grid" }, [
-          metricCard("ROI", fmt.formatPct(meta.roi), "頁面/API 可見"),
-          metricCard("MDD", fmt.formatPct(meta.mdd), "可見最大回撤"),
+          metricCard("全期間 ROI", fmt.formatPct(meta.roi), meta.performanceSource || "歷史/API"),
+          metricCard("MDD", fmt.formatPct(meta.mdd), meta.primaryWindow ? "交易所時間窗最大值" : (meta.performanceQuality || "資料品質")),
+          metricCard("全期間 PnL", fmt.formatMoney(meta.pnl), "目前資金 + 提領 - 投入"),
           metricCard("交易天數", meta.days ? `${meta.days.toFixed(0)} 天` : "N/A"),
           metricCard("跟單 PnL/AUM", meta.aum ? `${(meta.copierPnl / meta.aum * 100).toFixed(1)}%` : "N/A"),
           metricCard("勝率", fmt.formatPct(summary.winRate * 100), `${summary.closedTrades} 筆已平倉`),
@@ -189,6 +227,11 @@
           metricCard("逆勢加倉", fmt.formatPct(orders.adverseAddRate * 100), `${orders.adverseAdds}/${orders.openOrders}`),
           metricCard("目前浮虧", fmt.formatMoney(live.openUnrealizedLoss), `${(live.openUnrealizedLossToMargin * 100).toFixed(1)}% margin`),
           metricCard("歷史關閉", String(meta.closeLeadCount || 0), "portfolio restart")
+        ]),
+        h("section", { class: "ctl-section" }, [
+          h("h3", { text: "時間窗交叉檢查" }),
+          performanceWindowTable(meta, fmt),
+          h("p", { class: "ctl-muted ctl-small-note", text: `歷史資料：${historyCompleteness(raw)}` })
         ]),
         h("section", { class: "ctl-section" }, [
           h("h3", { text: "主要風險" }),

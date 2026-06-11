@@ -1,6 +1,6 @@
 {
   "name": "copy-trading-lens",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": false,
   "description": "Chrome Extension for live Binance/OKX copy-trader risk analysis.",
   "type": "module",
