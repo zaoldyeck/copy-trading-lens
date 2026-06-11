@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Copy Trading Lens",
   "short_name": "CopyLens",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "即時分析 Binance 與 OKX 跟單員頁面的策略型態、風險與跟單可複製性。",
   "minimum_chrome_version": "114",
   "action": {

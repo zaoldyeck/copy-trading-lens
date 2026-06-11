@@ -76,41 +76,99 @@
     return asArray(response?.data?.list);
   }
 
-  async function fetchBinancePagedDetailed(path, portfolioId, maxPages = 80) {
+  function binanceCodeError(path, response) {
+    const code = response?.code || "UNKNOWN";
+    const message = response?.message || response?.msg || "Unknown Binance response";
+    return `Binance ${path} returned code ${code}: ${message}`;
+  }
+
+  function isRetriableBinanceError(message) {
+    const text = String(message || "").toLowerCase();
+    return text.includes("11012005")
+      || text.includes("系統目前忙碌")
+      || text.includes("system is busy")
+      || text.includes("failed to fetch")
+      || text.includes("network")
+      || text.includes("timeout")
+      || text.includes("http 408")
+      || text.includes("http 418")
+      || text.includes("http 429")
+      || text.includes("http 5");
+  }
+
+  function retryDelayMs(attempt) {
+    const base = Math.min(15000, 500 * (2 ** Math.min(attempt - 1, 5)));
+    return base + Math.floor(Math.random() * 250);
+  }
+
+  async function fetchBinancePagedPage(path, portfolioId, pageNumber, pageSize) {
+    let lastError = "";
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        const response = await postBinance(path, {
+          portfolioId,
+          pageNumber,
+          pageSize
+        });
+        if (!response?.code || response.code === "000000") {
+          return {
+            response,
+            retries: attempt - 1,
+            lastRetryError: lastError
+          };
+        }
+        lastError = binanceCodeError(path, response);
+      } catch (fetchError) {
+        lastError = fetchError instanceof Error ? fetchError.message : String(fetchError);
+      }
+      if (!isRetriableBinanceError(lastError)) {
+        throw new Error(lastError);
+      }
+      await sleep(retryDelayMs(attempt));
+    }
+  }
+
+  async function fetchBinancePagedDetailed(path, portfolioId) {
     const rows = [];
     let total = null;
     let pages = 0;
-    let lastPageWasShort = false;
-    for (let pageNumber = 1; pageNumber <= maxPages; pageNumber += 1) {
-      const response = await postBinance(path, {
-        portfolioId,
-        pageNumber,
-        pageSize: PAGE_SIZE
-      });
-      if (response?.code && response.code !== "000000") {
-        throw new Error(`Binance ${path} returned code ${response.code}`);
-      }
+    let retryCount = 0;
+    let lastRetryError = "";
+    for (let pageNumber = 1; ; pageNumber += 1) {
+      const page = await fetchBinancePagedPage(path, portfolioId, pageNumber, PAGE_SIZE);
+      const response = page.response;
+      retryCount += page.retries;
+      if (page.lastRetryError) lastRetryError = page.lastRetryError;
       const pageRows = binanceDataList(response);
-      pages = pageNumber;
-      if (response?.data?.total !== undefined && response?.data?.total !== null) {
-        total = Number(response.data.total);
+      const responseTotal = response?.data?.total !== undefined && response?.data?.total !== null
+        ? Number(response.data.total)
+        : null;
+      if (Number.isFinite(responseTotal)) total = responseTotal;
+
+      const prematureShortPage = Number.isFinite(total)
+        && pageNumber * PAGE_SIZE < total
+        && pageRows.length < PAGE_SIZE;
+      if (prematureShortPage) {
+        lastRetryError = `Binance ${path} page ${pageNumber} returned short data before total was reached`;
+        await sleep(retryDelayMs(1));
+        pageNumber -= 1;
+        continue;
       }
+
+      pages = pageNumber;
       rows.push(...pageRows);
-      lastPageWasShort = pageRows.length < PAGE_SIZE;
-      if (lastPageWasShort) break;
       if (Number.isFinite(total) && rows.length >= total) break;
+      if (!Number.isFinite(total) && pageRows.length < PAGE_SIZE) break;
       await sleep(120);
     }
-    const complete = Number.isFinite(total)
-      ? rows.length >= total
-      : lastPageWasShort;
     return {
       rows,
       total: Number.isFinite(total) ? total : rows.length,
       fetched: rows.length,
       pages,
-      complete,
-      maxPagesReached: !complete && pages >= maxPages
+      complete: true,
+      retryCount,
+      lastRetryError
     };
   }
 
@@ -198,13 +256,13 @@
         getBinance(`/bapi/futures/v1/friendly/future/copy-trade/lead-data/positions?portfolioId=${encodeURIComponent(portfolioId)}`)
       ),
       safeFetch("positionHistory", () =>
-        fetchBinancePagedDetailed("/bapi/futures/v1/friendly/future/copy-trade/lead-portfolio/position-history", portfolioId, 120)
+        fetchBinancePagedDetailed("/bapi/futures/v1/friendly/future/copy-trade/lead-portfolio/position-history", portfolioId)
       ),
       safeFetch("orderHistory", () =>
-        fetchBinancePagedDetailed("/bapi/futures/v1/friendly/future/copy-trade/lead-portfolio/order-history", portfolioId, 120)
+        fetchBinancePagedDetailed("/bapi/futures/v1/friendly/future/copy-trade/lead-portfolio/order-history", portfolioId)
       ),
       safeFetch("transferHistory", () =>
-        fetchBinancePagedDetailed("/bapi/futures/v1/friendly/future/copy-trade/lead-portfolio/transfer-history", portfolioId, 120)
+        fetchBinancePagedDetailed("/bapi/futures/v1/friendly/future/copy-trade/lead-portfolio/transfer-history", portfolioId)
       )
     ]);
     endpointResults.livePositions = live;
@@ -234,21 +292,24 @@
           fetched: positionData.fetched,
           pages: positionData.pages,
           complete: positionData.complete,
-          maxPagesReached: positionData.maxPagesReached
+          retryCount: positionData.retryCount,
+          lastRetryError: positionData.lastRetryError
         } : { total: 0, fetched: 0, pages: 0, complete: false, error: positionHistory.error },
         orderHistory: orderHistory.ok ? {
           total: orderData.total,
           fetched: orderData.fetched,
           pages: orderData.pages,
           complete: orderData.complete,
-          maxPagesReached: orderData.maxPagesReached
+          retryCount: orderData.retryCount,
+          lastRetryError: orderData.lastRetryError
         } : { total: 0, fetched: 0, pages: 0, complete: false, error: orderHistory.error },
         transferHistory: transferHistory.ok ? {
           total: transferData.total,
           fetched: transferData.fetched,
           pages: transferData.pages,
           complete: transferData.complete,
-          maxPagesReached: transferData.maxPagesReached
+          retryCount: transferData.retryCount,
+          lastRetryError: transferData.lastRetryError
         } : { total: 0, fetched: 0, pages: 0, complete: false, error: transferHistory.error }
       },
       endpointResults

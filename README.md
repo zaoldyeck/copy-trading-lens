@@ -10,6 +10,7 @@ Copy Trading Lens 是一個 Chrome Extension，用來在 Binance / OKX 個別跟
 - 支援 OKX 跟單員頁面：`/copy-trading/account/<uniqueName>`
 - 進入個別帶單員頁面後自動分析，不使用靜態帶單員名單
 - Binance 主績效優先由當下抓到的歷史交易、轉帳紀錄與目前帶單資金重建，不依賴頁面目前選到 7D/30D/90D/180D
+- Binance 歷史分頁遇到 `系統忙碌`、網路抖動、429/5xx 等暫時錯誤時會持續重試，直到抓完可用歷史資料
 - 只在你的瀏覽器本機運算，沒有後端服務
 - 不收集、不上傳、不儲存 cookie、header、API key、帳戶資料
 - 顯示可解釋證據，而不是只給黑盒分數

@@ -62,10 +62,27 @@
     return `${ok}/${total} endpoints 可用`;
   }
 
+  function endpointLabel(label) {
+    const labels = {
+      detail: "基本資料",
+      livePositions: "目前持倉",
+      positionHistory: "倉位歷史",
+      orderHistory: "訂單歷史",
+      transferHistory: "轉帳歷史",
+      candidate: "排行/profile",
+      "performance:7D": "7D績效",
+      "performance:30D": "30D績效",
+      "performance:90D": "90D績效",
+      "performance:180D": "180D績效",
+      "performance:365D": "365D績效"
+    };
+    return labels[label] || label;
+  }
+
   function endpointList(endpointResults) {
     return h("div", { class: "ctl-endpoints" }, Object.values(endpointResults || {}).map((item) =>
       h("div", { class: `ctl-endpoint ${item.ok ? "is-ok" : "is-fail"}` }, [
-        h("span", { text: item.label }),
+        h("span", { text: endpointLabel(item.label), title: item.error || "" }),
         h("strong", { text: item.ok ? "OK" : "FAIL" })
       ])
     ));
@@ -117,8 +134,11 @@
     ];
     return items.map(([label, item]) => {
       if (!item) return `${label}: N/A`;
-      const state = item.complete ? "完整" : "部分";
-      return `${label}: ${item.fetched || 0}/${item.total || 0} ${state}`;
+      if (item.error) return `${label}: 失敗`;
+      if (!item.total && !item.fetched) return `${label}: 無資料`;
+      const retries = item.retryCount ? `，重試 ${item.retryCount} 次` : "";
+      const state = item.complete ? "完整" : "未完整";
+      return `${label}: ${item.fetched || 0}/${item.total || 0} ${state}${retries}`;
     }).join("；");
   }
 
@@ -229,11 +249,6 @@
           metricCard("歷史關閉", String(meta.closeLeadCount || 0), "portfolio restart")
         ]),
         h("section", { class: "ctl-section" }, [
-          h("h3", { text: "時間窗交叉檢查" }),
-          performanceWindowTable(meta, fmt),
-          h("p", { class: "ctl-muted ctl-small-note", text: `歷史資料：${historyCompleteness(raw)}` })
-        ]),
-        h("section", { class: "ctl-section" }, [
           h("h3", { text: "主要風險" }),
           bullets(verdict.cautions, "目前未觸發主要風險規則，但仍不代表安全或保證獲利。")
         ]),
@@ -246,7 +261,10 @@
           bullets(settingAdvice(analysis), "")
         ]),
         h("details", { class: "ctl-details" }, [
-          h("summary", { text: `資料狀態：${statusText(raw.endpointResults)}` }),
+          h("summary", { text: `進階資料：${statusText(raw.endpointResults)}` }),
+          h("h3", { text: "時間窗交叉檢查" }),
+          performanceWindowTable(meta, fmt),
+          h("p", { class: "ctl-muted ctl-small-note", text: `歷史資料：${historyCompleteness(raw)}` }),
           endpointList(raw.endpointResults),
           h("pre", { text: JSON.stringify(analysis.rawCounts, null, 2) })
         ]),
