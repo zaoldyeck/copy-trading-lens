@@ -246,7 +246,7 @@
 .ctl-table th,
 .ctl-table td {
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 7px 5px;
+  padding: 7px 4px;
   text-align: left;
 }
 
@@ -256,7 +256,8 @@
 }
 
 .ctl-table td:nth-child(2),
-.ctl-table td:nth-child(3) {
+.ctl-table td:nth-child(3),
+.ctl-table td:nth-child(4) {
   color: #ffffff;
   font-variant-numeric: tabular-nums;
 }

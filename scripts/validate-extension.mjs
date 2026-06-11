@@ -7,9 +7,13 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const requiredFiles = [
   "manifest.json",
   "popup.html",
+  "_locales/en/messages.json",
+  "_locales/zh_TW/messages.json",
+  "src/i18n.js",
   "src/analysis.js",
   "src/providers.js",
   "src/content.js",
+  "src/popup.js",
   "src/content.css",
   "src/popup.css",
   "assets/icons/icon16.png",
@@ -17,8 +21,8 @@ const requiredFiles = [
   "assets/icons/icon48.png",
   "assets/icons/icon128.png",
   "README.md",
-  "PRIVACY.md",
-  "STORE_LISTING.md"
+  "README.zh-TW.md",
+  "PRIVACY.md"
 ];
 
 function fail(message) {
@@ -34,7 +38,9 @@ for (const file of requiredFiles) {
 
 const manifest = JSON.parse(readFileSync(join(root, "manifest.json"), "utf8"));
 if (manifest.manifest_version !== 3) fail("manifest_version must be 3");
+if (manifest.default_locale !== "en") fail("manifest default_locale must be en");
 if (!manifest.name || !manifest.version || !manifest.description) fail("manifest must include name/version/description");
+if (!String(manifest.name).startsWith("__MSG_")) fail("manifest name must use i18n __MSG_ substitution");
 if (!Array.isArray(manifest.content_scripts) || manifest.content_scripts.length === 0) fail("manifest must include content_scripts");
 if (!Array.isArray(manifest.host_permissions)) fail("manifest must include host_permissions");
 for (const host of manifest.host_permissions) {
@@ -44,9 +50,11 @@ for (const host of manifest.host_permissions) {
 }
 
 const jsFiles = [
+  "src/i18n.js",
   "src/analysis.js",
   "src/providers.js",
   "src/content.js",
+  "src/popup.js",
   "scripts/generate-icons.mjs",
   "scripts/validate-extension.mjs",
   "scripts/package-extension.mjs"

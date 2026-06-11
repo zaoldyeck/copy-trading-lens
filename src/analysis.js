@@ -4,6 +4,10 @@
   const HOUR_MS = 60 * 60 * 1000;
   const DAY_MS = 24 * HOUR_MS;
 
+  function t(key, substitutions = []) {
+    return global.CopyTradingLensI18n?.t(key, substitutions) || key;
+  }
+
   function num(value, fallback = 0) {
     if (value === null || value === undefined || value === "") return fallback;
     const parsed = Number(String(value).replace(/,/g, "").replace("%", ""));
@@ -77,13 +81,62 @@
     };
   }
 
+  function annualizedFromRoi(roiPercent, days) {
+    if (!Number.isFinite(roiPercent) || !Number.isFinite(days) || days <= 0) return null;
+    const growth = 1 + roiPercent / 100;
+    if (growth <= 0) return -100;
+    const annualized = (growth ** (365 / days) - 1) * 100;
+    return Number.isFinite(annualized) ? annualized : null;
+  }
+
+  function xirrAnnualized(cashFlows) {
+    const flows = (cashFlows || [])
+      .filter((flow) => Number.isFinite(flow.ts) && Number.isFinite(flow.amount) && Math.abs(flow.amount) > 1e-9)
+      .sort((a, b) => a.ts - b.ts);
+    if (flows.length < 2) return null;
+    if (!flows.some((flow) => flow.amount < 0) || !flows.some((flow) => flow.amount > 0)) return null;
+    const start = flows[0].ts;
+    const npv = (rate) => flows.reduce((sum, flow) => {
+      const years = Math.max(0, (flow.ts - start) / (365 * DAY_MS));
+      return sum + flow.amount / ((1 + rate) ** years);
+    }, 0);
+
+    let low = -0.999999;
+    let high = 10;
+    let lowValue = npv(low);
+    let highValue = npv(high);
+    for (let i = 0; i < 24 && lowValue * highValue > 0; i += 1) {
+      high *= 2;
+      highValue = npv(high);
+      if (!Number.isFinite(highValue)) break;
+    }
+    if (!Number.isFinite(lowValue) || !Number.isFinite(highValue) || lowValue * highValue > 0) return null;
+
+    for (let i = 0; i < 100; i += 1) {
+      const mid = (low + high) / 2;
+      const value = npv(mid);
+      if (!Number.isFinite(value)) return null;
+      if (Math.abs(value) < 1e-7) return mid * 100;
+      if (lowValue * value <= 0) {
+        high = mid;
+        highValue = value;
+      } else {
+        low = mid;
+        lowValue = value;
+      }
+    }
+    return ((low + high) / 2) * 100;
+  }
+
   function normalizeWindowMetric(row) {
     if (!row || typeof row !== "object") return null;
     const roi = num(row.roi, null);
     const mdd = num(row.mdd, null);
+    const days = timeRangeDays(row.timeRange || "");
     return {
       timeRange: row.timeRange || "",
       roi,
+      annualizedReturn: annualizedFromRoi(roi, days),
       mdd,
       pnl: num(row.pnl, null),
       startTime: num(row.startTime, null),
@@ -132,6 +185,7 @@
     const marginBalance = num(firstDefined(detail.marginBalance, detail.marginAsset), null);
     const historyStatus = raw.historyStatus || {};
     const events = [];
+    const cashFlows = [];
     let grossDeposits = 0;
     let withdrawals = 0;
     let currentEquityFromEvents = 0;
@@ -147,8 +201,14 @@
       firstEventTime = Math.min(firstEventTime, ts);
       lastEventTime = Math.max(lastEventTime, ts);
       events.push({ ts, kind: "transfer", direction, amount });
-      if (direction === "in") grossDeposits += amount;
-      if (direction === "out") withdrawals += amount;
+      if (direction === "in") {
+        grossDeposits += amount;
+        cashFlows.push({ ts, amount: -amount });
+      }
+      if (direction === "out") {
+        withdrawals += amount;
+        cashFlows.push({ ts, amount });
+      }
     }
 
     let realizedPnl = 0;
@@ -197,6 +257,7 @@
 
     const currentEquity = Number.isFinite(marginBalance) ? marginBalance : currentEquityFromEvents;
     if (cumulativeIn > 0 && Number.isFinite(currentEquity)) {
+      if (currentEquity > 0) cashFlows.push({ ts: Date.now(), amount: currentEquity });
       const finalReturn = (currentEquity + cumulativeOut - cumulativeIn) / cumulativeIn * 100;
       if (peakReturn === null) peakReturn = finalReturn;
       peakReturn = Math.max(peakReturn, finalReturn);
@@ -224,9 +285,15 @@
       && complete
       && (!detailStart || startGapDays <= 2)
     );
+    const xirr = xirrAnnualized(cashFlows);
+    const elapsedDays = firstAt ? Math.max(0, (Date.now() - firstAt) / DAY_MS) : null;
+    const cagrFallback = annualizedFromRoi(roi, elapsedDays);
+    const annualizedReturn = Number.isFinite(xirr) ? xirr : cagrFallback;
 
     return {
       roi,
+      annualizedReturn,
+      annualizedSource: Number.isFinite(xirr) ? t("annualizedSourceXirr") : (Number.isFinite(cagrFallback) ? t("annualizedSourceCagr") : ""),
       mdd: curve.length >= 2 ? reconstructedMdd : null,
       netProfit,
       realizedPnl,
@@ -238,6 +305,7 @@
       lastEventTime: lastEventTime || null,
       closedTrades: positions.length,
       curvePoints: curve.length,
+      cashFlowCount: cashFlows.length,
       complete,
       reliable,
       startGapDays,
@@ -260,13 +328,21 @@
       .filter((value) => Number.isFinite(value))
       .reduce((maxValue, value) => Math.max(maxValue, value), null);
     const roi = num(firstDefined(reconstructed.roi, primaryWindowMetric?.roi, detail.roi, detail.yieldRate, pageMetrics.roi), null);
+    const annualizedReturn = num(
+      firstDefined(
+        reconstructed.annualizedReturn,
+        primaryWindowMetric?.annualizedReturn,
+        annualizedFromRoi(roi, days)
+      ),
+      null
+    );
     const mdd = num(firstDefined(worstWindowMdd, reconstructed.mdd, detail.mdd, detail.maxDrawdown, pageMetrics.mdd), null);
     const performanceSource = Number.isFinite(reconstructed.roi)
-      ? "歷史現金流重建"
-      : (primaryWindow ? `交易所 ${primaryWindow} 視窗` : "頁面/API fallback");
+      ? t("performanceSourceCashFlow")
+      : (primaryWindow ? t("performanceSourceWindow", [primaryWindow]) : t("performanceSourceFallback"));
     const performanceQuality = reconstructed.reliable
-      ? "完整"
-      : (Number.isFinite(reconstructed.roi) ? "可重建但需看完整度" : "不可重建");
+      ? t("performanceQualityComplete")
+      : (Number.isFinite(reconstructed.roi) ? t("performanceQualityReconstructed") : t("performanceQualityUnavailable"));
     return {
       name: String(firstDefined(detail.nickname, listItem.nickname, raw.pageTitle, "Unknown Binance Lead")),
       id: raw.id,
@@ -274,6 +350,8 @@
       url: raw.url,
       days,
       roi,
+      annualizedReturn,
+      annualizedSource: reconstructed.annualizedSource || (primaryWindow ? `${primaryWindow} CAGR` : t("annualizedSourceCagr")),
       mdd,
       pnl: num(firstDefined(reconstructed.netProfit, listItem.pnl, detail.pnl, pageMetrics.pnl), null),
       copierPnl: num(firstDefined(detail.copierPnl, pageMetrics.copierPnl), 0),
@@ -534,7 +612,7 @@
 
   function inferStrategy(summary, orders) {
     const labels = [];
-    let family = "資料不足，暫不判定策略型態";
+    let family = t("familyInsufficient");
     const adverseRate = orders.adverseAddRate || 0;
     const highFrequency = orders.openOrders >= 200 || (summary.closedTrades >= 100 && summary.avgWinHoldHours < 3);
     const longLossHold = summary.avgLossHoldHours > Math.max(12, summary.avgWinHoldHours * 1.5);
@@ -542,25 +620,25 @@
     const strongPayoff = summary.payoffRatio !== null && summary.payoffRatio >= 1.5;
 
     if (adverseRate >= 0.35 && longLossHold) {
-      family = "逆勢網格 / 類馬丁格爾";
-      labels.push("逆勢加倉", "虧損持倉偏久");
+      family = t("familyMartingaleGrid");
+      labels.push(t("labelAdverseAdd"), t("labelLongLossHold"));
     } else if (adverseRate >= 0.35 && strongPayoff && summary.avgLossHoldHours < 1) {
-      family = "短線均值回歸 + 快速停損";
-      labels.push("允許加倉", "虧損單快速結束");
+      family = t("familyMeanReversionStop");
+      labels.push(t("labelAllowAdds"), t("labelFastLossClose"));
     } else if (highFrequency && adverseRate < 0.1) {
-      family = "批次拆單 / 短線 scalping";
-      labels.push("高頻短線", "同價拆單");
+      family = t("familyBatchScalping");
+      labels.push(t("labelHighFreq"), t("labelSamePriceSplits"));
     } else if (adverseRate >= 0.2) {
-      family = "分層均值回歸";
-      labels.push("分層加倉");
+      family = t("familyLayeredMeanReversion");
+      labels.push(t("labelLayeredAdds"));
     } else if (summary.closedTrades >= 30 && summary.avgWinHoldHours > 24) {
-      family = "低頻波段 / 持倉型";
-      labels.push("持倉時間較長");
+      family = t("familyLowFreqSwing");
+      labels.push(t("labelLongHold"));
     }
 
-    if (poorPayoff) labels.push("盈虧比偏弱");
-    if (summary.winRate >= 0.95) labels.push("高勝率需驗證尾部風險");
-    if (summary.dominantSymbolShare >= 0.5) labels.push("單一標的集中");
+    if (poorPayoff) labels.push(t("labelPoorPayoff"));
+    if (summary.winRate >= 0.95) labels.push(t("labelHighWinTailRisk"));
+    if (summary.dominantSymbolShare >= 0.5) labels.push(t("labelSingleSymbol"));
     return { family, labels: [...new Set(labels)] };
   }
 
@@ -569,7 +647,7 @@
     const cautions = [];
     const positives = [];
     let level = "watch";
-    let title = "觀察";
+    let title = t("verdictWatch");
 
     const copierPnlToAum = safeDivide(meta.copierPnl, meta.aum, 0);
     const adverseRate = orders.adverseAddRate || 0;
@@ -587,47 +665,47 @@
       && summary.lossCount === 0
     );
 
-    if (meta.days >= 30) positives.push(`交易天數約 ${meta.days.toFixed(0)} 天，已達最低觀察門檻。`);
-    if (summary.closedTrades >= 50) positives.push(`已平倉樣本 ${summary.closedTrades} 筆，可初步判讀交易行為。`);
-    if (summary.payoffRatio !== null && summary.payoffRatio >= 1) positives.push(`平均盈虧比 ${summary.payoffRatio.toFixed(2)}，不是典型贏小賠大。`);
-    if (summary.avgLossHoldHours > 0 && summary.avgLossHoldHours < summary.avgWinHoldHours) positives.push("虧損單平均持倉短於獲利單，停損行為相對乾淨。");
-    if (meta.days > 0 && meta.days < 30) cautions.push(`交易天數只有 ${meta.days.toFixed(1)} 天，還沒滿最低 30 天觀察門檻。`);
-    if (!Number.isFinite(meta.roi)) cautions.push("全期間 ROI 目前無法可靠重建，不能只看頁面局部時間窗。");
-    if (Number.isFinite(meta.roi) && !meta.allPeriodPerformance?.reliable) cautions.push("全期間 ROI 是用可取得資料重建，但歷史完整度或起始點仍需留意。");
-    if (summary.closedTrades > 0 && summary.closedTrades < 30) cautions.push(`已平倉樣本只有 ${summary.closedTrades} 筆，單筆交易會嚴重影響結論。`);
-    if (meta.mdd >= 30) cautions.push(`頁面/排行可見 MDD 約 ${formatPct(meta.mdd)}，新跟單者可能一開始就承受大回撤。`);
-    if (summary.maxLossHoldHours >= 72) cautions.push(`歷史虧損單最長持倉 ${formatHours(summary.maxLossHoldHours)}，有死扛風險。`);
-    if (poorPayoff) cautions.push(`平均盈虧比只有 ${summary.payoffRatio?.toFixed(2)}，代表平均虧損大於平均獲利。`);
-    if (summary.winRate >= 0.98 && summary.lossCount <= 1 && summary.closedTrades >= 20) cautions.push("勝率接近 100% 且幾乎沒有已實現虧損，可能尚未被壓力行情測試。");
-    if (orders.openOrders >= 300 && summary.avgWin > 0 && summary.avgWin <= 2) cautions.push("高頻微利型策略容易被跟單延遲、滑價、手續費吃掉。");
-    if (adverseRate >= 0.35) cautions.push(`逆勢加倉率約 ${(adverseRate * 100).toFixed(0)}%，不利行情下會擴大同方向曝險。`);
-    if (transfers.lossPeriodDepositCount > 0) cautions.push(`偵測到 ${transfers.lossPeriodDepositCount} 次虧損持倉期間資金轉入，跟單者未必能同步補保證金。`);
-    if (live.openUnrealizedLossToMargin >= 0.05 || live.openUnrealizedLoss >= 5000) cautions.push(`目前持倉浮虧約 ${formatMoney(live.openUnrealizedLoss)}，約為帶單本金 ${(live.openUnrealizedLossToMargin * 100).toFixed(1)}%。`);
-    if (copierPnlToAum <= -0.05 && meta.roi > 0) cautions.push(`帶單員帳面 ROI 為正，但跟單者 PnL/AUM 約 ${(copierPnlToAum * 100).toFixed(1)}%，可能有滑價、進場時點或倉位管理背離。`);
-    if (meta.closeLeadCount >= 8) cautions.push(`歷史關閉項目 ${meta.closeLeadCount} 次，舊績效與現輪資料可能被切斷。`);
+    if (meta.days >= 30) positives.push(t("positiveDays", [meta.days.toFixed(0)]));
+    if (summary.closedTrades >= 50) positives.push(t("positiveClosedTrades", [summary.closedTrades]));
+    if (summary.payoffRatio !== null && summary.payoffRatio >= 1) positives.push(t("positivePayoff", [summary.payoffRatio.toFixed(2)]));
+    if (summary.avgLossHoldHours > 0 && summary.avgLossHoldHours < summary.avgWinHoldHours) positives.push(t("positiveLossHoldShort"));
+    if (meta.days > 0 && meta.days < 30) cautions.push(t("cautionTooFewDays", [meta.days.toFixed(1)]));
+    if (!Number.isFinite(meta.roi)) cautions.push(t("cautionNoAllPeriodRoi"));
+    if (Number.isFinite(meta.roi) && !meta.allPeriodPerformance?.reliable) cautions.push(t("cautionReconstructedNeedsCompleteness"));
+    if (summary.closedTrades > 0 && summary.closedTrades < 30) cautions.push(t("cautionThinClosedTrades", [summary.closedTrades]));
+    if (meta.mdd >= 30) cautions.push(t("cautionHighMdd", [formatPct(meta.mdd)]));
+    if (summary.maxLossHoldHours >= 72) cautions.push(t("cautionLongLossHold", [formatHours(summary.maxLossHoldHours)]));
+    if (poorPayoff) cautions.push(t("cautionPoorPayoff", [summary.payoffRatio?.toFixed(2)]));
+    if (summary.winRate >= 0.98 && summary.lossCount <= 1 && summary.closedTrades >= 20) cautions.push(t("cautionNearPerfectWin"));
+    if (orders.openOrders >= 300 && summary.avgWin > 0 && summary.avgWin <= 2) cautions.push(t("cautionMicroProfit"));
+    if (adverseRate >= 0.35) cautions.push(t("cautionAdverseAdd", [`${(adverseRate * 100).toFixed(0)}%`]));
+    if (transfers.lossPeriodDepositCount > 0) cautions.push(t("cautionLossPeriodDeposit", [transfers.lossPeriodDepositCount]));
+    if (live.openUnrealizedLossToMargin >= 0.05 || live.openUnrealizedLoss >= 5000) cautions.push(t("cautionFloatingLoss", [formatMoney(live.openUnrealizedLoss), (live.openUnrealizedLossToMargin * 100).toFixed(1)]));
+    if (copierPnlToAum <= -0.05 && meta.roi > 0) cautions.push(t("cautionCopierDivergence", [`${(copierPnlToAum * 100).toFixed(1)}%`]));
+    if (meta.closeLeadCount >= 8) cautions.push(t("cautionCloseLeadCount", [meta.closeLeadCount]));
 
     if (transfers.lossPeriodDepositCount > 0) {
       level = "avoid";
-      title = "不建議跟";
-      evidence.push("虧損期補資金是跟單者最難複製的風險來源。");
+      title = t("verdictAvoid");
+      evidence.push(t("evidenceLossDeposit"));
     } else if (destructiveMartingale) {
       level = "avoid";
-      title = "不建議跟";
-      evidence.push("逆勢加倉、虧損持倉拖延或盈虧比失衡同時出現，類馬丁風險偏高。");
+      title = t("verdictAvoid");
+      evidence.push(t("evidenceDestructiveMartingale"));
     } else if (live.openUnrealizedLossToMargin >= 0.20 || live.openUnrealizedLoss >= 50000) {
       level = "avoid";
-      title = "暫不跟";
-      evidence.push("目前有顯著浮虧倉位，新跟單者直接進場可能接下原本不屬於自己的風險。");
+      title = t("verdictWait");
+      evidence.push(t("evidenceFloatingLoss"));
     } else if (meta.mdd >= 50) {
       level = "avoid";
-      title = "高風險，不建議一般跟單";
-      evidence.push("歷史回撤過大，除非只用極小攻擊倉且能承受連續虧損。");
+      title = t("verdictHighRiskAvoid");
+      evidence.push(t("evidenceHugeMdd"));
     } else if (cautions.length >= 3 || meta.mdd >= 30 || adverseRate >= 0.35 || poorPayoff) {
       level = "risky";
-      title = "高風險候補";
+      title = t("verdictRisky");
     } else if (meta.days >= 30 && summary.closedTrades >= 30) {
       level = "followable";
-      title = "可小比例觀察";
+      title = t("verdictFollowSmall");
     }
 
     return {
@@ -675,13 +753,17 @@
     const rates = Array.isArray(candidate.rates) ? candidate.rates : [];
     const curve = ratioCurveStats(rates, "unit_return");
     const roi = firstDefined(curve.roi30, curve.fullRoi, num(candidate.yieldRatio, 0) * 100, pageMetrics.roi);
+    const roiValue = num(roi, 0);
+    const days = num(firstDefined(candidate.initialDay, pageMetrics.tradingDays), 0);
     return {
       name: String(firstDefined(candidate.nickName, candidate.nickname, raw.pageTitle, "Unknown OKX Lead")),
       id: raw.id,
       exchange: "OKX",
       url: raw.url,
-      days: num(firstDefined(candidate.initialDay, pageMetrics.tradingDays), 0),
-      roi: num(roi, 0),
+      days,
+      roi: roiValue,
+      annualizedReturn: annualizedFromRoi(roiValue, days || 30),
+      annualizedSource: t("annualizedSourceCagr"),
       mdd: num(firstDefined(curve.mdd, pageMetrics.mdd), 0),
       pnl: num(candidate.pnl, 0),
       copierPnl: num(firstDefined(candidate.followPnl, pageMetrics.copierPnl), 0),

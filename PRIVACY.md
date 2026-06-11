@@ -1,17 +1,66 @@
 # Privacy Policy
 
+Copy Trading Lens does not collect personal data.
+
+## How Data Is Processed
+
+The extension runs only when the user opens a supported Binance or OKX copy-trading lead-trader page. It reads lead-trader data from same-origin page APIs available to the current browser session and computes the analysis locally in the browser.
+
+Same-origin exchange requests may use the browser's normal session context and exchange-required CSRF header. These values are used only for same-origin requests to the exchange page the user is already visiting; they are not stored, logged, or sent to third parties.
+
+## Data Not Collected
+
+Copy Trading Lens does not collect, store, or transmit:
+
+- cookies or request headers as stored records
+- API keys
+- account IDs
+- exchange login credentials
+- user asset data
+- user order history
+- raw API responses
+- analysis results
+- browsing history
+
+## Third-Party Transfer
+
+There is no backend service, no analytics service, and no third-party data transfer.
+
+The extension does not send data to the developer, a cloud server, or a third-party analytics provider.
+
+## Local Storage
+
+The current version does not use Chrome storage and does not create a local database. Analysis results live only in page memory and are recomputed after page refresh.
+
+## Permission Purpose
+
+The extension requests host permissions for `www.binance.com` and `www.okx.com` only to:
+
+- inject the analysis panel on individual lead-trader pages
+- read same-origin public/session-visible lead-trader data
+- compute local copy-trading risk analysis
+
+## Contact
+
+Open a GitHub issue in this repository for privacy or security concerns.
+
+---
+
+# 隱私權政策
+
 Copy Trading Lens 不收集個人資料。
 
 ## 資料處理方式
 
 Extension 只在使用者打開 Binance 或 OKX 個別跟單員頁面時運作。它會在使用者瀏覽器內，向當前網站的同源 API 讀取該帶單員頁面相關資料，並在本機完成分析。
 
+同源請求可能使用瀏覽器正常 session 與交易所要求的 CSRF header。這些值只會用於使用者正在瀏覽的交易所同源請求，不會被儲存、記錄或傳給第三方。
+
 ## 不收集的資料
 
 Copy Trading Lens 不會收集、儲存或傳送：
 
-- cookie
-- request header
+- cookie 或 request header 的儲存紀錄
 - API key
 - 帳戶 id
 - 交易所登入憑證
