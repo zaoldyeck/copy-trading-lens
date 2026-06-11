@@ -1,0 +1,20 @@
+{
+  "name": "copy-trading-lens",
+  "version": "0.1.0",
+  "private": false,
+  "description": "Chrome Extension for live Binance/OKX copy-trader risk analysis.",
+  "type": "module",
+  "scripts": {
+    "icons": "node scripts/generate-icons.mjs",
+    "validate": "node scripts/validate-extension.mjs",
+    "package": "npm run icons && npm run validate && node scripts/package-extension.mjs"
+  },
+  "keywords": [
+    "chrome-extension",
+    "copy-trading",
+    "binance",
+    "okx",
+    "risk-analysis"
+  ],
+  "license": "MIT"
+}
