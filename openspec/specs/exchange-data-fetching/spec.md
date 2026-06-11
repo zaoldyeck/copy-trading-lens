@@ -14,6 +14,10 @@ The extension SHALL fetch Binance lead trader data from same-origin page APIs fo
 - **WHEN** one or more Binance API requests fail or return empty data
 - **THEN** the extension still analyzes the available datasets and reports which datasets were unavailable
 
+#### Scenario: Binance paged history is temporarily busy
+- **WHEN** Binance paged history APIs return transient busy, rate-limit, network, or server errors
+- **THEN** the extension retries the failed page with backoff until the page succeeds before continuing analysis
+
 #### Scenario: Standard performance windows are fetched
 - **WHEN** Binance detail provides a nickname or the portfolio can be found by bounded list scan
 - **THEN** the extension fetches live `7D`, `30D`, `90D`, `180D`, and `365D` ROI/MDD rows for the current portfolio id independent of the page-selected time range
@@ -46,4 +50,3 @@ The extension MUST NOT store, transmit, log, or expose user cookies, headers, AP
 #### Scenario: Fetching with active session
 - **WHEN** same-origin API requests include the browser's normal session context
 - **THEN** the extension uses the response only in memory for local analysis and does not persist credentials or raw private headers
-

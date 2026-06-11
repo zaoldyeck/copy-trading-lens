@@ -28,7 +28,6 @@ The extension SHALL track how many historical records were fetched compared with
 - **WHEN** fetched rows are at least the exchange-reported total
 - **THEN** the UI reports the dataset as complete for the fetched endpoint
 
-#### Scenario: History fetch is bounded before total
-- **WHEN** the safety page limit is reached before all exchange-reported rows are fetched
-- **THEN** the UI reports the dataset as partial
-
+#### Scenario: History fetch waits for transient failures
+- **WHEN** a historical page temporarily fails before the exchange-reported total is reached
+- **THEN** the extension waits and retries instead of analyzing a partial historical dataset

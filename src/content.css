@@ -277,6 +277,13 @@
   font-weight: 700;
 }
 
+.ctl-details h3 {
+  color: #ffffff;
+  font-size: 13px;
+  line-height: 1.2;
+  margin: 12px 0 6px;
+}
+
 .ctl-endpoints {
   display: grid;
   gap: 6px;

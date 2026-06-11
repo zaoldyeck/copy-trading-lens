@@ -591,8 +591,6 @@
     if (summary.closedTrades >= 50) positives.push(`已平倉樣本 ${summary.closedTrades} 筆，可初步判讀交易行為。`);
     if (summary.payoffRatio !== null && summary.payoffRatio >= 1) positives.push(`平均盈虧比 ${summary.payoffRatio.toFixed(2)}，不是典型贏小賠大。`);
     if (summary.avgLossHoldHours > 0 && summary.avgLossHoldHours < summary.avgWinHoldHours) positives.push("虧損單平均持倉短於獲利單，停損行為相對乾淨。");
-    if (meta.allPeriodPerformance?.reliable) positives.push("全期間績效可由歷史現金流與目前資金重建，主 ROI 不依賴目前頁面時間範圍。");
-
     if (meta.days > 0 && meta.days < 30) cautions.push(`交易天數只有 ${meta.days.toFixed(1)} 天，還沒滿最低 30 天觀察門檻。`);
     if (!Number.isFinite(meta.roi)) cautions.push("全期間 ROI 目前無法可靠重建，不能只看頁面局部時間窗。");
     if (Number.isFinite(meta.roi) && !meta.allPeriodPerformance?.reliable) cautions.push("全期間 ROI 是用可取得資料重建，但歷史完整度或起始點仍需留意。");
