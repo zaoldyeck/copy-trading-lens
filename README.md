@@ -1,10 +1,10 @@
 # Copy Trading Lens
 
-[台灣正體中文 README](README.zh-TW.md)
+English | [台灣正體中文](README.zh-TW.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
 
 Copy Trading Lens is a Chrome Extension that analyzes Binance and OKX copy-trading lead-trader pages in real time.
 
-It is not a trading bot, does not place orders, and does not guarantee profit. Its purpose is to make follower-facing risks visible before you copy: martingale-like behavior, adverse averaging, rescue capital injections, held floating losses, high-frequency micro-profit slippage, weak payoff ratio, and divergence between the lead trader and copiers.
+It is not a trading bot, does not place orders, and does not guarantee profit. Its purpose is to make follower-facing risks visible before you copy: martingale-like sizing, grid/range behavior, adverse averaging, rescue capital injections, held floating losses, high-frequency micro-profit slippage, weak payoff ratio, and divergence between the lead trader and copiers.
 
 ## Features
 
@@ -15,11 +15,11 @@ It is not a trading bot, does not place orders, and does not guarantee profit. I
 - Fetches fresh same-origin page/session-visible data from the current page
 - Reconstructs Binance all-period ROI/PnL from historical transfers, current lead capital, and historical records when available
 - Shows annualized return: XIRR/APY when cash flows are sufficient, otherwise CAGR estimated from ROI and elapsed days
-- Retries transient Binance history-page failures until the page succeeds
+- Retries transient Binance history-page failures until the target page succeeds
 - Computes locally in your browser
 - No backend service, analytics, remote code, cookie/header/API key storage, or account-data upload
 - Provides explainable verdicts instead of a black-box score
-- Uses Chrome extension i18n with English as the default locale and Taiwan Traditional Chinese (`zh_TW`) support
+- Supports Chrome extension locales: English, Taiwan Traditional Chinese, Simplified Chinese, and Japanese
 
 ## What It Analyzes
 
@@ -33,6 +33,18 @@ Copy Trading Lens checks the data currently available to your browser session:
 - Capital inflow during historical losing positions
 - Current floating-loss positions and open exposure
 - Whether high-frequency micro-profit behavior is likely to be hard to copy after latency, slippage, minimum size, and fees
+
+## Strategy Labels
+
+The panel uses familiar trading-style labels to make the risk easier to read:
+
+- **Martingale**: increases size while losing; consecutive wrong-way moves can expand drawdown quickly.
+- **Grid / range trading**: layered orders harvest chop, but one-way trends can build floating loss.
+- **DCA / left-side trading**: averages into weakness, so early copiers can inherit drawdown.
+- **Right-side / trend following**: enters after confirmation and usually depends on cleaner stops.
+- **Scalping**: short-duration small profits where copier latency, minimum size, fees, and slippage matter.
+- **Market-making tendency**: many short trades where copy execution can erase the edge.
+- **Swing trading**: longer holds where copiers may inherit open-position volatility.
 
 ## Install Before Chrome Web Store Release
 
@@ -60,6 +72,21 @@ Then in Chrome:
 3. Click **Load unpacked**.
 4. Select the repository folder or `dist/copy-trading-lens/`.
 5. Open a Binance or OKX lead-trader detail page.
+
+## Repository Layout
+
+```text
+.
+├── _locales/        Chrome i18n message files
+├── assets/icons/    Extension icons
+├── openspec/        Public product and packaging specifications
+├── scripts/         Validation, icon generation, and packaging scripts
+├── src/             Provider adapters, analysis engine, content UI, and popup code
+├── manifest.json    Chrome Manifest V3 definition
+├── popup.html       Extension action popup
+├── PRIVACY.md       Privacy policy
+└── README*.md       User and developer documentation
+```
 
 ## Permissions
 
@@ -89,13 +116,15 @@ Summary:
 - Same-origin requests may use the browser's normal session context and exchange-required CSRF header, but these values are not stored or sent to third parties
 - No static lead-trader database
 
-## Source Validation
+## Validation
 
 ```bash
 npm run icons
 npm run validate
 npm run package
 ```
+
+`npm run validate` checks required files, Manifest V3 constraints, host permissions, JavaScript syntax, secret-like patterns, and locale message-key parity.
 
 ## Limitations
 
@@ -107,6 +136,10 @@ npm run package
 - OKX public data is less complete than Binance order/transfer data, so some OKX conclusions are intentionally conservative.
 - Hidden positions are not treated as a negative signal by themselves.
 - The analysis is a risk aid, not investment advice.
+
+## Support / Donate
+
+If Copy Trading Lens helps you avoid bad copy-trading decisions, donations are welcome. The extension does not include payment code and will not ask for funds inside Binance or OKX pages. Use only donation links or addresses published by the official repository owner or the Chrome Web Store listing.
 
 ## License
 

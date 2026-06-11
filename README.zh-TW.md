@@ -1,25 +1,25 @@
 # Copy Trading Lens
 
-[English README](README.md)
+[English](README.md) | 台灣正體中文 | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
 
 Copy Trading Lens 是一個 Chrome Extension，用來在 Binance / OKX 個別跟單員頁面上，即時分析該帶單員的跟單風險。
 
-它不是交易機器人，不會幫你下單，也不保證收益。它的目標是把跟單前最容易忽略的風險攤開來：類馬丁格爾、逆勢加倉、補保證金、死扛浮虧、高頻微利滑價、盈虧比失衡、跟單者實際體驗背離。
+它不是交易機器人，不會幫你下單，也不保證收益。它的目標是把跟單前最容易忽略的風險攤開來：類馬丁格爾倉位、網格/區間交易、逆勢加倉、補保證金、死扛浮虧、高頻微利滑價、盈虧比失衡、跟單者實際體驗背離。
 
 ## 核心特性
 
 - 支援 Binance 跟單員頁面：`/copy-trading/lead-details/<portfolioId>`
 - 支援 OKX 跟單員頁面：`/copy-trading/account/<uniqueName>`
 - 進入個別帶單員頁面後自動分析
-- 不使用靜態帶單員名單
+- 不使用靜態帶單員推薦名單
 - 每次都從目前頁面重新抓取同站、目前 session 可見的最新資料
 - Binance 主績效優先由當下抓到的歷史交易、轉帳紀錄與目前帶單資金重建
-- 顯示全期間年化收益；有現金流資料時用 XIRR/APY，否則用全期間 ROI 推估 CAGR
-- Binance 歷史分頁遇到系統忙碌、網路抖動、429/5xx 等暫時錯誤時會持續重試，直到抓完可用歷史資料
+- 顯示全期間年化收益；有現金流資料時用 XIRR/APY，否則用全期間 ROI 與經過天數推估 CAGR
+- Binance 歷史分頁遇到系統忙碌、網路抖動、429/5xx 等暫時錯誤時會持續重試，直到抓完目標資料
 - 只在你的瀏覽器本機運算
 - 沒有後端服務、analytics、remote code、cookie/header/API key 儲存，也不會上傳帳戶資料
 - 顯示可解釋證據，而不是只給黑盒分數
-- 使用 Chrome extension i18n，預設英文，支援台灣正體中文 (`zh_TW`)
+- 支援 Chrome extension locale：英文、台灣正體中文、簡體中文、日文
 
 ## 分析內容
 
@@ -29,10 +29,22 @@ Extension 會根據當前頁面即時能取得的資料，檢查：
 - Binance 7D / 30D / 90D / 180D / 365D 交易所時間窗交叉檢查
 - 勝率、平均獲利、平均虧損、盈虧比、每筆期望值
 - 獲利單與虧損單持倉時間
-- 歷史訂單中的逆勢加倉、分層、最大層數與高頻拆單特徵
+- 歷史訂單中的逆勢加倉、分層、最大層數、訂單名目金額型態、高頻拆單特徵
 - 轉帳紀錄中是否有虧損持倉期間資金轉入
 - 目前持倉是否有明顯浮虧或高曝險
-- 高頻微利策略是否可能被跟單延遲、滑價、手續費吃掉
+- 高頻微利策略是否可能被跟單延遲、滑價、最小下單量與手續費吃掉
+
+## 策略標籤
+
+面板會使用跟單者熟悉的交易風格詞彙，讓風險更容易判斷：
+
+- **馬丁格爾**：虧損時加大倉位，連續錯邊會快速放大回撤。
+- **網格 / 區間交易**：分層掛單吃震盪，單邊行情容易累積浮虧。
+- **DCA / 左側交易**：逆勢分批攤平，太早跟進可能承接回撤。
+- **右側交易 / 趨勢跟隨**：方向確認後進場，通常更依賴乾淨停損。
+- **剝頭皮**：短線高頻小利，跟單延遲、最小下單量、手續費、滑價都很重要。
+- **做市傾向**：大量短線成交，跟單執行品質可能吃掉優勢。
+- **波段交易**：持倉時間較長，跟單者可能承接既有持倉波動。
 
 ## Chrome Web Store 上架前安裝
 
@@ -47,7 +59,7 @@ Extension 會根據當前頁面即時能取得的資料，檢查：
 7. 選擇解壓縮後的資料夾。
 8. 打開 Binance 或 OKX 的個別跟單員頁面。
 
-## 從原始碼安裝
+## 從原始碼建置
 
 ```bash
 npm run package
@@ -60,6 +72,21 @@ npm run package
 3. 點 **Load unpacked**
 4. 選擇這個 repository 資料夾，或選擇 `dist/copy-trading-lens/`
 5. 打開 Binance 或 OKX 的個別跟單員頁面
+
+## 專案目錄
+
+```text
+.
+├── _locales/        Chrome i18n 訊息檔
+├── assets/icons/    Extension icons
+├── openspec/        公開產品與打包規格
+├── scripts/         驗證、icon 產生、打包腳本
+├── src/             Provider adapters、分析引擎、content UI、popup 程式
+├── manifest.json    Chrome Manifest V3 定義
+├── popup.html       Extension action popup
+├── PRIVACY.md       隱私權政策
+└── README*.md       使用者與開發者文件
+```
 
 ## 權限說明
 
@@ -89,13 +116,15 @@ Content script 只會在以下頁面注入：
 - 同源請求可能使用瀏覽器正常 session 與交易所要求的 CSRF header，但不會儲存或傳給第三方
 - 沒有靜態帶單員資料庫
 
-## 原始碼驗證
+## 驗證
 
 ```bash
 npm run icons
 npm run validate
 npm run package
 ```
+
+`npm run validate` 會檢查必要檔案、Manifest V3 約束、host permissions、JavaScript syntax、疑似 secret pattern、以及 locale message key 是否一致。
 
 ## 限制
 
@@ -107,6 +136,10 @@ npm run package
 - OKX 公開資料不像 Binance 訂單/轉帳資料那麼完整，因此部分判斷會比較保守。
 - Hidden positions 本身不會被當作負面訊號；只會標示資料不足。
 - 分析結果是風險提示，不是投資建議。
+
+## 支持 / Donate
+
+如果 Copy Trading Lens 幫你避開不適合跟單的對象，歡迎 donation 支持維護。Extension 不內建付款功能，也不會在 Binance 或 OKX 頁面要求付款。請只使用官方 repository owner 或 Chrome Web Store listing 公開的 donation 連結或地址。
 
 ## License
 

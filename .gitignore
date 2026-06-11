@@ -3,6 +3,9 @@ node_modules/
 .DS_Store
 *.log
 *.local.*
+local/
+*.store-guide.md
+chrome-store-publishing-guide*.md
 
 .codex/
 openspec/changes/archive/
