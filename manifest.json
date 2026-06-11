@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "Copy Trading Lens",
+  "short_name": "CopyLens",
+  "version": "0.1.0",
+  "description": "即時分析 Binance 與 OKX 跟單員頁面的策略型態、風險與跟單可複製性。",
+  "minimum_chrome_version": "114",
+  "action": {
+    "default_title": "Copy Trading Lens",
+    "default_popup": "popup.html"
+  },
+  "icons": {
+    "16": "assets/icons/icon16.png",
+    "32": "assets/icons/icon32.png",
+    "48": "assets/icons/icon48.png",
+    "128": "assets/icons/icon128.png"
+  },
+  "host_permissions": [
+    "https://www.binance.com/*",
+    "https://www.okx.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.binance.com/copy-trading/lead-details/*",
+        "https://www.binance.com/*/copy-trading/lead-details/*",
+        "https://www.okx.com/copy-trading/account/*",
+        "https://www.okx.com/*/copy-trading/account/*"
+      ],
+      "js": [
+        "src/analysis.js",
+        "src/providers.js",
+        "src/content.js"
+      ],
+      "css": [
+        "src/content.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}
