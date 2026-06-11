@@ -1,7 +1,7 @@
 # local-risk-analysis Specification
 
 ## Purpose
-TBD - created by archiving change build-copy-trading-lens-extension. Update Purpose after archive.
+Defines the local follower-oriented risk analysis engine, including trade-quality metrics, martingale-like behavior detection, capital-injection risk, current floating-loss risk, and explainable verdict output.
 ## Requirements
 ### Requirement: Compute core performance and trade quality metrics
 The extension SHALL compute follower-oriented metrics from available data, including ROI, MDD, win rate, payoff ratio, expected PnL per closed trade, win/loss holding time, max loss holding time, current unrealized loss, and copier PnL/AUM when available.
@@ -46,4 +46,3 @@ The extension MUST NOT treat hidden current positions by itself as a negative si
 #### Scenario: Current position access unavailable
 - **WHEN** the current position endpoint is unavailable or positions are hidden
 - **THEN** the extension reports the missing data but does not penalize the trader solely for hidden positions
-

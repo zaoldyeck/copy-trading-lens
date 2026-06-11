@@ -1,7 +1,7 @@
 # lead-page-detection Specification
 
 ## Purpose
-TBD - created by archiving change build-copy-trading-lens-extension. Update Purpose after archive.
+Defines how the extension detects supported Binance/OKX lead-trader pages, extracts the active trader identifier, and refreshes analysis across single-page-app navigation.
 ## Requirements
 ### Requirement: Detect supported lead trader pages
 The extension SHALL activate only on supported Binance and OKX lead trader detail pages and SHALL extract the current lead trader identifier from the URL.
@@ -31,4 +31,3 @@ The extension MUST NOT identify traders by a packaged recommendation database or
 #### Scenario: Known trader visited
 - **WHEN** the user visits a lead trader that appeared in prior local research
 - **THEN** the extension still fetches current page data and computes a fresh analysis
-

@@ -1,89 +1,95 @@
 # Copy Trading Lens
 
-Copy Trading Lens 是一個 Chrome Extension，用來在 Binance / OKX 個別跟單員頁面上，即時分析該帶單員的跟單風險。
+[台灣正體中文 README](README.zh-TW.md)
 
-它不是交易機器人，不會幫你下單，也不保證收益。它的目標是把跟單前最容易忽略的風險攤開來：類馬丁格爾、逆勢加倉、補保證金、死扛浮虧、高頻微利滑價、盈虧比失衡、跟單者實際體驗背離。
+Copy Trading Lens is a Chrome Extension that analyzes Binance and OKX copy-trading lead-trader pages in real time.
 
-## 核心特性
+It is not a trading bot, does not place orders, and does not guarantee profit. Its purpose is to make follower-facing risks visible before you copy: martingale-like behavior, adverse averaging, rescue capital injections, held floating losses, high-frequency micro-profit slippage, weak payoff ratio, and divergence between the lead trader and copiers.
 
-- 支援 Binance 跟單員頁面：`/copy-trading/lead-details/<portfolioId>`
-- 支援 OKX 跟單員頁面：`/copy-trading/account/<uniqueName>`
-- 進入個別帶單員頁面後自動分析，不使用靜態帶單員名單
-- Binance 主績效優先由當下抓到的歷史交易、轉帳紀錄與目前帶單資金重建，不依賴頁面目前選到 7D/30D/90D/180D
-- Binance 歷史分頁遇到 `系統忙碌`、網路抖動、429/5xx 等暫時錯誤時會持續重試，直到抓完可用歷史資料
-- 只在你的瀏覽器本機運算，沒有後端服務
-- 不收集、不上傳、不儲存 cookie、header、API key、帳戶資料
-- 顯示可解釋證據，而不是只給黑盒分數
+## Features
 
-## 分析內容
+- Supports Binance lead pages: `/copy-trading/lead-details/<portfolioId>`
+- Supports OKX lead pages: `/copy-trading/account/<uniqueName>`
+- Runs only when you open an individual lead-trader page
+- Does not bundle a static recommendation database
+- Fetches fresh same-origin page/session-visible data from the current page
+- Reconstructs Binance all-period ROI/PnL from historical transfers, current lead capital, and historical records when available
+- Shows annualized return: XIRR/APY when cash flows are sufficient, otherwise CAGR estimated from ROI and elapsed days
+- Retries transient Binance history-page failures until the page succeeds
+- Computes locally in your browser
+- No backend service, analytics, remote code, cookie/header/API key storage, or account-data upload
+- Provides explainable verdicts instead of a black-box score
+- Uses Chrome extension i18n with English as the default locale and Taiwan Traditional Chinese (`zh_TW`) support
 
-Extension 會根據當前頁面即時能取得的資料，檢查：
+## What It Analyzes
 
-- 全期間 ROI / 全期間 PnL / MDD / 交易天數 / 跟單者 PnL/AUM
-- Binance 7D / 30D / 90D / 180D / 365D 交易所時間窗交叉檢查
-- 勝率、平均獲利、平均虧損、盈虧比、每筆期望值
-- 獲利單與虧損單持倉時間
-- 歷史訂單中的逆勢加倉、分層、最大層數與高頻拆單特徵
-- 轉帳紀錄中是否有虧損持倉期間資金轉入
-- 目前持倉是否有明顯浮虧或高曝險
-- 高頻微利策略是否可能被跟單延遲、滑價、手續費吃掉
+Copy Trading Lens checks the data currently available to your browser session:
 
-## 安裝測試
+- All-period ROI, annualized return, all-period PnL, MDD, trading days, copier PnL/AUM
+- Binance 7D / 30D / 90D / 180D / 365D exchange-window cross-checks
+- Win rate, average win, average loss, payoff ratio, and expectancy
+- Winning and losing trade holding time
+- Adverse adds, layering, max layers, order-notional pattern, and high-frequency split orders
+- Capital inflow during historical losing positions
+- Current floating-loss positions and open exposure
+- Whether high-frequency micro-profit behavior is likely to be hard to copy after latency, slippage, minimum size, and fees
+
+## Install Before Chrome Web Store Release
+
+Until the extension is available in the Chrome Web Store, install it from GitHub Releases:
+
+1. Open the latest release on GitHub.
+2. Download `copy-trading-lens-<version>.zip`.
+3. Unzip it to a local folder.
+4. Open `chrome://extensions`.
+5. Enable **Developer mode**.
+6. Click **Load unpacked**.
+7. Select the unzipped folder.
+8. Open a Binance or OKX lead-trader detail page.
+
+## Build From Source
 
 ```bash
 npm run package
 ```
 
-然後在 Chrome：
+Then in Chrome:
 
-1. 打開 `chrome://extensions`
-2. 開啟 Developer mode
-3. 點 Load unpacked
-4. 選擇這個資料夾，或選擇 `dist/copy-trading-lens/`
-5. 打開 Binance 或 OKX 的個別跟單員頁面
+1. Open `chrome://extensions`.
+2. Enable **Developer mode**.
+3. Click **Load unpacked**.
+4. Select the repository folder or `dist/copy-trading-lens/`.
+5. Open a Binance or OKX lead-trader detail page.
 
-## 打包 Chrome Web Store zip
+## Permissions
 
-```bash
-npm run package
-```
-
-輸出檔案：
-
-```text
-dist/copy-trading-lens-0.1.0.zip
-```
-
-這個 zip 只包含 extension runtime 必要檔案：`manifest.json`、`popup.html`、`assets/`、`src/`。
-
-## 權限說明
-
-Manifest 只要求：
+The manifest requests only:
 
 - `https://www.binance.com/*`
 - `https://www.okx.com/*`
 
-原因是 extension 需要在 Binance / OKX 跟單員頁面呼叫同站 API，取得該頁本來就能看到或登入後可見的帶單員資料。Extension 不會把資料傳到任何第三方伺服器。
+The extension needs these host permissions to run on Binance/OKX copy-trading pages and call same-origin APIs that the current browser session can already access. It does not transmit the data to any third-party server.
 
-Content script 只會在以下頁面注入：
+The content script is injected only on supported copy-trading detail routes:
 
 - `https://www.binance.com/*/copy-trading/lead-details/*`
 - `https://www.okx.com/*/copy-trading/account/*`
 
-## 隱私
+## Privacy
 
-請見 [PRIVACY.md](PRIVACY.md)。
+See [PRIVACY.md](PRIVACY.md).
 
-簡短版本：
+Summary:
 
-- 沒有後端
-- 沒有 analytics
-- 沒有 remote code
-- 沒有資料上傳
-- 沒有 credential 儲存
-- 沒有靜態帶單員資料庫
+- No backend
+- No analytics
+- No remote code
+- No data upload
+- No credential storage
+- Same-origin requests may use the browser's normal session context and exchange-required CSRF header, but these values are not stored or sent to third parties
+- No static lead-trader database
 
-## 開發
+## Source Validation
 
 ```bash
 npm run icons
@@ -91,22 +97,19 @@ npm run validate
 npm run package
 ```
 
-OpenSpec change：
+## Limitations
 
-```text
-openspec/changes/build-copy-trading-lens-extension/
-```
-
-## 限制
-
-- 交易所 API 或頁面結構可能改版，導致部分資料暫時抓不到。
-- Binance 全期間 ROI 是用「目前帶單資金 + 已提領 - 已投入」重建；若 Binance 沒提供完整歷史轉帳或歷史倉位，面板會標示資料不完整或 `N/A`。
-- Binance 標準視窗 ROI/MDD 來自當下 live `query-list` API，只作交叉檢查，不作為靜態資料庫。
-- 未登入時，某些 Binance 資料可能不可見。
-- OKX 公開資料不像 Binance 訂單/轉帳資料那麼完整，因此部分判斷會比較保守。
-- Hidden positions 本身不會被當作負面訊號；只會標示資料不足。
-- 分析結果是風險提示，不是投資建議。
+- Exchange APIs and page structures can change.
+- Binance all-period ROI is reconstructed as current lead equity plus withdrawals minus deposits. If Binance does not expose complete transfer or position history, the panel marks the data as incomplete or `N/A`.
+- Annualized return uses XIRR/APY when cash flows are available; otherwise it uses CAGR estimated from ROI and elapsed days. Short samples can produce extreme annualized values and must be read with MDD and trade behavior.
+- Binance standard-window ROI/MDD comes from live `query-list` data and is only a cross-check, not a static database.
+- Some Binance data may be unavailable when the user is not logged in.
+- OKX public data is less complete than Binance order/transfer data, so some OKX conclusions are intentionally conservative.
+- Hidden positions are not treated as a negative signal by themselves.
+- The analysis is a risk aid, not investment advice.
 
 ## License
 
-MIT
+Creative Commons Attribution-NonCommercial 4.0 International (`CC-BY-NC-4.0`).
+
+You may share and modify the project with attribution, but commercial use is not allowed without separate written permission.

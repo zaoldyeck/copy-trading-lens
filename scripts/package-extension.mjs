@@ -13,7 +13,7 @@ const zipPath = join(dist, `copy-trading-lens-${version}.zip`);
 rmSync(staging, { recursive: true, force: true });
 mkdirSync(staging, { recursive: true });
 
-for (const entry of ["manifest.json", "popup.html", "assets", "src"]) {
+for (const entry of ["manifest.json", "popup.html", "_locales", "assets", "src"]) {
   cpSync(join(root, entry), join(staging, entry), { recursive: true });
 }
 

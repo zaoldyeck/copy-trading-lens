@@ -7,6 +7,10 @@
   let root = null;
   let routeTimer = null;
 
+  function t(key, substitutions = []) {
+    return window.CopyTradingLensI18n?.t(key, substitutions) || key;
+  }
+
   function h(tag, attrs = {}, children = []) {
     const el = document.createElement(tag);
     for (const [key, value] of Object.entries(attrs)) {
@@ -42,13 +46,13 @@
     ensureRoot().replaceChildren(
       h("button", {
         class: "ctl-launcher",
-        title: "Open Copy Trading Lens",
+        title: t("launcherTitle"),
         onclick: () => {
           collapsed = false;
           runAnalysis(true);
         }
       }, [
-        h("span", { text: "Lens" }),
+        h("span", { text: t("launcherLabel") }),
         h("strong", { text: context.platform })
       ])
     );
@@ -58,23 +62,23 @@
     const entries = Object.values(endpointResults || {});
     const ok = entries.filter((item) => item?.ok).length;
     const total = entries.length;
-    if (!total) return "尚未取得資料";
-    return `${ok}/${total} endpoints 可用`;
+    if (!total) return t("noDataYet");
+    return t("endpointsAvailable", [ok, total]);
   }
 
   function endpointLabel(label) {
     const labels = {
-      detail: "基本資料",
-      livePositions: "目前持倉",
-      positionHistory: "倉位歷史",
-      orderHistory: "訂單歷史",
-      transferHistory: "轉帳歷史",
-      candidate: "排行/profile",
-      "performance:7D": "7D績效",
-      "performance:30D": "30D績效",
-      "performance:90D": "90D績效",
-      "performance:180D": "180D績效",
-      "performance:365D": "365D績效"
+      detail: t("endpointDetail"),
+      livePositions: t("endpointLivePositions"),
+      positionHistory: t("endpointPositionHistory"),
+      orderHistory: t("endpointOrderHistory"),
+      transferHistory: t("endpointTransferHistory"),
+      candidate: t("endpointCandidate"),
+      "performance:7D": t("endpointPerformance", ["7D"]),
+      "performance:30D": t("endpointPerformance", ["30D"]),
+      "performance:90D": t("endpointPerformance", ["90D"]),
+      "performance:180D": t("endpointPerformance", ["180D"]),
+      "performance:365D": t("endpointPerformance", ["365D"])
     };
     return labels[label] || label;
   }
@@ -105,19 +109,21 @@
   function performanceWindowTable(meta, fmt) {
     const windows = meta.performanceWindows || {};
     const ordered = ["7D", "30D", "90D", "180D", "365D"].filter((range) => windows[range]);
-    if (!ordered.length) return h("p", { class: "ctl-muted", text: "沒有抓到交易所標準時間窗資料。" });
+    if (!ordered.length) return h("p", { class: "ctl-muted", text: t("noWindowData") });
     return h("table", { class: "ctl-table" }, [
       h("thead", {}, h("tr", {}, [
-        h("th", { text: "時間窗" }),
-        h("th", { text: "ROI" }),
-        h("th", { text: "MDD" }),
-        h("th", { text: "來源" })
+        h("th", { text: t("colTimeRange") }),
+        h("th", { text: t("colRoi") }),
+        h("th", { text: t("colAnnualized") }),
+        h("th", { text: t("colMdd") }),
+        h("th", { text: t("colSource") })
       ])),
       h("tbody", {}, ordered.map((range) => {
         const metric = windows[range] || {};
         return h("tr", {}, [
           h("td", { text: range }),
           h("td", { text: fmt.formatPct(metric.roi) }),
+          h("td", { text: fmt.formatPct(metric.annualizedReturn) }),
           h("td", { text: fmt.formatPct(metric.mdd) }),
           h("td", { text: metric.lookupSource || "API" })
         ]);
@@ -128,33 +134,33 @@
   function historyCompleteness(raw) {
     const status = raw.historyStatus || {};
     const items = [
-      ["倉位歷史", status.positionHistory],
-      ["訂單歷史", status.orderHistory],
-      ["轉帳歷史", status.transferHistory]
+      [t("histPosition"), status.positionHistory],
+      [t("histOrder"), status.orderHistory],
+      [t("histTransfer"), status.transferHistory]
     ];
     return items.map(([label, item]) => {
-      if (!item) return `${label}: N/A`;
-      if (item.error) return `${label}: 失敗`;
-      if (!item.total && !item.fetched) return `${label}: 無資料`;
-      const retries = item.retryCount ? `，重試 ${item.retryCount} 次` : "";
-      const state = item.complete ? "完整" : "未完整";
-      return `${label}: ${item.fetched || 0}/${item.total || 0} ${state}${retries}`;
+      if (!item) return `${label}: ${t("statusNA")}`;
+      if (item.error) return `${label}: ${t("statusFail")}`;
+      if (!item.total && !item.fetched) return `${label}: ${t("statusEmpty")}`;
+      const retries = item.retryCount ? t("retrySuffix", [item.retryCount]) : "";
+      const state = item.complete ? t("statusComplete") : t("statusIncomplete");
+      return t("historyItem", [label, item.fetched || 0, item.total || 0, state, retries]);
     }).join("；");
   }
 
   function settingAdvice(analysis) {
     const cautions = [];
     if (analysis.live.openUnrealizedLoss > 0) {
-      cautions.push("不要複製現有持倉；等下一筆新開倉再跟。");
+      cautions.push(t("settingNoCopyExisting"));
     }
     if (analysis.orders.adverseAddRate >= 0.35 || analysis.summary.payoffRatio < 0.5) {
-      cautions.push("若仍要測試，只用小比例定比跟單，並設定總帳戶止損。");
+      cautions.push(t("settingSmallRatio"));
     }
     if (analysis.meta.mdd >= 30) {
-      cautions.push("最大回撤偏高，單一帶單員配置不宜過大。");
+      cautions.push(t("settingHighMdd"));
     }
     if (!cautions.length) {
-      cautions.push("仍建議定比跟單、不要複製現有倉位，並設定總帳戶止損。");
+      cautions.push(t("settingDefault"));
     }
     return cautions;
   }
@@ -165,16 +171,16 @@
         h("header", { class: "ctl-header" }, [
           h("div", {}, [
             h("span", { class: "ctl-eyebrow", text: "Copy Trading Lens" }),
-            h("h2", { text: `${context.platform} 帶單員分析中` })
+            h("h2", { text: t("analysisInProgress", [context.platform]) })
           ]),
-          h("button", { class: "ctl-icon-btn", title: "Collapse", onclick: () => {
+          h("button", { class: "ctl-icon-btn", title: t("collapseTitle"), onclick: () => {
             collapsed = true;
             renderLauncher(context);
           } }, "−")
         ]),
         h("div", { class: "ctl-loading" }, [
           h("div", { class: "ctl-spinner" }),
-          h("p", { text: "正在抓取目前頁面的公開/登入可見資料並在本機分析..." })
+          h("p", { text: t("loadingText") })
         ])
       ])
     );
@@ -186,15 +192,15 @@
         h("header", { class: "ctl-header" }, [
           h("div", {}, [
             h("span", { class: "ctl-eyebrow", text: "Copy Trading Lens" }),
-            h("h2", { text: "分析失敗" })
+            h("h2", { text: t("analysisFailed") })
           ]),
-          h("button", { class: "ctl-icon-btn", title: "Collapse", onclick: () => {
+          h("button", { class: "ctl-icon-btn", title: t("collapseTitle"), onclick: () => {
             collapsed = true;
             renderLauncher(context);
           } }, "−")
         ]),
         h("p", { class: "ctl-error", text: error instanceof Error ? error.message : String(error) }),
-        h("button", { class: "ctl-primary", onclick: () => runAnalysis(true) }, "重新分析")
+        h("button", { class: "ctl-primary", onclick: () => runAnalysis(true) }, t("retry"))
       ])
     );
   }
@@ -223,8 +229,8 @@
             h("h2", { text: meta.name })
           ]),
           h("div", { class: "ctl-actions" }, [
-            h("button", { class: "ctl-icon-btn", title: "Refresh analysis", onclick: () => runAnalysis(true) }, "↻"),
-            h("button", { class: "ctl-icon-btn", title: "Collapse", onclick: () => {
+            h("button", { class: "ctl-icon-btn", title: t("refreshTitle"), onclick: () => runAnalysis(true) }, "↻"),
+            h("button", { class: "ctl-icon-btn", title: t("collapseTitle"), onclick: () => {
               collapsed = true;
               renderLauncher(context);
             } }, "−")
@@ -236,39 +242,40 @@
         ]),
         strategy.labels?.length ? h("div", { class: "ctl-tags" }, strategy.labels.map((label) => h("span", { text: label }))) : null,
         h("div", { class: "ctl-grid" }, [
-          metricCard("全期間 ROI", fmt.formatPct(meta.roi), meta.performanceSource || "歷史/API"),
-          metricCard("MDD", fmt.formatPct(meta.mdd), meta.primaryWindow ? "交易所時間窗最大值" : (meta.performanceQuality || "資料品質")),
-          metricCard("全期間 PnL", fmt.formatMoney(meta.pnl), "目前資金 + 提領 - 投入"),
-          metricCard("交易天數", meta.days ? `${meta.days.toFixed(0)} 天` : "N/A"),
-          metricCard("跟單 PnL/AUM", meta.aum ? `${(meta.copierPnl / meta.aum * 100).toFixed(1)}%` : "N/A"),
-          metricCard("勝率", fmt.formatPct(summary.winRate * 100), `${summary.closedTrades} 筆已平倉`),
-          metricCard("盈虧比", summary.payoffRatio === null ? "N/A" : summary.payoffRatio.toFixed(2)),
-          metricCard("虧損持倉", fmt.formatHours(summary.avgLossHoldHours), `最長 ${fmt.formatHours(summary.maxLossHoldHours)}`),
-          metricCard("逆勢加倉", fmt.formatPct(orders.adverseAddRate * 100), `${orders.adverseAdds}/${orders.openOrders}`),
-          metricCard("目前浮虧", fmt.formatMoney(live.openUnrealizedLoss), `${(live.openUnrealizedLossToMargin * 100).toFixed(1)}% margin`),
-          metricCard("歷史關閉", String(meta.closeLeadCount || 0), "portfolio restart")
+          metricCard(t("metricAllPeriodRoi"), fmt.formatPct(meta.roi), meta.performanceSource || t("hintHistoryApi")),
+          metricCard(t("metricAnnualized"), fmt.formatPct(meta.annualizedReturn), meta.annualizedSource || "CAGR/APY"),
+          metricCard(t("metricMdd"), fmt.formatPct(meta.mdd), meta.primaryWindow ? t("hintMddWindowMax") : (meta.performanceQuality || t("colSource"))),
+          metricCard(t("metricAllPeriodPnl"), fmt.formatMoney(meta.pnl), t("hintCurrentCapitalFormula")),
+          metricCard(t("metricTradingDays"), meta.days ? t("daysValue", [meta.days.toFixed(0)]) : "N/A"),
+          metricCard(t("metricCopierPnlAum"), meta.aum ? `${(meta.copierPnl / meta.aum * 100).toFixed(1)}%` : "N/A"),
+          metricCard(t("metricWinRate"), fmt.formatPct(summary.winRate * 100), t("closedTrades", [summary.closedTrades])),
+          metricCard(t("metricPayoffRatio"), summary.payoffRatio === null ? "N/A" : summary.payoffRatio.toFixed(2)),
+          metricCard(t("metricLossHold"), fmt.formatHours(summary.avgLossHoldHours), t("longestHold", [fmt.formatHours(summary.maxLossHoldHours)])),
+          metricCard(t("metricAdverseAdd"), fmt.formatPct(orders.adverseAddRate * 100), `${orders.adverseAdds}/${orders.openOrders}`),
+          metricCard(t("metricFloatingLoss"), fmt.formatMoney(live.openUnrealizedLoss), t("marginPct", [(live.openUnrealizedLossToMargin * 100).toFixed(1)])),
+          metricCard(t("metricRestartCount"), String(meta.closeLeadCount || 0), t("portfolioRestart"))
         ]),
         h("section", { class: "ctl-section" }, [
-          h("h3", { text: "主要風險" }),
-          bullets(verdict.cautions, "目前未觸發主要風險規則，但仍不代表安全或保證獲利。")
+          h("h3", { text: t("sectionRisks") }),
+          bullets(verdict.cautions, t("noMajorRisks"))
         ]),
         h("section", { class: "ctl-section" }, [
-          h("h3", { text: "正向訊號" }),
-          bullets(verdict.positives, "目前正向訊號不足，建議先觀察更多樣本。")
+          h("h3", { text: t("sectionPositives") }),
+          bullets(verdict.positives, t("noPositives"))
         ]),
         h("section", { class: "ctl-section" }, [
-          h("h3", { text: "建議設定" }),
+          h("h3", { text: t("sectionSettings") }),
           bullets(settingAdvice(analysis), "")
         ]),
         h("details", { class: "ctl-details" }, [
-          h("summary", { text: `進階資料：${statusText(raw.endpointResults)}` }),
-          h("h3", { text: "時間窗交叉檢查" }),
+          h("summary", { text: t("advancedData", [statusText(raw.endpointResults)]) }),
+          h("h3", { text: t("advancedWindowCrossCheck") }),
           performanceWindowTable(meta, fmt),
-          h("p", { class: "ctl-muted ctl-small-note", text: `歷史資料：${historyCompleteness(raw)}` }),
+          h("p", { class: "ctl-muted ctl-small-note", text: t("historyDataPrefix", [historyCompleteness(raw)]) }),
           endpointList(raw.endpointResults),
           h("pre", { text: JSON.stringify(analysis.rawCounts, null, 2) })
         ]),
-        h("p", { class: "ctl-disclaimer", text: "此分析只使用目前瀏覽器可取得資料並在本機計算，不是投資建議，也不保證收益或安全。" })
+        h("p", { class: "ctl-disclaimer", text: t("disclaimer") })
       ])
     );
   }

@@ -1,7 +1,7 @@
 # exchange-data-fetching Specification
 
 ## Purpose
-TBD - created by archiving change build-copy-trading-lens-extension. Update Purpose after archive.
+Defines provider behavior for fetching Binance/OKX lead-trader data from current-page same-origin APIs, including partial-failure reporting, retries, and credential/data protection constraints.
 ## Requirements
 ### Requirement: Fetch Binance lead trader data
 The extension SHALL fetch Binance lead trader data from same-origin page APIs for the current portfolio id, including detail, current positions, position history, order history, transfer history, and standard performance windows when those endpoints are available.

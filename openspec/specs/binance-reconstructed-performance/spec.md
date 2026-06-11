@@ -1,18 +1,22 @@
 # binance-reconstructed-performance Specification
 
 ## Purpose
-TBD - created by archiving change fix-live-performance-windows. Update Purpose after archive.
+Defines Binance all-period performance reconstruction and annualized-return handling from same-origin live data for the current lead portfolio.
 ## Requirements
 ### Requirement: Reconstruct Binance all-period performance
-The extension SHALL reconstruct Binance lead trader all-period performance from live same-origin API data for the current portfolio id when transfer history, current margin balance, and historical position data are available.
+The extension SHALL reconstruct Binance lead trader all-period performance from live same-origin API data for the current portfolio id when transfer history, current margin balance, and historical position data are available, including all-period ROI, net profit, and annualized return.
 
 #### Scenario: Complete cash-flow data is available
 - **WHEN** Binance transfer history contains deposits/withdrawals and detail contains current margin balance
-- **THEN** the analysis reports all-period net profit and ROI calculated from current margin balance plus withdrawals minus deposits
+- **THEN** the analysis reports all-period net profit, ROI calculated from current margin balance plus withdrawals minus deposits, and an XIRR/APY-style annualized return
+
+#### Scenario: Cash-flow annualization is unavailable
+- **WHEN** transfer history supports ROI reconstruction but does not support a valid XIRR solve
+- **THEN** the analysis reports CAGR estimated from all-period ROI and elapsed days when possible
 
 #### Scenario: Cash-flow data is unavailable
 - **WHEN** transfer history or margin balance is unavailable
-- **THEN** the analysis marks all-period ROI as unavailable instead of displaying zero
+- **THEN** the analysis marks all-period ROI and annualized return as unavailable instead of displaying zero
 
 ### Requirement: Use historical trading records for strategy analysis
 The extension SHALL use Binance position history and order history to analyze strategy behavior, including win/loss profile, payoff ratio, holding time, adverse adding, high-frequency behavior, and current floating-loss risk.

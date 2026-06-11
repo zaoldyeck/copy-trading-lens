@@ -1,24 +1,29 @@
-# TASKS
+# Tasks
 
-## Chrome Extension 發布版
+## Public Chrome Extension Release
 
-- [x] 建立獨立公開專案資料夾，避免把交易 bot repo 或私密 header/cookie 一起公開。
-- [x] 採用 Chrome Manifest V3，符合 Chrome Web Store 目前接受的 extension 格式。
-- [x] 不內建既有帶單員靜態排名或歷史快照，改為使用者進入個別帶單員頁面後即時抓取當頁資料分析。
-- [x] Binance provider：抓取 detail、目前持倉、歷史倉位、歷史訂單、轉帳紀錄。
-- [x] OKX provider：抓取公開排行候選資料、歷史倉位、目前持倉。
-- [x] 分析引擎：評估 ROI/MDD、盈虧比、持倉時間、逆勢加倉、補保證金、目前浮虧死扛、滑價/高頻可複製性。
-- [x] 頁面 UI：在 Binance/OKX 個別跟單員頁面顯示摘要、風險、證據與設定建議。
-- [x] Popup：說明 extension 目的、資料處理方式與手動刷新方式。
-- [x] README：公開 GitHub 使用說明、開發、打包、上架前檢查。
-- [x] Privacy Policy：明確說明不收集、不傳送、不儲存 cookie/header/API key。
-- [x] Chrome Web Store Description：可直接貼到商店頁面的說明文案。
-- [x] 打包腳本：產生可上傳 Chrome Web Store 的 zip。
-- [x] 基本驗證：manifest JSON、JS 語法、必要檔案、zip 結構。
+- [x] Create an independent public extension repository with no private bot-repo files, headers, cookies, or cached exchange data.
+- [x] Use Chrome Manifest V3.
+- [x] Avoid static lead-trader rankings or packaged historical snapshots; analyze the current lead page live.
+- [x] Implement Binance provider for profile, current positions, position history, order history, transfer history, and exchange performance windows.
+- [x] Implement OKX provider for available public profile/rank data, position history, and current positions.
+- [x] Retry transient Binance history-page failures until the target page succeeds.
+- [x] Reconstruct Binance all-period ROI/PnL where transfer and current-equity data are available.
+- [x] Add annualized return using XIRR/APY first and CAGR fallback.
+- [x] Implement risk analysis for ROI/MDD, payoff ratio, holding time, adverse adds, capital injections, current floating-loss holding, and high-frequency copyability risk.
+- [x] Render a collapsible overlay on Binance/OKX lead-trader pages.
+- [x] Add popup, generated icons, and release-ready extension package.
+- [x] Add Chrome i18n with English default and Taiwan Traditional Chinese support.
+- [x] Write English default README and Taiwan Traditional Chinese README.
+- [x] Add privacy policy and user-facing installation documentation.
+- [x] Add GitHub Actions workflow that builds the extension ZIP and attaches it to tagged GitHub Releases.
+- [x] Use `CC-BY-NC-4.0` licensing: attribution required, modification allowed, commercial use prohibited.
+- [x] Validate manifest/files/JavaScript syntax/secret patterns and package the extension ZIP.
+- [x] Push the independent public GitHub repository.
 
-## 後續可做但不阻塞 v0.1.0
+## Future Ideas
 
-- [ ] 加入使用者自訂風險門檻。
-- [ ] 加入匯出單一帶單員分析 JSON 的按鈕。
-- [ ] 針對 OKX 補更多公開 API 欄位，例如 copier 分布、週收益柱狀圖與分潤資訊。
-- [ ] 建立自動化 Playwright smoke test，載入 unpacked extension 並在 fixture page 測試 UI。
+- [ ] User-configurable risk thresholds.
+- [ ] Export a single lead-trader analysis JSON from the overlay.
+- [ ] Better OKX public data coverage if more stable public endpoints become available.
+- [ ] Automated browser smoke test with an unpacked extension fixture page.
