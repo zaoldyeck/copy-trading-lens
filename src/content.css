@@ -188,6 +188,15 @@
   padding: 10px;
 }
 
+.ctl-metric.is-danger {
+  background: rgba(239, 68, 68, 0.14);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.ctl-metric.is-danger strong {
+  color: #fca5a5;
+}
+
 .ctl-metric span {
   color: #91a0b2;
   display: block;
@@ -266,6 +275,7 @@
 .ctl-small-note {
   margin-top: 8px;
 }
+
 
 .ctl-details {
   border-top: 1px solid rgba(255, 255, 255, 0.08);
