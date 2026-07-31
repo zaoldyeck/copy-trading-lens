@@ -92,8 +92,8 @@
     ));
   }
 
-  function metricCard(label, value, hint = "") {
-    return h("div", { class: "ctl-metric" }, [
+  function metricCard(label, value, hint = "", accent = "") {
+    return h("div", { class: accent ? `ctl-metric ${accent}` : "ctl-metric" }, [
       h("span", { text: label }),
       h("strong", { text: value }),
       hint ? h("small", { text: hint }) : null
@@ -105,6 +105,7 @@
     if (!list.length) return h("p", { class: "ctl-muted", text: emptyText });
     return h("ul", { class: "ctl-list" }, list.slice(0, 8).map((item) => h("li", { text: item })));
   }
+
 
   function performanceWindowTable(meta, fmt) {
     const windows = meta.performanceWindows || {};
@@ -221,6 +222,7 @@
     const live = analysis.live;
     const verdict = analysis.verdict;
     const strategy = analysis.strategy;
+    const transfers = analysis.transfers;
 
     ensureRoot().replaceChildren(
       h("section", { class: "ctl-panel" }, [
@@ -254,6 +256,12 @@
           metricCard(t("metricLossHold"), fmt.formatHours(summary.avgLossHoldHours), t("longestHold", [fmt.formatHours(summary.maxLossHoldHours)])),
           metricCard(t("metricAdverseAdd"), fmt.formatPct(orders.adverseAddRate * 100), `${orders.adverseAdds}/${orders.openOrders}`),
           metricCard(t("metricFloatingLoss"), fmt.formatMoney(live.openUnrealizedLoss), t("marginPct", [(live.openUnrealizedLossToMargin * 100).toFixed(1)])),
+          metricCard(
+            t("metricLossPeriodDeposit"),
+            t("lossPeriodDepositCount", [transfers.lossPeriodDepositCount]),
+            transfers.lossPeriodDepositCount > 0 ? t("lossPeriodDepositHint", [fmt.formatMoney(transfers.lossPeriodDepositTotal)]) : t("lossPeriodDepositNone"),
+            transfers.lossPeriodDepositCount > 0 ? "is-danger" : ""
+          ),
           metricCard(t("metricRestartCount"), String(meta.closeLeadCount || 0), t("portfolioRestart"))
         ]),
         h("section", { class: "ctl-section" }, [

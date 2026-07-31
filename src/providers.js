@@ -128,12 +128,24 @@
     }
   }
 
+  // Binance's paged history endpoints report a `total` count but silently hard-cap
+  // how deep they'll actually paginate (observed: order-history stops returning any
+  // rows past page 61/pageSize 100 = 6100 records, regardless of a much larger
+  // stated `total`). A short page below that depth is usually a transient blip, but
+  // past the cap it repeats forever — treating every short page as transient spins
+  // the loop indefinitely. MAX_PREMATURE_RETRIES bounds the transient case (same
+  // small-bounded-retry convention as fetchBinancePagedPage's own backoff) before
+  // accepting the depth cap and reporting the fetch as incomplete instead of hanging.
+  const MAX_PREMATURE_RETRIES = 3;
+
   async function fetchBinancePagedDetailed(path, portfolioId) {
     const rows = [];
     let total = null;
     let pages = 0;
     let retryCount = 0;
     let lastRetryError = "";
+    let prematureRetries = 0;
+    let depthLimited = false;
     for (let pageNumber = 1; ; pageNumber += 1) {
       const page = await fetchBinancePagedPage(path, portfolioId, pageNumber, PAGE_SIZE);
       const response = page.response;
@@ -149,11 +161,19 @@
         && pageNumber * PAGE_SIZE < total
         && pageRows.length < PAGE_SIZE;
       if (prematureShortPage) {
-        lastRetryError = `Binance ${path} page ${pageNumber} returned short data before total was reached`;
-        await sleep(retryDelayMs(1));
-        pageNumber -= 1;
-        continue;
+        prematureRetries += 1;
+        if (prematureRetries <= MAX_PREMATURE_RETRIES) {
+          lastRetryError = `Binance ${path} page ${pageNumber} returned short data before total was reached`;
+          await sleep(retryDelayMs(prematureRetries));
+          pageNumber -= 1;
+          continue;
+        }
+        lastRetryError = `Binance ${path} stopped returning data at page ${pageNumber} (fetched ${rows.length} of reported total ${total}) — API depth limit, not a transient error`;
+        depthLimited = true;
+        pages = pageNumber - 1;
+        break;
       }
+      prematureRetries = 0;
 
       pages = pageNumber;
       rows.push(...pageRows);
@@ -166,7 +186,7 @@
       total: Number.isFinite(total) ? total : rows.length,
       fetched: rows.length,
       pages,
-      complete: true,
+      complete: !depthLimited,
       retryCount,
       lastRetryError
     };

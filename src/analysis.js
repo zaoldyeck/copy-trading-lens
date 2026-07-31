@@ -274,7 +274,15 @@
 
     const detailStart = num(firstDefined(detail.startTime, pageMetrics.tradingDays ? Date.now() - pageMetrics.tradingDays * DAY_MS : 0), 0);
     const firstAt = Number.isFinite(firstEventTime) ? firstEventTime : detailStart;
-    const startGapDays = detailStart && firstAt ? Math.max(0, (firstAt - detailStart) / DAY_MS) : 0;
+    // Signed, not clamped to >=0: a NEGATIVE gap (events recorded before the
+    // official portfolio start) means position/transfer history from a prior,
+    // closed lead incarnation is bleeding into "current" stats — e.g. a
+    // catastrophic loss two months before this portfolio's start date still
+    // dragging down the reported payoff ratio. Clamping that to 0 (the old
+    // behavior) made reliable=true pass for exactly this contaminated case.
+    const startGapSignedDays = detailStart && firstAt ? (firstAt - detailStart) / DAY_MS : 0;
+    const startGapDays = Math.abs(startGapSignedDays);
+    const preStartHistoryDays = startGapSignedDays < 0 ? startGapDays : 0;
     const complete = Boolean(
       historyStatus.positionHistory?.complete
       && historyStatus.transferHistory?.complete
@@ -309,6 +317,7 @@
       complete,
       reliable,
       startGapDays,
+      preStartHistoryDays,
       source: "cash-flow-reconstruction"
     };
   }
@@ -480,10 +489,23 @@
     };
   }
 
+  function isCapitalInflowTransfer(item) {
+    // LEAD_DEPOSIT / LEAD_INVEST = real capital added by the trader.
+    // LEAD_FEE_DEPOSIT = the trader topping up to settle a profit-share fee owed
+    // to copiers — routed through the same account, but not a position rescue.
+    // A plain substring match on "DEPOSIT" mixes the two (every fee top-up is
+    // literally named *_FEE_DEPOSIT_*) and inflates the loss-period-deposit count
+    // with $0.03-$2 fee noise alongside real five/six-figure injections.
+    const type = String(item.transType || item.type || "").toUpperCase();
+    return (type.includes("DEPOSIT") || type.includes("INVEST")) && !type.includes("FEE");
+  }
+
   function analyzeTransfers(transfers, losses, marginBalance) {
-    const deposits = transfers.filter((item) => String(item.transType || item.type || "").includes("DEPOSIT"));
+    const deposits = transfers.filter(isCapitalInflowTransfer);
     const lossIntervals = losses
       .map((position) => ({
+        symbol: String(firstDefined(position.symbol, position.instId, "")),
+        pnl: binancePositionPnl(position),
         opened: num(firstDefined(position.opened, position.openTime, position.createTime), 0),
         closed: num(firstDefined(position.closed, position.closeTime, position.updateTime), 0)
       }))
@@ -496,6 +518,17 @@
     });
     const lossPeriodAmount = lossPeriodDeposits.reduce((sum, item) => sum + Math.max(0, num(firstDefined(item.amount, item.amt), 0)), 0);
     const maxDeposit = depositAmounts.length ? Math.max(...depositAmounts) : 0;
+    const rescueTimeline = lossPeriodDeposits
+      .map((item) => {
+        const time = num(firstDefined(item.time, item.ts, item.cTime), 0);
+        const amount = num(firstDefined(item.amount, item.amt), 0);
+        const positions = lossIntervals
+          .filter((range) => range.opened <= time && time <= range.closed)
+          .map((range) => ({ symbol: range.symbol, pnl: range.pnl, opened: range.opened, closed: range.closed }));
+        return { time, amount, positions };
+      })
+      .filter((entry) => entry.time > 0 && entry.amount > 0)
+      .sort((a, b) => a.time - b.time);
     return {
       depositCount: depositAmounts.length,
       depositTotal: depositAmounts.reduce((sum, value) => sum + value, 0),
@@ -504,16 +537,23 @@
       lossPeriodDepositTotal: lossPeriodAmount,
       maxDepositToMargin: safeDivide(maxDeposit, marginBalance, 0),
       lossPeriodDepositToMargin: safeDivide(lossPeriodAmount, marginBalance, 0),
-      totalDepositToMargin: safeDivide(depositAmounts.reduce((sum, value) => sum + value, 0), marginBalance, 0)
+      totalDepositToMargin: safeDivide(depositAmounts.reduce((sum, value) => sum + value, 0), marginBalance, 0),
+      rescueTimeline
     };
   }
 
   function analyzeLivePositions(livePositions, orderAnalysis, marginBalance) {
+    // Binance's lead-data/positions endpoint returns one placeholder row per
+    // symbol/side combination the trader has ever configured, most with zero
+    // quantity — filter to rows with a real position before counting/listing,
+    // or `openCount`/`dominantOpenSymbols` report hundreds of empty scaffolding
+    // rows as if they were live positions.
     const rows = Array.isArray(livePositions) ? livePositions : [];
     let openUnrealizedLoss = 0;
     let openUnrealizedProfit = 0;
     let openNotional = 0;
     const losingPositions = [];
+    const openPositions = [];
 
     for (const position of rows) {
       const qty = num(firstDefined(position.positionAmount, position.pos, position.quantity, position.availPos), 0);
@@ -522,6 +562,7 @@
       let notional = Math.abs(num(firstDefined(position.notionalValue, position.notionalUsd, position.margin), 0));
       if (!notional && mark && qty) notional = Math.abs(qty * mark);
       if (Math.abs(qty) > 0 || notional > 0) {
+        openPositions.push(position);
         openNotional += notional;
         if (pnl < 0) {
           openUnrealizedLoss += Math.abs(pnl);
@@ -533,14 +574,14 @@
     }
 
     return {
-      openCount: rows.length,
+      openCount: openPositions.length,
       losingOpenCount: losingPositions.length,
       openUnrealizedLoss,
       openUnrealizedProfit,
       openUnrealizedLossToMargin: safeDivide(openUnrealizedLoss, marginBalance, 0),
       openNotional,
       openNotionalToMargin: safeDivide(openNotional, marginBalance, 0),
-      dominantOpenSymbols: rows.slice(0, 5).map((p) => String(firstDefined(p.symbol, p.instId, p.instIdCode, ""))).filter(Boolean),
+      dominantOpenSymbols: openPositions.slice(0, 5).map((p) => String(firstDefined(p.symbol, p.instId, p.instIdCode, ""))).filter(Boolean),
       orderAnalysis
     };
   }
@@ -708,6 +749,7 @@
     if (live.openUnrealizedLossToMargin >= 0.05 || live.openUnrealizedLoss >= 5000) cautions.push(t("cautionFloatingLoss", [formatMoney(live.openUnrealizedLoss), (live.openUnrealizedLossToMargin * 100).toFixed(1)]));
     if (copierPnlToAum <= -0.05 && meta.roi > 0) cautions.push(t("cautionCopierDivergence", [`${(copierPnlToAum * 100).toFixed(1)}%`]));
     if (meta.closeLeadCount >= 8) cautions.push(t("cautionCloseLeadCount", [meta.closeLeadCount]));
+    if (meta.allPeriodPerformance?.preStartHistoryDays > 2) cautions.push(t("cautionPreStartHistory", [meta.allPeriodPerformance.preStartHistoryDays.toFixed(0)]));
 
     if (transfers.lossPeriodDepositCount > 0) {
       level = "avoid";
