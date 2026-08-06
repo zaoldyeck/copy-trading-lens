@@ -21,9 +21,11 @@ export function summarizeResult(rankEntry, result) {
     pid: meta.id,
     name: meta.name,
     rankRoi30D: rankEntry?.row?.roi ?? null,
+    roi30D: meta.performanceWindows?.["30D"]?.roi ?? null,
     days: meta.days,
     roi: meta.roi,
     annualizedReturn: meta.annualizedReturn,
+    annualizedSource: meta.annualizedSource,
     mdd: meta.mdd,
     pnl: meta.pnl,
     aum: meta.aum,
@@ -93,12 +95,12 @@ export function toMarkdownTable(summaries, opts = {}) {
     return (a.rank ?? 0) - (b.rank ?? 0);
   });
 
-  const header = "| 排名 | 交易員 | 天數 | ROI(全期) | MDD | 勝率 | 盈虧比 | 虧損期入金 | 策略型態 | 判定 |";
-  const sep = "|---|---|---|---|---|---|---|---|---|---|";
+  const header = "| 排名 | 交易員 | 天數 | 年化(CAGR/XIRR) | 近30天ROI | MDD | 勝率 | 盈虧比 | 虧損期入金 | 策略型態 | 判定 |";
+  const sep = "|---|---|---|---|---|---|---|---|---|---|---|";
   const rows = sorted.map((s) => {
     const link = `[${escapeCell(s.name)}](https://www.binance.com/zh-TC/copy-trading/lead-details/${s.pid}?timeRange=30D)`;
     const deposit = s.lossPeriodDepositCount > 0 ? `${s.lossPeriodDepositCount} 次 / ${fmtMoney(s.lossPeriodDepositTotal)}` : "無";
-    return `| ${s.rank ?? ""} | ${link} | ${Math.round(s.days)} | ${fmtPct(s.roi)} | ${fmtPct(s.mdd)} | ${fmtPct((s.winRate ?? 0) * 100)} | ${fmtRatio(s.payoffRatio)} | ${deposit} | ${escapeCell(s.family)} | ${escapeCell(s.verdictTitle)} |`;
+    return `| ${s.rank ?? ""} | ${link} | ${Math.round(s.days)} | ${fmtPct(s.annualizedReturn, 0)} | ${fmtPct(s.roi30D)} | ${fmtPct(s.mdd)} | ${fmtPct((s.winRate ?? 0) * 100)} | ${fmtRatio(s.payoffRatio)} | ${deposit} | ${escapeCell(s.family)} | ${escapeCell(s.verdictTitle)} |`;
   });
   return [header, sep, ...rows].join("\n");
 }

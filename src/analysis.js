@@ -663,6 +663,18 @@
     const addSizeExpansion = orders.initialOrderMedian > 0 && orders.addOrderMedian > orders.initialOrderMedian * 1.2;
     const layeredAdds = orders.maxLayers >= 3 || adverseRate >= 0.2;
     const tightGridSteps = orders.adverseStepMedianBps > 0 && orders.adverseStepMedianBps <= 120;
+    // Tight step spacing alone doesn't mean grid — a bot that only ever adds
+    // to one side as price grinds down produces the same tight, regular
+    // steps as genuine two-sided range trading. Real grid/range harvesting
+    // round-trips: it closes roughly as often as it opens, because each
+    // level that fills eventually gets sold back into the range. One-way
+    // accumulation barely closes at all. Measured on the 32 traders an
+    // earlier pass labeled Grid: close/open ratio clustered at 35%-400%+
+    // except four outliers at 0.2%/8%/14%/15% — all of which turned out to
+    // be one-directional accumulation on inspection (e.g. 熬鹰资本: 1699 of
+    // 1722 orders on its dominant symbol were BUY/LONG while price fell
+    // 1405->1026, 13 sells total). 25% sits in that gap.
+    const roundTrips = orders.openOrders > 0 && safeDivide(orders.closeOrders, orders.openOrders, 0) >= 0.25;
     const shortHolds = summary.avgWinHoldHours > 0 && summary.avgWinHoldHours < 3;
     const tinyTakeProfit = summary.tpMedianBps > 0 && summary.tpMedianBps <= 35;
     const cleanTrendLike = summary.closedTrades >= 30
@@ -684,7 +696,7 @@
       family = t("familyMartingale");
       labels.push(t("labelMartingale"), t("labelAdverseAdd"));
       if (longLossHold) labels.push(t("labelLongLossHold"));
-    } else if (layeredAdds && tightGridSteps && highFrequency) {
+    } else if (layeredAdds && tightGridSteps && highFrequency && roundTrips) {
       family = t("familyGrid");
       labels.push(t("labelGrid"), t("labelDca"), t("labelLeftSide"));
     } else if (adverseRate >= 0.35 && strongPayoff && summary.avgLossHoldHours < 1) {
