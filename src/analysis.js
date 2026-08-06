@@ -671,7 +671,16 @@
       && summary.avgLossHoldHours > 0
       && summary.avgLossHoldHours < summary.avgWinHoldHours;
 
-    if (adverseRate >= 0.35 && (addSizeExpansion || longLossHold || poorPayoff) && orders.maxLayers >= 3) {
+    // Martingale means capitulation-style averaging at meaningful price
+    // dislocations — escalating conviction after an adverse move. Tight,
+    // regular step spacing (<=120bps, the same bar tightGridSteps uses) is
+    // the opposite signature: mechanical/programmatic execution, not
+    // capitulation. Without the !tightGridSteps guard, a high-frequency
+    // tight-grid trader who also happens to hold losers a bit longer than
+    // winners (longLossHold) gets mislabeled Martingale before the Grid
+    // branch ever runs — confirmed on real data: 18 of 31 Martingale calls
+    // in one batch also satisfied tightGridSteps.
+    if (adverseRate >= 0.35 && (addSizeExpansion || longLossHold || poorPayoff) && orders.maxLayers >= 3 && !tightGridSteps) {
       family = t("familyMartingale");
       labels.push(t("labelMartingale"), t("labelAdverseAdd"));
       if (longLossHold) labels.push(t("labelLongLossHold"));

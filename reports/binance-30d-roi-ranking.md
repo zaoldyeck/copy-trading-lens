@@ -14,7 +14,7 @@
 
 | 等級 | 意思 | 觸發條件（擇一即中） |
 |---|---|---|
-| 🚫 **不建議跟 / 暫不跟 / 高風險不建議一般跟單** (avoid) | 有直接證據顯示帳戶會在虧損時做出跟單者無法同步複製的行為，或歷史回撤已經大到不合理 | 虧損持倉期間偵測到資金轉入；逆勢加碼、虧損持倉拖延、盈虧比失衡同時出現（類馬丁組合）；目前有顯著浮虧倉位；歷史回撤 ≥50% |
+| 🚫 **不建議跟 / 暫不跟 / 高風險不建議一般跟單** (avoid) | 有直接證據顯示帳戶會在虧損時做出跟單者無法同步複製的行為，或歷史回撤已經大到不合理 | 虧損持倉期間偵測到資金轉入；逆勢加碼、虧損持倉拖延、盈虧比失衡同時出現（風險組合訊號）；目前有顯著浮虧倉位；歷史回撤 ≥50% |
 | ⚠️ **高風險候補** (risky) | 沒有前述直接證據，但風險訊號已經多到不能忽略 | 警示數 ≥3、或回撤 ≥30%、或逆勢加碼率 ≥35%、或盈虧比 <0.5 |
 | 👀 **觀察** (watch) | 樣本太薄，判斷不出型態 | 其餘情況的預設值 |
 | ✅ **可小額測試候選** (followable) | 天數與樣本數達標，沒有觸發任何警示 | 天數 ≥30 且平倉 ≥30 筆，且不落入以上任何一類 |
@@ -22,15 +22,17 @@
 
 **沒有「零風險」這一級**——preferred 也只代表「目前看不到結構性問題」，不是保證。
 
-### 策略型態怎麼判斷（含「馬丁格爾」的明確定義）
+### 策略型態怎麼判斷（含「馬丁格爾」的明確定義，以及一次真實的分類修正）
 分析器看**訂單紀錄**裡的加碼行為，不是看標籤或自稱：
 
-- **馬丁格爾（Martingale）**：逆勢加碼率 >35% 且（加碼倉位持續放大、或虧損倉位持有時間過長、或盈虧比失衡），同時加碼層數 ≥3。白話：跌了不停損、反而越跌越加碼，賭反彈，一旦方向錯到底就是等比放大的虧損。
+- **馬丁格爾（Martingale）**：逆勢加碼率 >35% 且（加碼倉位持續放大、或虧損倉位持有時間過長、或盈虧比失衡），同時加碼層數 ≥3、**且加碼價距不算網格級的緊密**（>120 個基點）。白話：跌了不停損、反而在有意義的價格拉開後越跌越加碼，賭反彈，一旦方向錯到底就是等比放大的虧損。
 - **網格 / 區間交易（Grid）**：加碼是分層的、加碼間距很窄（≤120 個基點）、且交易頻率高。白話：固定價距掛單吃震盪，行情走出區間就會累積浮虧。
 - **DCA / 左側交易**：逆勢加碼率 ≥20% 但沒達到馬丁的組合門檻。白話：跌了會攤平，但沒有馬丁那麼失控。
 - **剝頭皮 / 波段 / 右側趨勢**：健康的三種型態，差別在持倉時間長短與進場邏輯，不涉及逆勢加碼。
 
-**逆勢加碼率**、**加碼層數**、**盈虧比**這三個數字組合起來，就是本報告分辨「乾淨策略」跟「賭一把」的核心依據。
+**逆勢加碼率**、**加碼層數**、**加碼價距**、**盈虧比**這四個數字組合起來，就是本報告分辨「乾淨策略」跟「賭一把」的核心依據。
+
+> **一次真實的分類修正**：本報告第一版把 [13] 熬鹰资本判成「馬丁格爾」。使用者指出這人是純人工交易，實際查證後：(1) Binance 官方帳戶標籤裡有 `API_KEY_TRADE`（API／程式化交易的官方標記），(2) 訂單紀錄裡有兩筆不同金額的賣單時間戳精確到同一毫秒——人手不可能做到，(3) 加碼價距中位數只有 2.5 個基點，訂單量高達 2171 筆，其中 79% 集中在單一標的。這三項證據都指向「純人工」是錯的（是自動化執行），但也讓我們發現分類器本身有問題：判定邏輯先檢查馬丁格爾、後檢查網格，兩者條件在這類「加碼間距其實很窄、但同時虧損倉位持有偏久」的帳戶身上會同時成立，馬丁格爾先中就不會再檢查網格，導致誤標。**已在 `src/analysis.js` 修正**（馬丁格爾判定新增「加碼價距不能是網格級緊密」的排除條件），全批 140 人重新跑過。修正前後對照：馬丁格爾 31 位 → 13 位，網格 20 位 → 32 位，DCA 左側 45 位 → 51 位；三者合計仍是 96 位（68.6%），**沒有任何交易員因此離開「逆勢加碼」風險家族，只是型態標籤更準了**。避免跟單的判定（verdict）本身不受影響——熬鹰资本目前仍是「不建議跟」，理由是回撤 68.3%、逆勢加碼率 39%、虧損倉位持有時間明顯長於獲利倉位，這些跟「是不是馬丁格爾」無關，是獨立成立的風險證據。
 
 ### 「虧損期入金」是什麼、為什麼是最重的紅燈
 交易員在**某個虧損中的倉位還沒平倉時**，把新資金轉入帶單帳戶——這是跟單者結構上無法同步複製的行為（你不會知道他何時、要補多少），也是「用錢撐住不被強平」的直接證據，不是巧合。本報告統計時已排除 `LEAD_FEE_DEPOSIT`（分潤手續費補繳，通常幾毛到幾塊錢，不是真實資金救援）以及只納入真正的資金流入（`LEAD_DEPOSIT`/`LEAD_INVEST`），避免手續費雜訊把次數灌水。
@@ -46,10 +48,10 @@
 
 **140 位「30 天 ROI 排行榜上最靠前」的交易員裡，92 位（65.7%）被判不建議跟單，只有 1 位達到「較適合跟單候選」等級，11 位可小額測試，1 位觀察中，其餘 35 位是高風險候補。**
 
-策略型態分布更直接說明問題：
-- **馬丁格爾**：31 位（22.1%）
-- **網格 / 區間交易**：20 位（14.3%）
-- **DCA / 左側交易**：45 位（32.1%）
+策略型態分布更直接說明問題（已套用上述分類修正）：
+- **DCA / 左側交易**：51 位（36.4%）
+- **網格 / 區間交易**：32 位（22.9%）
+- **馬丁格爾**：13 位（9.3%）
 - 三者合計 **96 位（68.6%）** 都是「逆勢加碼、賭反彈」家族。
 - 乾淨的剝頭皮／波段／右側趨勢型態合計只有 25 位（17.9%）。
 
@@ -62,16 +64,16 @@
 | 排名 | 交易員 | 天數 | ROI(全期) | MDD | 勝率 | 盈虧比 | 虧損期入金 | 策略型態 | 判定 |
 |---|---|---|---|---|---|---|---|---|---|
 | 32 | [芝麻芝麻](https://www.binance.com/zh-TC/copy-trading/lead-details/4971482014090862081?timeRange=30D) | 136 | 249.8% | 14.1% | 46.7% | 7.82 | 無 | 右側交易 / 趨勢跟隨：等方向確認後進場，通常更重視停損 | 🏆 較適合跟單候選 |
-| 10 | [来一杯清茶](https://www.binance.com/zh-TC/copy-trading/lead-details/5114550459351371264?timeRange=30D) | 37 | 2508.9% | 25.3% | 82.9% | 4.09 | 無 | DCA / 左側交易：逆勢分批攤平，進場太早會承接回撤 | ✅ 可小額測試候選 |
-| 40 | [HK大叔D](https://www.binance.com/zh-TC/copy-trading/lead-details/5082904357337048064?timeRange=30D) | 59 | 392.1% | 19.8% | 56.4% | 1.61 | 無 | 剝頭皮：短線高頻小利，跟單延遲與手續費會影響結果 | ✅ 可小額測試候選 |
-| 48 | [富一次就足够](https://www.binance.com/zh-TC/copy-trading/lead-details/5121749078299654657?timeRange=30D) | 32 | 64.9% | 13.7% | 43.9% | 2.10 | 無 | 剝頭皮：短線高頻小利，跟單延遲與手續費會影響結果 | ✅ 可小額測試候選 |
-| 56 | [静宝Trader](https://www.binance.com/zh-TC/copy-trading/lead-details/5062779826159549440?timeRange=30D) | 73 | 101.0% | 25.5% | 96.2% | 59.96 | 無 | 波段交易：持倉時間較長，跟單者可能承接既有波動 | ✅ 可小額測試候選 |
-| 75 | [Passion lucky little orange king](https://www.binance.com/zh-TC/copy-trading/lead-details/5097511984930658560?timeRange=30D) | 49 | 71.4% | 12.6% | 100.0% | N/A | 無 | 剝頭皮：短線高頻小利，跟單延遲與手續費會影響結果 | ✅ 可小額測試候選 |
-| 85 | [布鲁斯村长](https://www.binance.com/zh-TC/copy-trading/lead-details/4904114645412812033?timeRange=30D) | 182 | 254.5% | 25.5% | 80.0% | 2.34 | 無 | DCA / 左側交易：逆勢分批攤平，進場太早會承接回撤 | ✅ 可小額測試候選 |
-| 105 | [专空暴涨币](https://www.binance.com/zh-TC/copy-trading/lead-details/5107107059031359745?timeRange=30D) | 42 | 43.4% | 12.3% | 56.8% | 1.44 | 無 | 波段交易：持倉時間較長，跟單者可能承接既有波動 | ✅ 可小額測試候選 |
+| 10 | [来一杯清茶](https://www.binance.com/zh-TC/copy-trading/lead-details/5114550459351371264?timeRange=30D) | 37 | 2508.9% | 25.3% | 82.9% | 4.09 | 無 | DCA / 左側交易 | ✅ 可小額測試候選 |
+| 40 | [HK大叔D](https://www.binance.com/zh-TC/copy-trading/lead-details/5082904357337048064?timeRange=30D) | 59 | 392.1% | 19.8% | 56.4% | 1.61 | 無 | 剝頭皮 | ✅ 可小額測試候選 |
+| 48 | [富一次就足够](https://www.binance.com/zh-TC/copy-trading/lead-details/5121749078299654657?timeRange=30D) | 32 | 64.9% | 13.7% | 43.9% | 2.10 | 無 | 剝頭皮 | ✅ 可小額測試候選 |
+| 56 | [静宝Trader](https://www.binance.com/zh-TC/copy-trading/lead-details/5062779826159549440?timeRange=30D) | 73 | 101.0% | 25.5% | 96.2% | 59.96 | 無 | 波段交易 | ✅ 可小額測試候選 |
+| 75 | [Passion lucky little orange king](https://www.binance.com/zh-TC/copy-trading/lead-details/5097511984930658560?timeRange=30D) | 49 | 71.4% | 12.6% | 100.0% | N/A | 無 | 剝頭皮 | ✅ 可小額測試候選 |
+| 85 | [布鲁斯村长](https://www.binance.com/zh-TC/copy-trading/lead-details/4904114645412812033?timeRange=30D) | 182 | 254.5% | 25.5% | 80.0% | 2.34 | 無 | DCA / 左側交易 | ✅ 可小額測試候選 |
+| 105 | [专空暴涨币](https://www.binance.com/zh-TC/copy-trading/lead-details/5107107059031359745?timeRange=30D) | 42 | 43.4% | 12.3% | 56.8% | 1.44 | 無 | 波段交易 | ✅ 可小額測試候選 |
 | 107 | [Callme卢本伟](https://www.binance.com/zh-TC/copy-trading/lead-details/4512404768792222208?timeRange=30D) | 452 | 262.3% | 18.7% | 73.8% | 1.17 | 無 | 未偵測到明顯高風險交易模式 | ✅ 可小額測試候選 |
-| 111 | [Hassiiiiiii](https://www.binance.com/zh-TC/copy-trading/lead-details/5023790571803063297?timeRange=30D) | 99 | 340.8% | 24.1% | 80.9% | 3.35 | 無 | 波段交易：持倉時間較長，跟單者可能承接既有波動 | ✅ 可小額測試候選 |
-| 121 | [笑里藏猫](https://www.binance.com/zh-TC/copy-trading/lead-details/4373485373878739969?timeRange=30D) | 548 | 22.6% | 23.3% | 75.8% | 2.51 | 無 | 右側交易 / 趨勢跟隨：等方向確認後進場，通常更重視停損 | ✅ 可小額測試候選 |
+| 111 | [Hassiiiiiii](https://www.binance.com/zh-TC/copy-trading/lead-details/5023790571803063297?timeRange=30D) | 99 | 340.8% | 24.1% | 80.9% | 3.35 | 無 | 波段交易 | ✅ 可小額測試候選 |
+| 121 | [笑里藏猫](https://www.binance.com/zh-TC/copy-trading/lead-details/4373485373878739969?timeRange=30D) | 548 | 22.6% | 23.3% | 75.8% | 2.51 | 無 | 右側交易 / 趨勢跟隨 | ✅ 可小額測試候選 |
 | 126 | [人生到处知何似](https://www.binance.com/zh-TC/copy-trading/lead-details/4556315195316581632?timeRange=30D) | 422 | 38.5% | 26.4% | 93.2% | 11.25 | 無 | 未偵測到明顯高風險交易模式 | ✅ 可小額測試候選 |
 | 122 | [Connnars](https://www.binance.com/zh-TC/copy-trading/lead-details/5050018266813140224?timeRange=30D) | 81 | 10.1% | 19.7% | 100.0% | N/A | 無 | 交易紀錄不足，暫時無法判斷跟單風險 | 👀 觀察 |
 | 1 | [VickyKaushal](https://www.binance.com/zh-TC/copy-trading/lead-details/5118776604240532481?timeRange=30D) | 34 | 5302.0% | 0.1% | 83.6% | 0.14 | 無 | 網格 / 區間交易 | ⚠️ 高風險候補 |
@@ -88,14 +90,14 @@
 | 34 | [一只饲养员](https://www.binance.com/zh-TC/copy-trading/lead-details/5106111650998328832?timeRange=30D) | 43 | 59.3% | 42.4% | 87.0% | 0.27 | 無 | DCA / 左側交易 | ⚠️ 高風險候補 |
 | 39 | [悟空行者](https://www.binance.com/zh-TC/copy-trading/lead-details/5058554442875015681?timeRange=30D) | 75 | 176.3% | 46.6% | 67.8% | 0.55 | 無 | 剝頭皮 | ⚠️ 高風險候補 |
 | 46 | [添天-Trader](https://www.binance.com/zh-TC/copy-trading/lead-details/5116162540710377216?timeRange=30D) | 36 | 282.3% | 48.8% | 43.1% | 1.27 | 無 | 波段交易 | ⚠️ 高風險候補 |
-| 55 | [分析师李涵](https://www.binance.com/zh-TC/copy-trading/lead-details/4871505589745295616?timeRange=30D) | 204 | 203.8% | 45.6% | 84.0% | 2.90 | 無 | DCA / 左側交易 | ⚠️ 高風險候補 |
+| 55 | [分析师李涵](https://www.binance.com/zh-TC/copy-trading/lead-details/4871505589745295616?timeRange=30D) | 205 | 203.8% | 45.6% | 84.0% | 2.90 | 無 | DCA / 左側交易 | ⚠️ 高風險候補 |
 | 59 | [Off-Duty Santa](https://www.binance.com/zh-TC/copy-trading/lead-details/5099790348346659328?timeRange=30D) | 47 | 1193.3% | 0.4% | 84.9% | 0.37 | 無 | 未偵測到明顯高風險交易模式 | ⚠️ 高風險候補 |
 | 65 | [Genacud](https://www.binance.com/zh-TC/copy-trading/lead-details/5106482936524032000?timeRange=30D) | 42 | 89.8% | 17.4% | 93.3% | 0.24 | 無 | 未偵測到明顯高風險交易模式 | ⚠️ 高風險候補 |
 | 66 | [豆壳资管 ALPHA...](https://www.binance.com/zh-TC/copy-trading/lead-details/5121701902529609728?timeRange=30D) | 32 | 95.5% | 10.3% | 77.8% | 12.77 | 無 | 左側搶反彈但停損快 | ⚠️ 高風險候補 |
 | 67 | [逢春化绿](https://www.binance.com/zh-TC/copy-trading/lead-details/5114561986167403008?timeRange=30D) | 37 | 170.1% | 42.7% | 58.5% | 0.59 | 無 | DCA / 左側交易 | ⚠️ 高風險候補 |
 | 68 | [方幻资本](https://www.binance.com/zh-TC/copy-trading/lead-details/5088700299483824129?timeRange=30D) | 55 | 44.0% | 10.1% | 55.2% | 1.40 | 無 | 網格 / 區間交易 | ⚠️ 高風險候補 |
-| 72 | [BTC荣主席](https://www.binance.com/zh-TC/copy-trading/lead-details/5079451489425475073?timeRange=30D) | 61 | 1022.3% | 48.4% | 90.0% | 1.58 | 無 | 馬丁格爾 | ⚠️ 高風險候補 |
-| 74 | [万倍 小白兔](https://www.binance.com/zh-TC/copy-trading/lead-details/5094758288553721345?timeRange=30D) | 50 | 25.4% | 32.0% | 75.7% | 0.53 | 無 | DCA / 左側交易 | ⚠️ 高風險候補 |
+| 72 | [BTC荣主席](https://www.binance.com/zh-TC/copy-trading/lead-details/5079451489425475073?timeRange=30D) | 61 | 1022.3% | 48.4% | 90.0% | 1.58 | 無 | DCA / 左側交易（原誤標馬丁格爾，已修正） | ⚠️ 高風險候補 |
+| 74 | [万倍 小白兔](https://www.binance.com/zh-TC/copy-trading/lead-details/5094758288553721345?timeRange=30D) | 51 | 25.4% | 32.0% | 75.7% | 0.53 | 無 | DCA / 左側交易 | ⚠️ 高風險候補 |
 | 79 | [萧炎他哥](https://www.binance.com/zh-TC/copy-trading/lead-details/5052673756769390336?timeRange=30D) | 80 | 26.5% | 22.4% | 96.7% | 2.55 | 無 | DCA / 左側交易 | ⚠️ 高風險候補 |
 | 83 | [ANS568 crypto](https://www.binance.com/zh-TC/copy-trading/lead-details/4956682966099962369?timeRange=30D) | 146 | 216.3% | 22.7% | 95.6% | 0.28 | 無 | 波段交易 | ⚠️ 高風險候補 |
 | 88 | [驭鹰猎手](https://www.binance.com/zh-TC/copy-trading/lead-details/5080014986897740289?timeRange=30D) | 61 | 47.3% | 20.7% | 58.5% | 0.42 | 無 | 網格 / 區間交易 | ⚠️ 高風險候補 |
@@ -163,14 +165,14 @@
 - **[66] [豆壳资管 ALPHA...](https://www.binance.com/zh-TC/copy-trading/lead-details/5121701902529609728?timeRange=30D)**：本專案先前分析過，盈虧比 12.77 亮眼但逆勢加碼率高達 50.3%、歷史關閉 8 次，樣本僅 32 天、18 筆平倉，判斷依據仍薄。
 - **[67] [逢春化绿](https://www.binance.com/zh-TC/copy-trading/lead-details/5114561986167403008?timeRange=30D)**：37天、逆勢加碼 46.6%、歷史關閉 13 次、隱藏歷史 83 天——三個負面訊號疊加。
 - **[68] [方幻资本](https://www.binance.com/zh-TC/copy-trading/lead-details/5088700299483824129?timeRange=30D)**：55天、逆勢加碼 49.7%（接近馬丁門檻），網格型態。
-- **[72] [BTC荣主席](https://www.binance.com/zh-TC/copy-trading/lead-details/5079451489425475073?timeRange=30D)**：已被歸類馬丁格爾家族，MDD 48.4%、盈虧比尚可 1.58，但策略本質風險仍在。
+- **[72] [BTC荣主席](https://www.binance.com/zh-TC/copy-trading/lead-details/5079451489425475073?timeRange=30D)**：MDD 48.4%、盈虧比尚可 1.58，逆勢加碼 35.5%——分類修正後歸為 DCA 左側（原第一版誤標馬丁格爾，見上方方法論說明），加碼行為的風險本身沒變。
 - **[74] [万倍 小白兔](https://www.binance.com/zh-TC/copy-trading/lead-details/5094758288553721345?timeRange=30D)**：50天、盈虧比 0.53、MDD 32%。
 - **[79] [萧炎他哥](https://www.binance.com/zh-TC/copy-trading/lead-details/5052673756769390336?timeRange=30D)**：逆勢加碼 54.5%、歷史關閉 17 次，盈虧比 2.55 尚可但加碼行為偏重。
 - **[83] [ANS568 crypto](https://www.binance.com/zh-TC/copy-trading/lead-details/4956682966099962369?timeRange=30D)**：本專案長期追蹤對象，最新一輪盈虧比從先前的 1.24 惡化到 0.28，7 天窗口已轉負（詳見先前對話紀錄），這次批量分析再次確認**已從 followable 降級**，建議先停。
 - **[88] [驭鹰猎手](https://www.binance.com/zh-TC/copy-trading/lead-details/5080014986897740289?timeRange=30D)**：61天、隱藏歷史 61 天（幾乎跟顯示天數一樣長，代表官方起始時間幾乎沒有意義）。
 - **[92] [绝绝子量化](https://www.binance.com/zh-TC/copy-trading/lead-details/5010499259088388609?timeRange=30D)**：盈虧比僅 0.02（全組最差之一），98.4% 超高勝率，典型賺小賠大結構。
 - **[95] [琴心剑魄量化](https://www.binance.com/zh-TC/copy-trading/lead-details/5027661983202255104?timeRange=30D)**：加碼層數高達 197 層，網格型態。
-- **[102] [流沐](https://www.binance.com/zh-TC/copy-trading/lead-details/4978633340637175553?timeRange=30D)**：已歸類馬丁格爾，逆勢加碼 43.7%、加碼層數 89 層。
+- **[102] [流沐](https://www.binance.com/zh-TC/copy-trading/lead-details/4978633340637175553?timeRange=30D)**：逆勢加碼 43.7%、加碼層數 89 層、加碼價距偏寬（非緊密網格），維持馬丁格爾分類。
 - **[103] [求其_](https://www.binance.com/zh-TC/copy-trading/lead-details/5075520138668888576?timeRange=30D)**：歷史關閉 17 次、隱藏歷史 27 天、現正浮虧195 USDT，三重疊加。
 - **[115] [The Wealth Explorer](https://www.binance.com/zh-TC/copy-trading/lead-details/5011927020146328832?timeRange=30D)**：盈虧比 2.73 尚可，但逆勢加碼 48.1%（接近馬丁門檻）、加碼層數 28。
 - **[117] [Trafagen VS](https://www.binance.com/zh-TC/copy-trading/lead-details/5109382782177090817?timeRange=30D)**：盈虧比僅 0.12，隱藏歷史 74 天。
@@ -181,7 +183,7 @@
 
 ### 🚫 不建議跟單（92 位，佔全榜 65.7%）
 
-按觸發的核心證據分四組。每組先講「這個機制在防什麼事故」，再列出全部名單。
+按觸發的核心證據分四組。每組先講「這個機制在防什麼事故」，再列出全部名單。**分組依據是回撤／虧損期入金／逆勢加碼率這些獨立指標，不受上述策略型態標籤修正影響。**
 
 #### A. 虧損期入金——最直接的證據（51 位）
 
@@ -197,10 +199,10 @@
 - **[97] [绿茶时光](https://www.binance.com/zh-TC/copy-trading/lead-details/5044016029246786817?timeRange=30D)**：85天、ROI 5.4%、MDD 40.8%、勝率 96.7%、盈虧比 0.04、逆勢加碼 35.1%（最深 59 層）、虧損期入金 6 次共 19,867 USDT
 - **[82] [闹闹基金会](https://www.binance.com/zh-TC/copy-trading/lead-details/5123468843328084481?timeRange=30D)**：31天、ROI 43.8%、MDD 6.5%、勝率 90.7%、盈虧比 0.45、逆勢加碼 41.2%（最深 37 層）、虧損期入金 1 次共 11,469 USDT（現正浮虧153 USDT）
 - **[109] [雨后的夏天](https://www.binance.com/zh-TC/copy-trading/lead-details/5122837800040158209?timeRange=30D)**：31天、ROI 45.7%、MDD 16.1%、勝率 41.5%、盈虧比 1.23、逆勢加碼 24.5%（最深 10 層）、虧損期入金 1 次共 10,000 USDT（隱藏歷史61天；現正浮虧2,532 USDT；重建數據不可靠）
-- **[69] [Phorusrhacidae](https://www.binance.com/zh-TC/copy-trading/lead-details/3866994260364752129?timeRange=30D)**：897天、ROI 86.5%、MDD 59.3%、勝率 90.5%、盈虧比 0.08、逆勢加碼 0.0%（最深 11 層）、虧損期入金 5 次共 8,986 USDT（歷史關閉17次）
+- **[69] [Phorusrhacidae](https://www.binance.com/zh-TC/copy-trading/lead-details/3866994260364752129?timeRange=30D)**：898天、ROI 86.5%、MDD 59.3%、勝率 90.5%、盈虧比 0.08、逆勢加碼 0.0%（最深 11 層）、虧損期入金 5 次共 8,986 USDT（歷史關閉17次）
 - **[81] [观火明夷-天空](https://www.binance.com/zh-TC/copy-trading/lead-details/4818459045963553537?timeRange=30D)**：241天、ROI 513.0%、MDD 43.3%、勝率 98.6%、盈虧比 0.17、逆勢加碼 28.2%（最深 4 層）、虧損期入金 3 次共 7,534 USDT
-- **[101] [Pei Rath tObx 骆驼祥子](https://www.binance.com/zh-TC/copy-trading/lead-details/4917900657997249280?timeRange=30D)**：172天、ROI 8.6%、MDD 84.1%、勝率 88.4%、盈虧比 0.10、逆勢加碼 76.7%（最深 128 層）、虧損期入金 1 次共 5,500 USDT（現正浮虧6,320 USDT）
-- **[91] [意策稳算量化](https://www.binance.com/zh-TC/copy-trading/lead-details/5017907810143209217?timeRange=30D)**：103天、ROI 12.3%、MDD 29.4%、勝率 60.7%、盈虧比 0.83、逆勢加碼 30.2%（最深 48 層）、虧損期入金 15 次共 4,073 USDT（歷史關閉23次）
+- **[101] [Pei Rath tObx 骆驼祥子](https://www.binance.com/zh-TC/copy-trading/lead-details/4917900657997249280?timeRange=30D)**：173天、ROI 8.6%、MDD 84.1%、勝率 88.4%、盈虧比 0.10、逆勢加碼 76.7%（最深 128 層）、虧損期入金 1 次共 5,500 USDT（現正浮虧6,320 USDT）
+- **[91] [意策稳算量化](https://www.binance.com/zh-TC/copy-trading/lead-details/5017907810143209217?timeRange=30D)**：104天、ROI 12.3%、MDD 29.4%、勝率 60.7%、盈虧比 0.83、逆勢加碼 30.2%（最深 48 層）、虧損期入金 15 次共 4,073 USDT（歷史關閉23次）
 - **[106] [南帝一灯](https://www.binance.com/zh-TC/copy-trading/lead-details/5033762598222902784?timeRange=30D)**：93天、ROI 32.9%、MDD 19.8%、勝率 85.3%、盈虧比 0.49、逆勢加碼 36.7%（最深 7 層）、虧損期入金 1 次共 4,000 USDT（歷史關閉13次；現正浮虧11 USDT）
 - **[21] [重生之我在币圈捡垃圾-](https://www.binance.com/zh-TC/copy-trading/lead-details/5088110611707352576?timeRange=30D)**：55天、ROI 195.4%、MDD 91.0%、勝率 84.4%、盈虧比 0.35、逆勢加碼 52.6%（最深 39 層）、虧損期入金 6 次共 3,433 USDT（隱藏歷史14天；重建數據不可靠）
 - **[120] [Cw00](https://www.binance.com/zh-TC/copy-trading/lead-details/5112772623301787392?timeRange=30D)**：38天、ROI 42.4%、MDD 2.5%、勝率 82.2%、盈虧比 1.03、逆勢加碼 10.0%（最深 4 層）、虧損期入金 1 次共 3,228 USDT
@@ -216,9 +218,9 @@
 - **[127] [小涛_红雷团伙](https://www.binance.com/zh-TC/copy-trading/lead-details/4956058547359265281?timeRange=30D)**：146天、ROI -25.5%、MDD 87.0%、勝率 98.0%、盈虧比 0.03、逆勢加碼 68.3%（最深 13 層）、虧損期入金 2 次共 1,037 USDT
 - **[54] [悟空只想空](https://www.binance.com/zh-TC/copy-trading/lead-details/5063354055786336000?timeRange=30D)**：72天、ROI 112.4%、MDD 28.4%、勝率 60.7%、盈虧比 0.79、逆勢加碼 0.0%（最深 4 層）、虧損期入金 1 次共 1,000 USDT
 - **[86] [幻方](https://www.binance.com/zh-TC/copy-trading/lead-details/4847213992013158656?timeRange=30D)**：221天、ROI 40.2%、MDD 56.3%、勝率 81.7%、盈虧比 0.56、逆勢加碼 34.1%（最深 241 層）、虧損期入金 1 次共 1,000 USDT（現正浮虧861 USDT）
-- **[131] [馨影5245](https://www.binance.com/zh-TC/copy-trading/lead-details/5123706933479274240?timeRange=30D)**：30天、ROI 28.4%、MDD 6.7%、勝率 93.9%、盈虧比 0.17、逆勢加碼 11.8%（最深 4 層）、虧損期入金 1 次共 1,000 USDT
+- **[131] [馨影5245](https://www.binance.com/zh-TC/copy-trading/lead-details/5123706933479274240?timeRange=30D)**：31天、ROI 28.4%、MDD 6.7%、勝率 93.9%、盈虧比 0.17、逆勢加碼 11.8%（最深 4 層）、虧損期入金 1 次共 1,000 USDT
 - **[35] [deepseek量化之路](https://www.binance.com/zh-TC/copy-trading/lead-details/5027731030778117632?timeRange=30D)**：97天、ROI 173.3%、MDD 60.1%、勝率 64.5%、盈虧比 0.58、逆勢加碼 25.4%（最深 13 層）、虧損期入金 3 次共 886 USDT（隱藏歷史23天；現正浮虧577 USDT；重建數據不可靠）
-- **[93] [葫芦娃黑马](https://www.binance.com/zh-TC/copy-trading/lead-details/4962823996387848961?timeRange=30D)**：141天、ROI 36.8%、MDD 26.6%、勝率 75.5%、盈虧比 1.07、逆勢加碼 65.8%（最深 80 層）、虧損期入金 2 次共 850 USDT
+- **[93] [葫芦娃黑马](https://www.binance.com/zh-TC/copy-trading/lead-details/4962823996387848961?timeRange=30D)**：142天、ROI 36.8%、MDD 26.6%、勝率 75.5%、盈虧比 1.07、逆勢加碼 65.8%（最深 80 層）、虧損期入金 2 次共 850 USDT
 - **[116] [深圳老韭菜](https://www.binance.com/zh-TC/copy-trading/lead-details/5025347618056880384?timeRange=30D)**：98天、ROI 26.9%、MDD 12.8%、勝率 77.4%、盈虧比 1.21、逆勢加碼 44.4%（最深 26 層）、虧損期入金 2 次共 775 USDT（現正浮虧3 USDT）
 - **[14] [逐梦天舟](https://www.binance.com/zh-TC/copy-trading/lead-details/5046374891657474560?timeRange=30D)**：84天、ROI 219.0%、MDD 56.6%、勝率 65.6%、盈虧比 1.11、逆勢加碼 22.6%（最深 9 層）、虧損期入金 4 次共 570 USDT（現正浮虧596 USDT）
 - **[112] [李非与](https://www.binance.com/zh-TC/copy-trading/lead-details/4995909937889293825?timeRange=30D)**：119天、ROI 819.7%、MDD 59.5%、勝率 66.7%、盈虧比 2.61、逆勢加碼 23.5%（最深 10 層）、虧損期入金 1 次共 500 USDT（現正浮虧780 USDT）
@@ -233,7 +235,7 @@
 - **[61] [一步一步爬山虎](https://www.binance.com/zh-TC/copy-trading/lead-details/5057146551021088512?timeRange=30D)**：76天、ROI 684.9%、MDD 35.4%、勝率 88.7%、盈虧比 0.33、逆勢加碼 21.7%（最深 4 層）、虧損期入金 1 次共 234 USDT
 - **[77] [善富E族-姐夫](https://www.binance.com/zh-TC/copy-trading/lead-details/5076494843629357824?timeRange=30D)**：63天、ROI 68.9%、MDD 46.7%、勝率 79.1%、盈虧比 0.31、逆勢加碼 60.1%（最深 437 層）、虧損期入金 2 次共 225 USDT（隱藏歷史21天；重建數據不可靠）
 - **[73] [澄衡波浪](https://www.binance.com/zh-TC/copy-trading/lead-details/5077826926356165632?timeRange=30D)**：62天、ROI 31.6%、MDD 37.5%、勝率 36.4%、盈虧比 2.09、逆勢加碼 0.0%（最深 23 層）、虧損期入金 1 次共 206 USDT
-- **[28] [WayneChu](https://www.binance.com/zh-TC/copy-trading/lead-details/4991821431728314112?timeRange=30D)**：121天、ROI 56.0%、MDD 72.1%、勝率 80.1%、盈虧比 0.29、逆勢加碼 0.0%（最深 39 層）、虧損期入金 1 次共 200 USDT
+- **[28] [WayneChu](https://www.binance.com/zh-TC/copy-trading/lead-details/4991821431728314112?timeRange=30D)**：122天、ROI 56.0%、MDD 72.1%、勝率 80.1%、盈虧比 0.29、逆勢加碼 0.0%（最深 39 層）、虧損期入金 1 次共 200 USDT
 - **[5] [Money Empire ](https://www.binance.com/zh-TC/copy-trading/lead-details/5111693353246966784?timeRange=30D)**：39天、ROI 358.8%、MDD 44.2%、勝率 76.0%、盈虧比 0.50、逆勢加碼 9.3%（最深 33 層）、虧損期入金 1 次共 100 USDT（隱藏歷史31天；現正浮虧39 USDT；重建數據不可靠）
 - **[50] [阳光算力](https://www.binance.com/zh-TC/copy-trading/lead-details/5079642847105446401?timeRange=30D)**：61天、ROI 90.3%、MDD 30.9%、勝率 86.0%、盈虧比 0.54、逆勢加碼 38.5%（最深 34 層）、虧損期入金 1 次共 26 USDT（歷史關閉9次；隱藏歷史41天；現正浮虧43 USDT；重建數據不可靠）
 - **[100] [黑袍小分队](https://www.binance.com/zh-TC/copy-trading/lead-details/5065357423393074433?timeRange=30D)**：71天、ROI 12.6%、MDD 64.2%、勝率 62.6%、盈虧比 1.28、逆勢加碼 19.5%（最深 7 層）、虧損期入金 2 次共 20 USDT（現正浮虧1,874 USDT）
@@ -241,14 +243,14 @@
 
 #### B. 歷史回撤過大（30 位，無虧損期入金證據，但回撤 ≥50%）
 
-回撤 ≥50% 代表帳戶淨值曾經從高點腰斬以上。就算現在帳戶正在賺錢，這種波動幅度意味著你隨時可能在某一輪回撤剛開始時跟進，直接扛下腰斬：
+回撤 ≥50% 代表帳戶淨值曾經從高點腰斬以上。就算現在帳戶正在賺錢，這種波動幅度意味著你隨時可能在某一輪回撤剛開始時跟進，直接扛下腰斬。**[13] 熬鹰资本就在這組**——分類修正後策略型態改標為網格（見上方方法論說明），但回撤 68.3%、逆勢加碼 38.6%、虧損倉位持有時間明顯長於獲利倉位的風險證據不變，維持不建議跟：
 
 - **[98] [三和道长](https://www.binance.com/zh-TC/copy-trading/lead-details/4823111653455102977?timeRange=30D)**：238天、MDD 90.2%、盈虧比 3.38，回撤全榜數一數二誇張。
 - **[134] [lion086](https://www.binance.com/zh-TC/copy-trading/lead-details/4914854656769106433?timeRange=30D)**：175天、MDD 85.3%、100% 勝率但無平倉樣本可信度低。
 - **[27] [大道无形我有型–BNB](https://www.binance.com/zh-TC/copy-trading/lead-details/4939017463752658432?timeRange=30D)**：158天、MDD 83.5%、盈虧比僅 0.11，馬丁型態。
 - **[136] [周文王](https://www.binance.com/zh-TC/copy-trading/lead-details/4023784565234525696?timeRange=30D)**：789天全榜最長歷史，但 MDD 79.5%——長壽不代表安全。
 - **[38] [阿冷HODL](https://www.binance.com/zh-TC/copy-trading/lead-details/5037029478517640449?timeRange=30D)**：MDD 77.8%，盈虧比 3.39 尚可但波動極端。
-- **[36] [舔一口就泡](https://www.binance.com/zh-TC/copy-trading/lead-details/4978313648854368256?timeRange=30D)**：MDD 76.8%、盈虧比僅 0.13，馬丁型態。
+- **[36] [舔一口就泡](https://www.binance.com/zh-TC/copy-trading/lead-details/4978313648854368256?timeRange=30D)**：MDD 76.8%、盈虧比僅 0.13，網格型態（分類修正後）。
 - **[58] [ZZH111](https://www.binance.com/zh-TC/copy-trading/lead-details/5016454688410489344?timeRange=30D)**：MDD 75.6%、逆勢加碼 62.5%，ROI 已轉負。
 - **[130] [叶思鸣](https://www.binance.com/zh-TC/copy-trading/lead-details/5014828616737026048?timeRange=30D)**：MDD 73.9%，歷史關閉 11 次。
 - **[80] [Armandino](https://www.binance.com/zh-TC/copy-trading/lead-details/5107700514419316224?timeRange=30D)**：MDD 73.8%，隱藏歷史 53 天，ROI 1182.6% 亮眼但數據不可靠。
@@ -256,7 +258,7 @@
 - **[104] [ETTrader](https://www.binance.com/zh-TC/copy-trading/lead-details/4750820417699079681?timeRange=30D)**：MDD 73.5%，ROI 已轉負。
 - **[87] [相对论](https://www.binance.com/zh-TC/copy-trading/lead-details/4841196969892864512?timeRange=30D)**：MDD 71.8%，225 天長歷史但波動極端。
 - **[129] [星星捞月](https://www.binance.com/zh-TC/copy-trading/lead-details/4929439643010061057?timeRange=30D)**：MDD 70.3%，盈虧比僅 0.26。
-- **[13] [熬鹰资本](https://www.binance.com/zh-TC/copy-trading/lead-details/5075281354358777856?timeRange=30D)**：MDD 68.3%，加碼層數高達 **1684 層**（全榜最深），歷史關閉 9 次——極端馬丁行為的代表案例。
+- **[13] [熬鹰资本](https://www.binance.com/zh-TC/copy-trading/lead-details/5075281354358777856?timeRange=30D)**：MDD 68.3%，加碼層數高達 **1684 層**（全榜最深），逆勢加碼率 38.6%、加碼價距中位數僅 2.5 個基點（極緊密，配合 Binance 官方 `API_KEY_TRADE` 標籤與訂單同毫秒重複下單的證據，確認是自動化/程式化執行，不是人工，也不是傳統馬丁——已修正為網格型態）。歷史關閉 9 次。
 - **[17] [Ketaaaa](https://www.binance.com/zh-TC/copy-trading/lead-details/5117787902104322049?timeRange=30D)**：MDD 66.5%，盈虧比 0.94。
 - **[132] [Monkey911](https://www.binance.com/zh-TC/copy-trading/lead-details/4763954199553903361?timeRange=30D)**：MDD 65.7%，**現正浮虧 18,839 USDT**——本組現存浮虧最大者之一。
 - **[89] [小新交易员](https://www.binance.com/zh-TC/copy-trading/lead-details/4855144495762648832?timeRange=30D)**：MDD 64.7%，ROI 2146.3% 極端亮眼但回撤同樣極端。
@@ -274,9 +276,9 @@
 - **[63] [薄荷巧克力](https://www.binance.com/zh-TC/copy-trading/lead-details/4394552835450474753?timeRange=30D)**：534天長歷史，MDD 50.9%。
 - **[118] [智能操作风火](https://www.binance.com/zh-TC/copy-trading/lead-details/4577970699563577857?timeRange=30D)**：407天長歷史，MDD 50.6%，勝率僅35.7%。
 
-#### C. 馬丁格爾／逆勢加碼組合（10 位，回撤未達 50% 但加碼行為已達類馬丁門檻）
+#### C. 逆勢加碼組合（10 位，回撤未達 50% 但加碼行為已達風險組合門檻）
 
-回撤數字還不算誇張，但逆勢加碼率普遍在 37~49%，已經逼近純馬丁格爾的判定邊緣，只是還沒疊加長期套牢或盈虧比失衡：
+回撤數字還不算誇張，但逆勢加碼率普遍在 37~49%，已經逼近風險組合的判定邊緣（型態上有的是馬丁、有的分類修正後是網格或 DCA 左側，但**共同點是逆勢加碼行為本身偏重**，不管背後是人工還是自動化執行）：
 
 - **[47] [OA_T100](https://www.binance.com/zh-TC/copy-trading/lead-details/5111142402744452609?timeRange=30D)**：逆勢加碼49.3%，隱藏歷史49天。
 - **[99] [零度玩家](https://www.binance.com/zh-TC/copy-trading/lead-details/5024435657034432001?timeRange=30D)**：逆勢加碼47.9%，加碼層數146層，盈虧比9.53尚可但加碼行為本身是風險。
@@ -298,9 +300,6 @@
 ## 附註
 
 - 完整機器可讀資料：`reports/binance-30d-roi-ranking.json`（140 筆，含本文未展開的全部欄位）。
-- 重新產生／更新此報告：`node tools/cli.mjs rank-above <目標 portfolioId> --minDays 30 | node tools/cli.mjs report /dev/stdin --out reports/xxx.md`（見 `tools/README.md`）。
+- 重新產生／更新此報告：`node tools/cli.mjs rank-above <目標 portfolioId> --minDays 30 | node tools/cli.mjs report /dev/stdin --out reports/xxx.md`（見 `tools/README.md`）。**注意：`report` 指令會整檔覆寫輸出檔案，不會保留手動加寫的質化分析段落——重跑前請先備份或改寫到別的檔名。**
 - 本報告是**單一時間點快照**（2026-08-06）。跟單市場變化快，同一位交易員一週後的結構可能完全不同（本報告裡的 ANS568 crypto 就是活生生的例子：先前追蹤時 followable，這次批量複查已經降級為 risky）——**判定會過期，跟單前建議重新拉一次數據，不要只看這份報告的舊結論**。
 - 本報告與判定邏輯僅供研究參考，不構成投資建議，不保證獲利或本金安全。
-
-
-
