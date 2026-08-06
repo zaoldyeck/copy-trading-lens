@@ -9,3 +9,7 @@ chrome-store-publishing-guide*.md
 
 .codex/
 openspec/changes/archive/
+
+# Fetched trader snapshots — ephemeral point-in-time data, not source.
+# Generated reports (tools/cli.mjs report) are committed; the raw cache backing them is not.
+tools/cache/

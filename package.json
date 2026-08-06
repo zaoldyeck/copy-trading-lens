@@ -8,7 +8,8 @@
     "icons": "node scripts/generate-icons.mjs",
     "validate": "node scripts/validate-extension.mjs",
     "test": "node scripts/test-provider-pagination.mjs",
-    "package": "npm run icons && npm run validate && npm run test && node scripts/package-extension.mjs"
+    "package": "npm run icons && npm run validate && npm run test && node scripts/package-extension.mjs",
+    "research": "node tools/cli.mjs"
   },
   "keywords": [
     "chrome-extension",

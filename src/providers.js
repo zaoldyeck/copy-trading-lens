@@ -192,7 +192,7 @@
     };
   }
 
-  async function fetchBinanceListPage(timeRange, pageNumber, nickname = "") {
+  async function fetchBinanceListPage(timeRange, pageNumber, nickname = "", extraParams = {}) {
     const response = await postBinance("/bapi/futures/v1/friendly/future/copy-trade/home-page/query-list", {
       pageNumber,
       pageSize: LIST_PAGE_SIZE,
@@ -202,7 +202,8 @@
       hideFull: false,
       nickname,
       order: "DESC",
-      userAsset: 0
+      userAsset: 0,
+      ...extraParams
     });
     if (response?.code && response.code !== "000000") {
       throw new Error(`Binance list returned code ${response.code}`);
@@ -403,6 +404,7 @@
 
   global.CopyTradingLensProviders = {
     detectLeadPage,
-    fetchLeadData
+    fetchLeadData,
+    fetchBinanceListPage
   };
 })(window);
