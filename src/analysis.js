@@ -683,16 +683,24 @@
       && summary.avgLossHoldHours > 0
       && summary.avgLossHoldHours < summary.avgWinHoldHours;
 
-    // Martingale means capitulation-style averaging at meaningful price
-    // dislocations — escalating conviction after an adverse move. Tight,
-    // regular step spacing (<=120bps, the same bar tightGridSteps uses) is
-    // the opposite signature: mechanical/programmatic execution, not
-    // capitulation. Without the !tightGridSteps guard, a high-frequency
-    // tight-grid trader who also happens to hold losers a bit longer than
-    // winners (longLossHold) gets mislabeled Martingale before the Grid
-    // branch ever runs — confirmed on real data: 18 of 31 Martingale calls
-    // in one batch also satisfied tightGridSteps.
-    if (adverseRate >= 0.35 && (addSizeExpansion || longLossHold || poorPayoff) && orders.maxLayers >= 3 && !tightGridSteps) {
+    // Martingale is defined by ESCALATING SIZE on adverse moves — doubling
+    // down. addSizeExpansion measures exactly that, so it alone is sufficient
+    // no matter how tight the step spacing is: a bot placing tightly-spaced
+    // orders at exponentially growing size is still running Martingale risk
+    // (arguably worse, since it does so without hesitation). Observed live:
+    // one 6-day-old account escalated a single episode from a 19,904 opening
+    // order to a 411,490 add — 20.7x — while its median step was only 46bps.
+    //
+    // The weaker signals (long loss holds, poor payoff) are NOT sufficient on
+    // their own, because genuine grid/range trading produces them too. Those
+    // stay gated behind !tightGridSteps, which is what stops a tight-spaced
+    // one-way accumulator from being mislabeled Martingale when its adds are
+    // actually SHRINKING (observed: addOrderMedian/initialOrderMedian ≈ 0.00).
+    // Measured over 144 cached traders, splitting the condition this way
+    // reclassifies 6 — every one of them escalating 1.49x–4.51x with 36–61%
+    // adverse-add rates — and leaves the shrinking-add accumulators as DCA.
+    if (adverseRate >= 0.35 && orders.maxLayers >= 3
+      && (addSizeExpansion || (!tightGridSteps && (longLossHold || poorPayoff)))) {
       family = t("familyMartingale");
       labels.push(t("labelMartingale"), t("labelAdverseAdd"));
       if (longLossHold) labels.push(t("labelLongLossHold"));
