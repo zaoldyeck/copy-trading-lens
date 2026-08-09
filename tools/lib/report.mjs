@@ -77,6 +77,18 @@ function fmtMoney(v) {
 function fmtRatio(v) {
   return v === null || v === undefined || !Number.isFinite(v) ? "N/A" : v.toFixed(2);
 }
+// Annualizing a short window compounds it to nonsense — a 12-day account up
+// 2242% extrapolates to ~1e42%, which Number#toFixed renders in scientific
+// notation and makes the table unreadable. Past ~1000x the figure carries no
+// information beyond "the extrapolation broke", so say that instead of
+// printing the digits. The neighbouring 30-day-ROI column is what's actually
+// readable for these accounts (see the report's methodology section).
+const ANNUALIZED_ABSURD_PCT = 100000;
+function fmtAnnualized(v) {
+  if (!Number.isFinite(v)) return "N/A";
+  if (Math.abs(v) >= ANNUALIZED_ABSURD_PCT) return "外推失真（天數過短）";
+  return `${v.toFixed(0)}%`;
+}
 function escapeCell(s) {
   return String(s ?? "").replace(/\|/g, "\\|").replace(/\n/g, " ");
 }
@@ -101,9 +113,9 @@ export function toMarkdownTable(summaries, opts = {}) {
     const link = `[${escapeCell(s.name)}](https://www.binance.com/zh-TC/copy-trading/lead-details/${s.pid}?timeRange=30D)`;
     const deposit = s.lossPeriodDepositCount > 0 ? `${s.lossPeriodDepositCount} 次 / ${fmtMoney(s.lossPeriodDepositTotal)}` : "無";
     const adverseAdd = Number.isFinite(s.adverseAddRate) ? `${fmtPct(s.adverseAddRate * 100)}（${s.maxLayers}層）` : "N/A";
-    return `| ${s.rank ?? ""} | ${link} | ${Math.round(s.days)} | ${fmtPct(s.annualizedReturn, 0)} | ${fmtPct(s.roi30D)} | ${fmtPct(s.mdd)} | ${fmtPct((s.winRate ?? 0) * 100)} | ${fmtRatio(s.payoffRatio)} | ${adverseAdd} | ${deposit} | ${escapeCell(s.family)} | ${escapeCell(s.verdictTitle)} |`;
+    return `| ${s.rank ?? ""} | ${link} | ${Math.round(s.days)} | ${fmtAnnualized(s.annualizedReturn)} | ${fmtPct(s.roi30D)} | ${fmtPct(s.mdd)} | ${fmtPct((s.winRate ?? 0) * 100)} | ${fmtRatio(s.payoffRatio)} | ${adverseAdd} | ${deposit} | ${escapeCell(s.family)} | ${escapeCell(s.verdictTitle)} |`;
   });
   return [header, sep, ...rows].join("\n");
 }
 
-export { fmtPct, fmtMoney, fmtRatio, VERDICT_ORDER };
+export { fmtPct, fmtMoney, fmtRatio, fmtAnnualized, VERDICT_ORDER };
