@@ -508,5 +508,17 @@
   },
   "labelSlicedScalping": {
     "message": "分片拆单剥头皮"
+  },
+  "evidenceZeroLossMartingaleBomb": {
+    "message": "从不平仓认赔（100% 胜率假象）且单边逆势加仓过深，具备极高穿仓尾部风险。"
+  },
+  "cautionZeroLossMartingaleBomb": {
+    "message": "历史平仓胜率 100%（0 笔止损），但逆势加仓高达 $1 层，为死扛不认赔的黑天鹅炸弹形态。"
+  },
+  "badgePublic": {
+    "message": "公开"
+  },
+  "badgePrivate": {
+    "message": "私有"
   }
 }

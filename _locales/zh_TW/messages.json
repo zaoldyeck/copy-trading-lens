@@ -508,5 +508,17 @@
   },
   "labelSlicedScalping": {
     "message": "分片拆單剝頭皮"
+  },
+  "evidenceZeroLossMartingaleBomb": {
+    "message": "從不平倉認賠（100% 勝率假象）且單邊逆勢加倉過深，具備極高穿倉尾部風險。"
+  },
+  "cautionZeroLossMartingaleBomb": {
+    "message": "歷史平倉勝率 100%（0 筆止損），但逆勢加倉高達 $1 層，為死扛不認賠的黑天鵝炸彈型態。"
+  },
+  "badgePublic": {
+    "message": "公開"
+  },
+  "badgePrivate": {
+    "message": "私人"
   }
 }
