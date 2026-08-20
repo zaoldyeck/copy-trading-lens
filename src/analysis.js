@@ -815,8 +815,10 @@
     const roi7 = meta.performanceWindows?.["7D"]?.roi;
     const tradesPerDay = safeDivide(summary.closedTrades, Math.max(1, meta.days), 0);
     const isStagnant = meta.days >= 60
-      && (Number.isFinite(roi30) ? roi30 < 5 : (Number.isFinite(meta.roi) ? meta.roi < 10 : true))
-      && tradesPerDay < 0.25;
+      && (
+        (Number.isFinite(roi30) && roi30 < 6)
+        || (tradesPerDay < 0.35 && (Number.isFinite(roi30) ? roi30 < 10 : (Number.isFinite(meta.roi) ? meta.roi < 15 : true)))
+      );
 
     // Momentum status for UI
     let momentumStatus = "normal";
@@ -857,7 +859,8 @@
       && !poorPayoff
       && summary.closedTrades >= 30
       && !destructiveMartingale
-      && !isZeroLossMartingaleBomb;
+      && !isZeroLossMartingaleBomb
+      && !isStagnant;
 
     if (hasProvenCopierProfit) {
       positives.unshift(t("positiveHighCopierProfit", [formatMoney(meta.copierPnl)]));
@@ -921,20 +924,20 @@
       level = "avoid";
       title = t("verdictHighRiskAvoid");
       evidence.push(t("evidenceHugeMdd"));
-    } else if (hasProvenCopierProfit && (meta.mdd >= 40 || adverseRate >= 0.35) && !severeDeadLoss && !highInitialLeverage && !isZeroLossMartingaleBomb) {
-      level = "followable";
-      title = t("verdictAggressiveGrowth");
-      evidence.push(t("evidenceAggressiveGrowth"));
     } else if (isStagnant) {
       level = "watch";
       title = t("verdictWatch");
+    } else if (hasProvenCopierProfit && (meta.mdd >= 40 || adverseRate >= 0.35) && !severeDeadLoss && !highInitialLeverage && !isZeroLossMartingaleBomb && !isStagnant) {
+      level = "followable";
+      title = t("verdictAggressiveGrowth");
+      evidence.push(t("evidenceAggressiveGrowth"));
     } else if (severeDeadLoss || highInitialLeverage || isZeroLossMartingaleBomb || cautions.length >= 3 || meta.mdd >= 30 || adverseRate >= 0.35 || poorPayoff) {
       level = "risky";
       title = t("verdictRisky");
-    } else if (enoughHistory && lowMdd && strongPayoff && adverseRate < 0.15 && cleanOpenRisk && !severeDeadLoss && !highInitialLeverage && !isZeroLossMartingaleBomb) {
+    } else if (enoughHistory && lowMdd && strongPayoff && adverseRate < 0.15 && cleanOpenRisk && !severeDeadLoss && !highInitialLeverage && !isZeroLossMartingaleBomb && !isStagnant) {
       level = "preferred";
       title = t("verdictPreferred");
-    } else if (meta.days >= 30 && summary.closedTrades >= 30 && !severeDeadLoss && !highInitialLeverage && !isZeroLossMartingaleBomb) {
+    } else if (meta.days >= 30 && summary.closedTrades >= 30 && !severeDeadLoss && !highInitialLeverage && !isZeroLossMartingaleBomb && !isStagnant) {
       level = "followable";
       title = t("verdictFollowSmall");
     }
