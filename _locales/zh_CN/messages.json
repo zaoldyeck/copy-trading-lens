@@ -1,154 +1,512 @@
 {
-  "extensionName": { "message": "Copy Trading Lens" },
-  "extensionShortName": { "message": "CopyLens" },
-  "extensionDescription": { "message": "实时分析 Binance 与 OKX 跟单员页面的策略类型、风险与跟单可复制性。" },
-  "popupHeroTitle": { "message": "跟单员实时风控分析" },
-  "popupUsageTitle": { "message": "使用方式" },
-  "popupUsageBody": { "message": "打开 Binance 或 OKX 的个别跟单员页面，右侧会自动出现分析面板。面板只使用当前页面可取得的数据，并在你的浏览器本机计算。" },
-  "popupChecksTitle": { "message": "它会检查什么" },
-  "popupCheckMartingale": { "message": "类马丁 / 逆势加仓与亏损持仓拖延" },
-  "popupCheckMargin": { "message": "亏损期补保证金与当前浮亏死扛" },
-  "popupCheckPayoff": { "message": "盈亏比、期望值、交易样本与 MDD" },
-  "popupCheckScalping": { "message": "高频微利策略的滑价与可复制性" },
-  "popupPrivacyTitle": { "message": "隐私" },
-  "popupPrivacyBody": { "message": "不收集、不上传、不储存 cookie、header、API key 或账户数据。没有后端服务。" },
-  "launcherTitle": { "message": "打开 Copy Trading Lens" },
-  "launcherLabel": { "message": "Lens" },
-  "noDataYet": { "message": "尚未取得数据" },
-  "endpointsAvailable": { "message": "{0}/{1} endpoints 可用" },
-  "endpointDetail": { "message": "基本资料" },
-  "endpointLivePositions": { "message": "当前持仓" },
-  "endpointPositionHistory": { "message": "仓位历史" },
-  "endpointOrderHistory": { "message": "订单历史" },
-  "endpointTransferHistory": { "message": "转账历史" },
-  "endpointCandidate": { "message": "排行/profile" },
-  "endpointPerformance": { "message": "{0}绩效" },
-  "noWindowData": { "message": "没有抓到交易所标准时间窗数据。" },
-  "colTimeRange": { "message": "时间窗" },
-  "colRoi": { "message": "ROI" },
-  "colAnnualized": { "message": "年化" },
-  "colMdd": { "message": "MDD" },
-  "colSource": { "message": "来源" },
-  "histPosition": { "message": "仓位历史" },
-  "histOrder": { "message": "订单历史" },
-  "histTransfer": { "message": "转账历史" },
-  "statusNA": { "message": "N/A" },
-  "statusFail": { "message": "失败" },
-  "statusEmpty": { "message": "无数据" },
-  "statusComplete": { "message": "完整" },
-  "statusIncomplete": { "message": "未完整" },
-  "retrySuffix": { "message": "，重试 {0} 次" },
-  "historyItem": { "message": "{0}: {1}/{2} {3}{4}" },
-  "historyDataPrefix": { "message": "历史数据：{0}" },
-  "settingNoCopyExisting": { "message": "不要复制现有持仓；等下一笔新开仓再跟。" },
-  "settingSmallRatio": { "message": "若仍要测试，只用小比例定比跟单，并设置总账户止损。" },
-  "settingHighMdd": { "message": "最大回撤偏高，单一带单员配置不宜过大。" },
-  "settingDefault": { "message": "仍建议定比跟单、不要复制现有仓位，并设置总账户止损。" },
-  "analysisInProgress": { "message": "{0} 带单员分析中" },
-  "loadingText": { "message": "正在抓取当前页面的公开/登录可见数据并在本机分析；暂时忙碌的历史分页会持续重试直到抓完。" },
-  "analysisFailed": { "message": "分析失败" },
-  "retry": { "message": "重新分析" },
-  "refreshTitle": { "message": "刷新分析" },
-  "collapseTitle": { "message": "收合" },
-  "metricAllPeriodRoi": { "message": "全期间 ROI" },
-  "metricAnnualized": { "message": "年化收益" },
-  "metricMdd": { "message": "MDD" },
-  "metricAllPeriodPnl": { "message": "全期间 PnL" },
-  "metricTradingDays": { "message": "交易天数" },
-  "metricCopierPnlAum": { "message": "跟单 PnL/AUM" },
-  "metricWinRate": { "message": "胜率" },
-  "metricPayoffRatio": { "message": "盈亏比" },
-  "metricLossHold": { "message": "亏损持仓" },
-  "metricAdverseAdd": { "message": "逆势加仓" },
-  "metricFloatingLoss": { "message": "当前浮亏" },
-  "metricLossPeriodDeposit": { "message": "亏损期入金" },
-  "lossPeriodDepositCount": { "message": "{0} 次" },
-  "lossPeriodDepositHint": { "message": "合计 {0}" },
-  "lossPeriodDepositNone": { "message": "无" },
-  "metricRestartCount": { "message": "历史关闭" },
-  "hintHistoryApi": { "message": "历史/API" },
-  "hintMddWindowMax": { "message": "交易所时间窗最大值" },
-  "hintCurrentCapitalFormula": { "message": "当前资金 + 提现 - 投入" },
-  "daysValue": { "message": "{0} 天" },
-  "closedTrades": { "message": "{0} 笔已平仓" },
-  "longestHold": { "message": "最长 {0}" },
-  "marginPct": { "message": "{0}% margin" },
-  "portfolioRestart": { "message": "portfolio restart" },
-  "sectionRisks": { "message": "主要风险" },
-  "noMajorRisks": { "message": "目前未触发主要风险规则，但仍不代表安全或保证获利。" },
-  "sectionPositives": { "message": "正向信号" },
-  "noPositives": { "message": "目前正向信号不足，建议先观察更多样本。" },
-  "sectionSettings": { "message": "建议设置" },
-  "advancedData": { "message": "进阶数据：{0}" },
-  "advancedWindowCrossCheck": { "message": "时间窗交叉检查" },
-  "disclaimer": { "message": "此分析只使用当前浏览器可取得数据并在本机计算，不是投资建议，也不保证收益或安全。" },
-  "familyInsufficient": { "message": "交易记录不足，暂时无法判断跟单风险" },
-  "familyNoMajorPattern": { "message": "未侦测到明显高风险交易模式" },
-  "familyMartingale": { "message": "马丁格尔：亏损时加大仓位，连续错边会快速放大回撤" },
-  "familyGrid": { "message": "网格 / 区间交易：分层挂单吃震荡，单边行情容易累积浮亏" },
-  "familyDcaLeft": { "message": "DCA / 左侧交易：逆势分批摊平，进场太早会承接回撤" },
-  "familyRightTrend": { "message": "右侧交易 / 趋势跟随：等方向确认后进场，通常更重视止损" },
-  "familyScalping": { "message": "剥头皮：短线高频小利，跟单延迟与手续费会影响结果" },
-  "familyMarketMaking": { "message": "做市 / 高频做市倾向：大量短线成交，跟单滑价可能吃掉优势" },
-  "familySwing": { "message": "波段交易：持仓时间较长，跟单者可能承接既有波动" },
-  "familyMeanReversionStop": { "message": "左侧抢反弹但止损快：跟单滑价与速度很重要" },
-  "familyBatchScalping": { "message": "剥头皮：短线高频小利，跟单延迟与手续费会影响结果" },
-  "familyLayeredMeanReversion": { "message": "DCA / 左侧交易：逆势分批摊平，进场太早会承接回撤" },
-  "familyLowFreqSwing": { "message": "波段交易：持仓时间较长，跟单者可能承接既有波动" },
-  "labelMartingale": { "message": "马丁格尔" },
-  "labelGrid": { "message": "网格" },
-  "labelDca": { "message": "DCA" },
-  "labelLeftSide": { "message": "左侧交易" },
-  "labelRightSide": { "message": "右侧交易" },
-  "labelScalping": { "message": "剥头皮" },
-  "labelMarketMaking": { "message": "做市倾向" },
-  "labelAdverseAdd": { "message": "亏损时加仓" },
-  "labelLongLossHold": { "message": "亏损单持仓偏久" },
-  "labelAllowAdds": { "message": "会加仓" },
-  "labelFastLossClose": { "message": "亏损单结束快" },
-  "labelHighFreq": { "message": "交易频率高" },
-  "labelSamePriceSplits": { "message": "拆成多笔成交" },
-  "labelLayeredAdds": { "message": "分批加仓" },
-  "labelLongHold": { "message": "持仓时间较长" },
-  "labelPoorPayoff": { "message": "盈亏比偏弱" },
-  "labelHighWinTailRisk": { "message": "高胜率可能藏尾部风险" },
-  "labelSingleSymbol": { "message": "集中押单一币" },
-  "verdictWatch": { "message": "观察" },
-  "verdictAvoid": { "message": "不建议跟" },
-  "verdictWait": { "message": "暂不跟" },
-  "verdictHighRiskAvoid": { "message": "高风险，不建议一般跟单" },
-  "verdictRisky": { "message": "高风险候补" },
-  "verdictPreferred": { "message": "较适合跟单候选" },
-  "verdictFollowSmall": { "message": "可小额测试候选" },
-  "positiveDays": { "message": "交易天数约 {0} 天，已达最低观察门槛。" },
-  "positiveClosedTrades": { "message": "已平仓样本 {0} 笔，可初步判读交易行为。" },
-  "positivePayoff": { "message": "平均盈亏比 {0}，不是典型赢小赔大。" },
-  "positiveLossHoldShort": { "message": "亏损单平均持仓短于获利单，止损行为相对干净。" },
-  "cautionTooFewDays": { "message": "交易天数只有 {0} 天，还没满最低 30 天观察门槛。" },
-  "cautionNoAllPeriodRoi": { "message": "全期间 ROI 目前无法可靠重建，不能只看页面局部时间窗。" },
-  "cautionReconstructedNeedsCompleteness": { "message": "全期间 ROI 是用可取得数据重建，但历史完整度或起始点仍需留意。" },
-  "cautionThinClosedTrades": { "message": "已平仓样本只有 {0} 笔，单笔交易会严重影响结论。" },
-  "cautionHighMdd": { "message": "页面/排行可见 MDD 约 {0}，新跟单者可能一开始就承受大回撤。" },
-  "cautionLongLossHold": { "message": "历史亏损单最长持仓 {0}，有死扛风险。" },
-  "cautionPoorPayoff": { "message": "平均盈亏比只有 {0}，代表平均亏损大于平均获利。" },
-  "cautionNearPerfectWin": { "message": "胜率接近 100% 且几乎没有已实现亏损，可能尚未被压力行情测试。" },
-  "cautionMicroProfit": { "message": "高频微利型策略容易被跟单延迟、滑价、手续费吃掉。" },
-  "cautionAdverseAdd": { "message": "逆势加仓率约 {0}，不利行情下会扩大同方向曝险。" },
-  "cautionLossPeriodDeposit": { "message": "侦测到 {0} 次亏损持仓期间资金转入，跟单者未必能同步补保证金。" },
-  "cautionFloatingLoss": { "message": "当前持仓浮亏约 {0}，约为带单本金 {1}%。" },
-  "cautionCopierDivergence": { "message": "带单员账面 ROI 为正，但跟单者 PnL/AUM 约 {0}，可能有滑价、进场时点或仓位管理背离。" },
-  "cautionCloseLeadCount": { "message": "历史关闭项目 {0} 次，旧绩效与现轮数据可能被切断。" },
-  "cautionPreStartHistory": { "message": "侦测到历史交易记录早于官方起始时间 {0} 天，可能混入前一轮已关闭带单的残留绩效，目前显示的天数与回报可能被稀释或夸大。" },
-  "evidenceLossDeposit": { "message": "亏损期补资金是跟单者最难复制的风险来源。" },
-  "evidenceDestructiveMartingale": { "message": "逆势加仓、亏损持仓拖延或盈亏比失衡同时出现，类马丁风险偏高。" },
-  "evidenceFloatingLoss": { "message": "目前有显著浮亏仓位，新跟单者直接进场可能接下原本不属于自己的风险。" },
-  "evidenceHugeMdd": { "message": "历史回撤过大，除非只用极小攻击仓且能承受连续亏损。" },
-  "annualizedSourceXirr": { "message": "XIRR/APY" },
-  "annualizedSourceCagr": { "message": "CAGR估算" },
-  "performanceSourceCashFlow": { "message": "历史现金流重建" },
-  "performanceSourceWindow": { "message": "交易所 {0} 窗口" },
-  "performanceSourceFallback": { "message": "页面/API fallback" },
-  "performanceQualityComplete": { "message": "完整" },
-  "performanceQualityReconstructed": { "message": "可重建但需看完整度" },
-  "performanceQualityUnavailable": { "message": "不可重建" }
+  "extensionName": {
+    "message": "Copy Trading Lens"
+  },
+  "extensionShortName": {
+    "message": "CopyLens"
+  },
+  "extensionDescription": {
+    "message": "实时分析 Binance 与 OKX 跟单员页面的策略类型、风险与跟单可复制性。"
+  },
+  "popupHeroTitle": {
+    "message": "跟单员实时风控分析"
+  },
+  "popupUsageTitle": {
+    "message": "使用方式"
+  },
+  "popupUsageBody": {
+    "message": "打开 Binance 或 OKX 的个别跟单员页面，右侧会自动出现分析面板。面板只使用当前页面可取得的数据，并在你的浏览器本机计算。"
+  },
+  "popupChecksTitle": {
+    "message": "它会检查什么"
+  },
+  "popupCheckMartingale": {
+    "message": "类马丁 / 逆势加仓与亏损持仓拖延"
+  },
+  "popupCheckMargin": {
+    "message": "亏损期补保证金与当前浮亏死扛"
+  },
+  "popupCheckPayoff": {
+    "message": "盈亏比、期望值、交易样本与 MDD"
+  },
+  "popupCheckScalping": {
+    "message": "高频微利策略的滑价与可复制性"
+  },
+  "popupPrivacyTitle": {
+    "message": "隐私"
+  },
+  "popupPrivacyBody": {
+    "message": "不收集、不上传、不储存 cookie、header、API key 或账户数据。没有后端服务。"
+  },
+  "launcherTitle": {
+    "message": "打开 Copy Trading Lens"
+  },
+  "launcherLabel": {
+    "message": "Lens"
+  },
+  "noDataYet": {
+    "message": "尚未取得数据"
+  },
+  "endpointsAvailable": {
+    "message": "{0}/{1} endpoints 可用"
+  },
+  "endpointDetail": {
+    "message": "基本资料"
+  },
+  "endpointLivePositions": {
+    "message": "当前持仓"
+  },
+  "endpointPositionHistory": {
+    "message": "仓位历史"
+  },
+  "endpointOrderHistory": {
+    "message": "订单历史"
+  },
+  "endpointTransferHistory": {
+    "message": "转账历史"
+  },
+  "endpointCandidate": {
+    "message": "排行/profile"
+  },
+  "endpointPerformance": {
+    "message": "{0}绩效"
+  },
+  "noWindowData": {
+    "message": "没有抓到交易所标准时间窗数据。"
+  },
+  "colTimeRange": {
+    "message": "时间窗"
+  },
+  "colRoi": {
+    "message": "ROI"
+  },
+  "colAnnualized": {
+    "message": "年化"
+  },
+  "colMdd": {
+    "message": "MDD"
+  },
+  "colSource": {
+    "message": "来源"
+  },
+  "histPosition": {
+    "message": "仓位历史"
+  },
+  "histOrder": {
+    "message": "订单历史"
+  },
+  "histTransfer": {
+    "message": "转账历史"
+  },
+  "statusNA": {
+    "message": "N/A"
+  },
+  "statusFail": {
+    "message": "失败"
+  },
+  "statusEmpty": {
+    "message": "无数据"
+  },
+  "statusComplete": {
+    "message": "完整"
+  },
+  "statusIncomplete": {
+    "message": "未完整"
+  },
+  "retrySuffix": {
+    "message": "，重试 {0} 次"
+  },
+  "historyItem": {
+    "message": "{0}: {1}/{2} {3}{4}"
+  },
+  "historyDataPrefix": {
+    "message": "历史数据：{0}"
+  },
+  "settingNoCopyExisting": {
+    "message": "不要复制现有持仓；等下一笔新开仓再跟。"
+  },
+  "settingSmallRatio": {
+    "message": "若仍要测试，只用小比例定比跟单，并设置总账户止损。"
+  },
+  "settingHighMdd": {
+    "message": "最大回撤偏高，单一带单员配置不宜过大。"
+  },
+  "settingDefault": {
+    "message": "仍建议定比跟单、不要复制现有仓位，并设置总账户止损。"
+  },
+  "analysisInProgress": {
+    "message": "{0} 带单员分析中"
+  },
+  "loadingText": {
+    "message": "正在抓取当前页面的公开/登录可见数据并在本机分析；暂时忙碌的历史分页会持续重试直到抓完。"
+  },
+  "analysisFailed": {
+    "message": "分析失败"
+  },
+  "retry": {
+    "message": "重新分析"
+  },
+  "refreshTitle": {
+    "message": "刷新分析"
+  },
+  "collapseTitle": {
+    "message": "收合"
+  },
+  "metricAllPeriodRoi": {
+    "message": "全期间 ROI"
+  },
+  "metricAnnualized": {
+    "message": "年化收益"
+  },
+  "metricMdd": {
+    "message": "MDD"
+  },
+  "metricAllPeriodPnl": {
+    "message": "全期间 PnL"
+  },
+  "metricTradingDays": {
+    "message": "交易天数"
+  },
+  "metricCopierPnlAum": {
+    "message": "跟单 PnL/AUM"
+  },
+  "metricWinRate": {
+    "message": "胜率"
+  },
+  "metricPayoffRatio": {
+    "message": "盈亏比"
+  },
+  "metricLossHold": {
+    "message": "亏损持仓"
+  },
+  "metricAdverseAdd": {
+    "message": "逆势加仓"
+  },
+  "metricFloatingLoss": {
+    "message": "当前浮亏"
+  },
+  "metricLossPeriodDeposit": {
+    "message": "亏损期入金"
+  },
+  "lossPeriodDepositCount": {
+    "message": "{0} 次"
+  },
+  "lossPeriodDepositHint": {
+    "message": "合计 {0}"
+  },
+  "lossPeriodDepositNone": {
+    "message": "无"
+  },
+  "metricRestartCount": {
+    "message": "历史关闭"
+  },
+  "hintHistoryApi": {
+    "message": "历史/API"
+  },
+  "hintMddWindowMax": {
+    "message": "交易所时间窗最大值"
+  },
+  "hintCurrentCapitalFormula": {
+    "message": "当前资金 + 提现 - 投入"
+  },
+  "daysValue": {
+    "message": "{0} 天"
+  },
+  "closedTrades": {
+    "message": "{0} 笔已平仓"
+  },
+  "longestHold": {
+    "message": "最长 {0}"
+  },
+  "marginPct": {
+    "message": "{0}% margin"
+  },
+  "portfolioRestart": {
+    "message": "portfolio restart"
+  },
+  "sectionRisks": {
+    "message": "主要风险"
+  },
+  "noMajorRisks": {
+    "message": "目前未触发主要风险规则，但仍不代表安全或保证获利。"
+  },
+  "sectionPositives": {
+    "message": "正向信号"
+  },
+  "noPositives": {
+    "message": "目前正向信号不足，建议先观察更多样本。"
+  },
+  "sectionSettings": {
+    "message": "建议设置"
+  },
+  "advancedData": {
+    "message": "进阶数据：{0}"
+  },
+  "advancedWindowCrossCheck": {
+    "message": "时间窗交叉检查"
+  },
+  "disclaimer": {
+    "message": "此分析只使用当前浏览器可取得数据并在本机计算，不是投资建议，也不保证收益或安全。"
+  },
+  "familyInsufficient": {
+    "message": "交易记录不足，暂时无法判断跟单风险"
+  },
+  "familyNoMajorPattern": {
+    "message": "未侦测到明显高风险交易模式"
+  },
+  "familyMartingale": {
+    "message": "马丁格尔：亏损时加大仓位，连续错边会快速放大回撤"
+  },
+  "familyGrid": {
+    "message": "网格 / 区间交易：分层挂单吃震荡，单边行情容易累积浮亏"
+  },
+  "familyDcaLeft": {
+    "message": "DCA / 左侧交易：逆势分批摊平，进场太早会承接回撤"
+  },
+  "familyRightTrend": {
+    "message": "右侧交易 / 趋势跟随：等方向确认后进场，通常更重视止损"
+  },
+  "familyScalping": {
+    "message": "剥头皮：短线高频小利，跟单延迟与手续费会影响结果"
+  },
+  "familyMarketMaking": {
+    "message": "做市 / 高频做市倾向：大量短线成交，跟单滑价可能吃掉优势"
+  },
+  "familySwing": {
+    "message": "波段交易：持仓时间较长，跟单者可能承接既有波动"
+  },
+  "familyMeanReversionStop": {
+    "message": "左侧抢反弹但止损快：跟单滑价与速度很重要"
+  },
+  "familyBatchScalping": {
+    "message": "剥头皮：短线高频小利，跟单延迟与手续费会影响结果"
+  },
+  "familyLayeredMeanReversion": {
+    "message": "DCA / 左侧交易：逆势分批摊平，进场太早会承接回撤"
+  },
+  "familyLowFreqSwing": {
+    "message": "波段交易：持仓时间较长，跟单者可能承接既有波动"
+  },
+  "labelMartingale": {
+    "message": "马丁格尔"
+  },
+  "labelGrid": {
+    "message": "网格"
+  },
+  "labelDca": {
+    "message": "DCA"
+  },
+  "labelLeftSide": {
+    "message": "左侧交易"
+  },
+  "labelRightSide": {
+    "message": "右侧交易"
+  },
+  "labelScalping": {
+    "message": "剥头皮"
+  },
+  "labelMarketMaking": {
+    "message": "做市倾向"
+  },
+  "labelAdverseAdd": {
+    "message": "亏损时加仓"
+  },
+  "labelLongLossHold": {
+    "message": "亏损单持仓偏久"
+  },
+  "labelAllowAdds": {
+    "message": "会加仓"
+  },
+  "labelFastLossClose": {
+    "message": "亏损单结束快"
+  },
+  "labelHighFreq": {
+    "message": "交易频率高"
+  },
+  "labelSamePriceSplits": {
+    "message": "拆成多笔成交"
+  },
+  "labelLayeredAdds": {
+    "message": "分批加仓"
+  },
+  "labelLongHold": {
+    "message": "持仓时间较长"
+  },
+  "labelPoorPayoff": {
+    "message": "盈亏比偏弱"
+  },
+  "labelHighWinTailRisk": {
+    "message": "高胜率可能藏尾部风险"
+  },
+  "labelSingleSymbol": {
+    "message": "集中押单一币"
+  },
+  "verdictWatch": {
+    "message": "观察"
+  },
+  "verdictAvoid": {
+    "message": "不建议跟"
+  },
+  "verdictWait": {
+    "message": "暂不跟"
+  },
+  "verdictHighRiskAvoid": {
+    "message": "高风险，不建议一般跟单"
+  },
+  "verdictRisky": {
+    "message": "高风险候补"
+  },
+  "verdictPreferred": {
+    "message": "较适合跟单候选"
+  },
+  "verdictFollowSmall": {
+    "message": "可小额测试候选"
+  },
+  "verdictAggressiveGrowth": {
+    "message": "进攻型候选（建议及时提现利润）"
+  },
+  "positiveHighCopierProfit": {
+    "message": "跟单者累计实质获利达 {0}，展现极高实盘获利能力。"
+  },
+  "positiveDays": {
+    "message": "交易天数约 {0} 天，已达最低观察门槛。"
+  },
+  "positiveClosedTrades": {
+    "message": "已平仓样本 {0} 笔，可初步判读交易行为。"
+  },
+  "positivePayoff": {
+    "message": "平均盈亏比 {0}，不是典型赢小赔大。"
+  },
+  "positiveLossHoldShort": {
+    "message": "亏损单平均持仓短于获利单，止损行为相对干净。"
+  },
+  "cautionTooFewDays": {
+    "message": "交易天数只有 {0} 天，还没满最低 30 天观察门槛。"
+  },
+  "cautionNoAllPeriodRoi": {
+    "message": "全期间 ROI 目前无法可靠重建，不能只看页面局部时间窗。"
+  },
+  "cautionReconstructedNeedsCompleteness": {
+    "message": "全期间 ROI 是用可取得数据重建，但历史完整度或起始点仍需留意。"
+  },
+  "cautionThinClosedTrades": {
+    "message": "已平仓样本只有 {0} 笔，单笔交易会严重影响结论。"
+  },
+  "cautionHighMdd": {
+    "message": "页面/排行可见 MDD 约 {0}，新跟单者可能一开始就承受大回撤。"
+  },
+  "cautionLongLossHold": {
+    "message": "历史亏损单最长持仓 {0}，有死扛风险。"
+  },
+  "cautionPoorPayoff": {
+    "message": "平均盈亏比只有 {0}，代表平均亏损大于平均获利。"
+  },
+  "cautionNearPerfectWin": {
+    "message": "胜率接近 100% 且几乎没有已实现亏损，可能尚未被压力行情测试。"
+  },
+  "cautionMicroProfit": {
+    "message": "高频微利型策略容易被跟单延迟、滑价、手续费吃掉。"
+  },
+  "cautionAdverseAdd": {
+    "message": "逆势加仓率约 {0}，不利行情下会扩大同方向曝险。"
+  },
+  "cautionLossPeriodDeposit": {
+    "message": "侦测到 {0} 次亏损持仓期间资金转入，跟单者未必能同步补保证金。"
+  },
+  "cautionFloatingLoss": {
+    "message": "当前持仓浮亏约 {0}，约为带单本金 {1}%。"
+  },
+  "cautionCopierDivergence": {
+    "message": "带单员账面 ROI 为正，但跟单者 PnL/AUM 约 {0}，可能有滑价、进场时点或仓位管理背离。"
+  },
+  "cautionCloseLeadCount": {
+    "message": "历史关闭项目 {0} 次，旧绩效与现轮数据可能被切断。"
+  },
+  "cautionPreStartHistory": {
+    "message": "侦测到历史交易记录早于官方起始时间 {0} 天，可能混入前一轮已关闭带单的残留绩效，目前显示的天数与回报可能被稀释或夸大。"
+  },
+  "evidenceLossDeposit": {
+    "message": "亏损期补资金是跟单者最难复制的风险来源。"
+  },
+  "evidenceDestructiveMartingale": {
+    "message": "逆势加仓、亏损持仓拖延或盈亏比失衡同时出现，类马丁风险偏高。"
+  },
+  "evidenceFloatingLoss": {
+    "message": "目前有显著浮亏仓位，新跟单者直接进场可能接下原本不属于自己的风险。"
+  },
+  "evidenceHugeMdd": {
+    "message": "历史回撤过大，除非只用极小攻击仓且能承受连续亏损。"
+  },
+  "evidenceAggressiveGrowth": {
+    "message": "跟单者实质大幅获利且无亏损补金，虽历史回撤较大，但具备高进攻 Alpha，建议以小额攻击仓定比跟单并定期提利润。"
+  },
+  "evidenceCopierBleed": {
+    "message": "跟单者整体大幅亏损或与带单员绩效严重背离，存在极高滑价、频繁止损或割韭菜风险。"
+  },
+  "annualizedSourceXirr": {
+    "message": "XIRR/APY"
+  },
+  "annualizedSourceCagr": {
+    "message": "CAGR估算"
+  },
+  "performanceSourceCashFlow": {
+    "message": "历史现金流重建"
+  },
+  "performanceSourceWindow": {
+    "message": "交易所 {0} 窗口"
+  },
+  "performanceSourceFallback": {
+    "message": "页面/API fallback"
+  },
+  "performanceQualityComplete": {
+    "message": "完整"
+  },
+  "performanceQualityReconstructed": {
+    "message": "可重建但需看完整度"
+  },
+  "performanceQualityUnavailable": {
+    "message": "不可重建"
+  },
+  "familyControlledMartingale": {
+    "message": "受控马丁：倍投加码但严格当日快速止损"
+  },
+  "labelControlledMartingale": {
+    "message": "受控快速止损马丁"
+  },
+  "labelStagnantMomentum": {
+    "message": "近期动能停滞 / 横盘死鱼"
+  },
+  "cautionSevereDeadLoss": {
+    "message": "历史亏损单最长持仓 {0}，有严重死扛不认赔记录。"
+  },
+  "evidenceExtremeDeadLoss": {
+    "message": "历史曾有超过 12 天的严重死扛记录，极端行情下极易穿仓爆仓。"
+  },
+  "cautionStagnantMomentum": {
+    "message": "近期 30 天收益率仅 {0} 且交易频率极低（{1} 单/天），呈现动能枯竭与横盘死鱼特征。"
+  },
+  "cautionHighInitialLeverage": {
+    "message": "初始开仓名义杠杆高达 {0}x 且频繁逆势加仓，单边行情极易穿仓爆仓。"
+  },
+  "badgeActiveMomentum": {
+    "message": "🔥 上升动能强劲"
+  },
+  "badgeStagnant": {
+    "message": "💤 动能停滞 / 横盘"
+  },
+  "badgeInDrawdown": {
+    "message": "📉 深陷回撤期"
+  },
+  "alertLossDeposit": {
+    "message": "🚨 亏损期补入金 {0} 次续命"
+  },
+  "alertSevereDeadLoss": {
+    "message": "🚨 历史死扛亏损 {0}"
+  },
+  "familySlicedScalping": {
+    "message": "高频分片拆单剥头皮：秒级拆单分批成交，极短线吃价差"
+  },
+  "labelSlicedScalping": {
+    "message": "分片拆单剥头皮"
+  }
 }

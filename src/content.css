@@ -158,6 +158,23 @@
 .ctl-verdict.is-followable { background: rgba(16, 185, 129, 0.14); border-color: rgba(16, 185, 129, 0.36); }
 .ctl-verdict.is-watch { background: rgba(59, 130, 246, 0.13); border-color: rgba(59, 130, 246, 0.32); }
 
+.ctl-alerts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 16px 0;
+}
+
+.ctl-alert-badge {
+  background: rgba(239, 68, 68, 0.22);
+  border: 1px solid rgba(239, 68, 68, 0.55);
+  border-radius: 6px;
+  color: #fecaca;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 10px;
+}
+
 .ctl-tags {
   display: flex;
   flex-wrap: wrap;
@@ -165,12 +182,33 @@
   padding: 0 16px 8px;
 }
 
-.ctl-tags span {
+.ctl-tags span,
+.ctl-tag {
   background: #263544;
   border-radius: 999px;
   color: #d8e2ec;
   font-size: 12px;
   padding: 5px 8px;
+}
+
+.ctl-tag.is-active-momentum {
+  background: rgba(245, 158, 11, 0.25);
+  border: 1px solid rgba(245, 158, 11, 0.6);
+  color: #fde68a;
+  font-weight: 700;
+}
+
+.ctl-tag.is-stagnant {
+  background: rgba(100, 116, 139, 0.25);
+  border: 1px solid rgba(100, 116, 139, 0.6);
+  color: #cbd5e1;
+}
+
+.ctl-tag.is-drawdown {
+  background: rgba(239, 68, 68, 0.22);
+  border: 1px solid rgba(239, 68, 68, 0.6);
+  color: #fca5a5;
+  font-weight: 700;
 }
 
 .ctl-grid {

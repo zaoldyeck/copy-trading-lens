@@ -239,11 +239,19 @@
             } }, "−")
           ])
         ]),
+        verdict.alerts?.length
+          ? h("div", { class: "ctl-alerts" }, verdict.alerts.map((alertText) => h("div", { class: "ctl-alert-badge", text: alertText })))
+          : null,
         h("div", { class: `ctl-verdict ${verdictClass(verdict.level)}` }, [
           h("strong", { text: verdict.title }),
           h("span", { text: strategy.family })
         ]),
-        strategy.labels?.length ? h("div", { class: "ctl-tags" }, strategy.labels.map((label) => h("span", { text: label }))) : null,
+        (strategy.labels?.length || verdict.momentumStatus) ? h("div", { class: "ctl-tags" }, [
+          ...(verdict.momentumStatus === "active" ? [h("span", { class: "ctl-tag is-active-momentum", text: t("badgeActiveMomentum") })] : []),
+          ...(verdict.momentumStatus === "stagnant" ? [h("span", { class: "ctl-tag is-stagnant", text: t("badgeStagnant") })] : []),
+          ...(verdict.momentumStatus === "drawdown" ? [h("span", { class: "ctl-tag is-drawdown", text: t("badgeInDrawdown") })] : []),
+          ...(strategy.labels || []).map((label) => h("span", { class: "ctl-tag", text: label }))
+        ]) : null,
         h("div", { class: "ctl-grid" }, [
           metricCard(t("metricAllPeriodRoi"), fmt.formatPct(meta.roi), meta.performanceSource || t("hintHistoryApi")),
           metricCard(t("metricAnnualized"), fmt.formatPct(meta.annualizedReturn), meta.annualizedSource || "CAGR/APY"),
