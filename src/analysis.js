@@ -37,6 +37,14 @@
     return cleaned[idx];
   }
 
+  function standardDeviation(values) {
+    const cleaned = values.filter((value) => Number.isFinite(value));
+    if (cleaned.length < 2) return 0;
+    const mean = cleaned.reduce((sum, value) => sum + value, 0) / cleaned.length;
+    const variance = cleaned.reduce((sum, value) => sum + ((value - mean) ** 2), 0) / cleaned.length;
+    return Math.sqrt(variance);
+  }
+
   function firstDefined(...values) {
     for (const value of values) {
       if (value !== undefined && value !== null && value !== "") return value;
@@ -414,6 +422,7 @@
     const initialNotionals = [];
     const addNotionals = [];
     const adverseStepBps = [];
+    const ladderEpisodes = [];
     const symbols = new Map();
     const leverages = new Map();
 
@@ -430,11 +439,14 @@
       const notional = Math.abs(num(firstDefined(order.cumQuote, order.quoteQty, order.notional), qty * price));
       const pnl = num(firstDefined(order.totalPnl, order.realizedProfit), 0);
       const key = `${symbol}:${positionSide}`;
-      const state = tracker.get(key) || { qty: 0, lastPrice: 0, layers: 0 };
+      const state = tracker.get(key) || { qty: 0, lastPrice: 0, layers: 0, episodeSteps: [] };
 
       const isOpen = (positionSide === "LONG" && side === "BUY")
         || (positionSide === "SHORT" && side === "SELL")
         || (positionSide === "BOTH" && Math.abs(pnl) <= 1e-8 && side);
+
+      const isLong = positionSide === "LONG" || (positionSide === "BOTH" && side === "BUY");
+      const isShort = positionSide === "SHORT" || (positionSide === "BOTH" && side === "SELL");
 
       if (isOpen) {
         openOrders += 1;
@@ -444,15 +456,17 @@
         } else {
           addNotionals.push(notional);
           state.layers += 1;
-          const adverse = (positionSide === "LONG" && price < state.lastPrice)
-            || (positionSide === "SHORT" && price > state.lastPrice);
+          const adverse = (isLong && price < state.lastPrice)
+            || (isShort && price > state.lastPrice);
           if (adverse) {
             adverseAdds += 1;
             if (state.lastPrice > 0 && price > 0) {
-              const step = positionSide === "LONG"
+              const step = isLong
                 ? (state.lastPrice / price - 1) * 10000
                 : (price / state.lastPrice - 1) * 10000;
-              adverseStepBps.push(Math.abs(step));
+              const stepAbs = Math.abs(step);
+              adverseStepBps.push(stepAbs);
+              state.episodeSteps.push(stepAbs);
             }
           }
         }
@@ -463,13 +477,47 @@
         closeOrders += 1;
         state.qty = Math.max(0, state.qty - qty);
         if (state.qty <= 1e-8) {
+          if (state.episodeSteps.length >= 2) {
+            ladderEpisodes.push(state.episodeSteps);
+          }
           state.qty = 0;
           state.layers = 0;
           state.lastPrice = 0;
+          state.episodeSteps = [];
         }
       }
       tracker.set(key, state);
     }
+
+    const stepCount = adverseStepBps.length;
+    const stepMean = stepCount ? adverseStepBps.reduce((s, v) => s + v, 0) / stepCount : 0;
+    const stepStdDev = standardDeviation(adverseStepBps);
+    const stepCv = stepMean > 0 ? stepStdDev / stepMean : Infinity;
+    const consistentEpisodes = ladderEpisodes.filter((steps) => {
+      const m = steps.reduce((s, v) => s + v, 0) / steps.length;
+      const sd = standardDeviation(steps);
+      return m > 0 && (sd / m) <= 0.35;
+    }).length;
+    const isEquidistantLadder = (stepCount >= 3 && stepCv <= 0.35) || consistentEpisodes >= 2;
+
+    const initialOrderMedian = median(initialNotionals);
+    const addOrderMedian = median(addNotionals);
+    const addSizeExpansion = initialOrderMedian > 0 && addOrderMedian > initialOrderMedian * 1.2;
+
+    const orderIntervalsSec = [];
+    for (let i = 1; i < sorted.length; i++) {
+      const t0 = Number(firstDefined(sorted[i - 1].orderTime, sorted[i - 1].time, sorted[i - 1].createTime, 0));
+      const t1 = Number(firstDefined(sorted[i].orderTime, sorted[i].time, sorted[i].createTime, 0));
+      if (t0 > 0 && t1 > 0) {
+        orderIntervalsSec.push(Math.abs(t1 - t0) / 1000);
+      }
+    }
+    const medianOrderIntervalSec = orderIntervalsSec.length ? median(orderIntervalsSec) : Infinity;
+    const orderBurstRate60s = safeDivide(
+      orderIntervalsSec.filter((sec) => sec <= 60).length,
+      orderIntervalsSec.length,
+      0
+    );
 
     const dominantSymbol = [...symbols.entries()].sort((a, b) => b[1] - a[1])[0];
     const dominantLeverage = [...leverages.entries()].sort((a, b) => b[1] - a[1])[0];
@@ -479,9 +527,16 @@
       adverseAdds,
       adverseAddRate: safeDivide(adverseAdds, openOrders, 0),
       maxLayers,
-      initialOrderMedian: median(initialNotionals),
-      addOrderMedian: median(addNotionals),
+      initialOrderMedian,
+      addOrderMedian,
+      addSizeExpansion,
+      medianOrderIntervalSec,
+      orderBurstRate60s,
       adverseStepMedianBps: median(adverseStepBps),
+      adverseStepMeanBps: stepMean,
+      adverseStepStdDevBps: stepStdDev,
+      adverseStepCv: stepCv,
+      isEquidistantLadder,
       dominantSymbol: dominantSymbol ? dominantSymbol[0] : "",
       dominantSymbolShare: dominantSymbol ? safeDivide(dominantSymbol[1], sorted.length, 0) : 0,
       dominantLeverage: dominantLeverage ? dominantLeverage[0] : "",
@@ -660,20 +715,10 @@
     const longLossHold = summary.avgLossHoldHours > Math.max(12, summary.avgWinHoldHours * 1.5);
     const poorPayoff = summary.payoffRatio !== null && summary.payoffRatio < 0.5;
     const strongPayoff = summary.payoffRatio !== null && summary.payoffRatio >= 1.5;
-    const addSizeExpansion = orders.initialOrderMedian > 0 && orders.addOrderMedian > orders.initialOrderMedian * 1.2;
+    const addSizeExpansion = orders.addSizeExpansion ?? (orders.initialOrderMedian > 0 && orders.addOrderMedian > orders.initialOrderMedian * 1.2);
     const layeredAdds = orders.maxLayers >= 3 || adverseRate >= 0.2;
-    const tightGridSteps = orders.adverseStepMedianBps > 0 && orders.adverseStepMedianBps <= 120;
-    // Tight step spacing alone doesn't mean grid — a bot that only ever adds
-    // to one side as price grinds down produces the same tight, regular
-    // steps as genuine two-sided range trading. Real grid/range harvesting
-    // round-trips: it closes roughly as often as it opens, because each
-    // level that fills eventually gets sold back into the range. One-way
-    // accumulation barely closes at all. Measured on the 32 traders an
-    // earlier pass labeled Grid: close/open ratio clustered at 35%-400%+
-    // except four outliers at 0.2%/8%/14%/15% — all of which turned out to
-    // be one-directional accumulation on inspection (e.g. 熬鹰资本: 1699 of
-    // 1722 orders on its dominant symbol were BUY/LONG while price fell
-    // 1405->1026, 13 sells total). 25% sits in that gap.
+    const equidistantLadder = Boolean(orders.isEquidistantLadder);
+    const tightGridSteps = (orders.adverseStepMedianBps > 0 && orders.adverseStepMedianBps <= 120) || equidistantLadder;
     const roundTrips = orders.openOrders > 0 && safeDivide(orders.closeOrders, orders.openOrders, 0) >= 0.25;
     const shortHolds = summary.avgWinHoldHours > 0 && summary.avgWinHoldHours < 3;
     const tinyTakeProfit = summary.tpMedianBps > 0 && summary.tpMedianBps <= 35;
@@ -683,34 +728,38 @@
       && summary.avgLossHoldHours > 0
       && summary.avgLossHoldHours < summary.avgWinHoldHours;
 
-    // Martingale is defined by ESCALATING SIZE on adverse moves — doubling
-    // down. addSizeExpansion measures exactly that, so it alone is sufficient
-    // no matter how tight the step spacing is: a bot placing tightly-spaced
-    // orders at exponentially growing size is still running Martingale risk
-    // (arguably worse, since it does so without hesitation). Observed live:
-    // one 6-day-old account escalated a single episode from a 19,904 opening
-    // order to a 411,490 add — 20.7x — while its median step was only 46bps.
-    //
-    // The weaker signals (long loss holds, poor payoff) are NOT sufficient on
-    // their own, because genuine grid/range trading produces them too. Those
-    // stay gated behind !tightGridSteps, which is what stops a tight-spaced
-    // one-way accumulator from being mislabeled Martingale when its adds are
-    // actually SHRINKING (observed: addOrderMedian/initialOrderMedian ≈ 0.00).
-    // Measured over 144 cached traders, splitting the condition this way
-    // reclassifies 6 — every one of them escalating 1.49x–4.51x with 36–61%
-    // adverse-add rates — and leaves the shrinking-add accumulators as DCA.
-    if (adverseRate >= 0.35 && orders.maxLayers >= 3
-      && (addSizeExpansion || (!tightGridSteps && (longLossHold || poorPayoff)))) {
-      family = t("familyMartingale");
-      labels.push(t("labelMartingale"), t("labelAdverseAdd"));
-      if (longLossHold) labels.push(t("labelLongLossHold"));
-    } else if (layeredAdds && tightGridSteps && highFrequency && roundTrips) {
+    // Micro-scalping with sliced order bursts (sub-minute clips)
+    const isSlicedScalpBurst = (
+      (orders.orderBurstRate60s >= 0.40 || orders.medianOrderIntervalSec <= 30 || summary.avgWinHoldHours < 0.5)
+      && summary.maxLossHoldHours <= 24
+      && summary.avgLossHoldHours <= 4
+    );
+
+    // Martingale is strictly defined by ESCALATING SIZE on adverse moves — doubling
+    // down (addSizeExpansion). Without expanding adds, multi-layer accumulation is DCA.
+    if (adverseRate >= 0.35 && orders.maxLayers >= 3 && addSizeExpansion) {
+      const isControlledFastExit = summary.avgLossHoldHours > 0
+        && summary.avgLossHoldHours < 3
+        && summary.maxLossHoldHours < 12
+        && (summary.payoffRatio >= 0.8 || summary.expectancy > 0);
+      if (isSlicedScalpBurst) {
+        family = t("familySlicedScalping");
+        labels.push(t("labelSlicedScalping"), t("labelScalping"), t("labelFastLossClose"));
+      } else if (isControlledFastExit) {
+        family = t("familyControlledMartingale");
+        labels.push(t("labelControlledMartingale"), t("labelFastLossClose"));
+      } else {
+        family = t("familyMartingale");
+        labels.push(t("labelMartingale"), t("labelAdverseAdd"));
+        if (longLossHold) labels.push(t("labelLongLossHold"));
+      }
+    } else if (layeredAdds && tightGridSteps && (highFrequency || equidistantLadder) && roundTrips) {
       family = t("familyGrid");
       labels.push(t("labelGrid"), t("labelDca"), t("labelLeftSide"));
     } else if (adverseRate >= 0.35 && strongPayoff && summary.avgLossHoldHours < 1) {
       family = t("familyMeanReversionStop");
       labels.push(t("labelDca"), t("labelLeftSide"), t("labelFastLossClose"));
-    } else if (adverseRate >= 0.2) {
+    } else if (adverseRate >= 0.2 || (adverseRate >= 0.35 && orders.maxLayers >= 3)) {
       family = t("familyDcaLeft");
       labels.push(t("labelDca"), t("labelLeftSide"), t("labelLayeredAdds"));
     } else if (veryHighFrequency && shortHolds && tinyTakeProfit && adverseRate < 0.1) {
@@ -737,6 +786,7 @@
     const evidence = [];
     const cautions = [];
     const positives = [];
+    const alerts = [];
     let level = "watch";
     let title = t("verdictWatch");
 
@@ -747,18 +797,64 @@
     const lowMdd = Number.isFinite(meta.mdd) && meta.mdd < 15;
     const enoughHistory = meta.days >= 60 && summary.closedTrades >= 50;
     const cleanOpenRisk = live.openUnrealizedLossToMargin < 0.02 && live.openUnrealizedLoss < 2000;
+
+    // Initial leverage risk
+    const marginBalance = Math.max(1, meta.marginBalance || meta.aum || 0);
+    const initialOrderNotional = orders.initialOrderMedian || 0;
+    const initialLeverage = safeDivide(initialOrderNotional, marginBalance, 0);
+    const highInitialLeverage = initialLeverage >= 10 && adverseRate >= 0.30;
+
+    // Dead loss duration thresholds
+    const severeDeadLoss = summary.maxLossHoldHours >= 150;
+    const extremeDeadLoss = summary.maxLossHoldHours >= 300;
+
+    // Stagnant momentum detection
+    const roi30 = meta.performanceWindows?.["30D"]?.roi;
+    const roi7 = meta.performanceWindows?.["7D"]?.roi;
+    const tradesPerDay = safeDivide(summary.closedTrades, Math.max(1, meta.days), 0);
+    const isStagnant = meta.days >= 60
+      && (Number.isFinite(roi30) ? roi30 < 5 : (Number.isFinite(meta.roi) ? meta.roi < 10 : true))
+      && tradesPerDay < 0.25;
+
+    // Momentum status for UI
+    let momentumStatus = "normal";
+    if (live.openUnrealizedLossToMargin >= 0.10 || (Number.isFinite(roi7) && roi7 <= -5)) {
+      momentumStatus = "drawdown";
+    } else if (isStagnant) {
+      momentumStatus = "stagnant";
+    } else if (Number.isFinite(roi30) && roi30 >= 20 && tradesPerDay >= 0.5) {
+      momentumStatus = "active";
+    }
+
+    // Alerts
+    if (transfers.lossPeriodDepositCount > 0) {
+      alerts.push(t("alertLossDeposit", [transfers.lossPeriodDepositCount]));
+    }
+    if (severeDeadLoss) {
+      alerts.push(t("alertSevereDeadLoss", [formatHours(summary.maxLossHoldHours)]));
+    }
+
     const destructiveMartingale = (
       adverseRate > 0.35
       && summary.avgLossHoldHours > 12
       && summary.lossHoldRatio > 1.5
+      && orders.addSizeExpansion
     ) || (
       adverseRate > 0.50
       && poorPayoff
-    ) || (
-      adverseRate > 0.75
-      && summary.winRate >= 0.98
-      && summary.lossCount === 0
+      && orders.addSizeExpansion
     );
+
+    const hasProvenCopierProfit = (meta.copierPnl >= 50000 || copierPnlToAum >= 0.20)
+      && transfers.lossPeriodDepositCount === 0
+      && summary.expectancy > 0
+      && !poorPayoff
+      && summary.closedTrades >= 30
+      && !destructiveMartingale;
+
+    if (hasProvenCopierProfit) {
+      positives.unshift(t("positiveHighCopierProfit", [formatMoney(meta.copierPnl)]));
+    }
 
     if (meta.days >= 30) positives.push(t("positiveDays", [meta.days.toFixed(0)]));
     if (summary.closedTrades >= 50) positives.push(t("positiveClosedTrades", [summary.closedTrades]));
@@ -769,11 +865,17 @@
     if (Number.isFinite(meta.roi) && !meta.allPeriodPerformance?.reliable) cautions.push(t("cautionReconstructedNeedsCompleteness"));
     if (summary.closedTrades > 0 && summary.closedTrades < 30) cautions.push(t("cautionThinClosedTrades", [summary.closedTrades]));
     if (meta.mdd >= 30) cautions.push(t("cautionHighMdd", [formatPct(meta.mdd)]));
-    if (summary.maxLossHoldHours >= 72) cautions.push(t("cautionLongLossHold", [formatHours(summary.maxLossHoldHours)]));
+    if (extremeDeadLoss || severeDeadLoss) {
+      cautions.push(t("cautionSevereDeadLoss", [formatHours(summary.maxLossHoldHours)]));
+    } else if (summary.maxLossHoldHours >= 72) {
+      cautions.push(t("cautionLongLossHold", [formatHours(summary.maxLossHoldHours)]));
+    }
     if (poorPayoff) cautions.push(t("cautionPoorPayoff", [summary.payoffRatio?.toFixed(2)]));
     if (summary.winRate >= 0.98 && summary.lossCount <= 1 && summary.closedTrades >= 20) cautions.push(t("cautionNearPerfectWin"));
     if (orders.openOrders >= 300 && summary.avgWin > 0 && summary.avgWin <= 2) cautions.push(t("cautionMicroProfit"));
     if (adverseRate >= 0.35) cautions.push(t("cautionAdverseAdd", [`${(adverseRate * 100).toFixed(0)}%`]));
+    if (highInitialLeverage) cautions.push(t("cautionHighInitialLeverage", [initialLeverage.toFixed(1)]));
+    if (isStagnant) cautions.push(t("cautionStagnantMomentum", [Number.isFinite(roi30) ? `${roi30.toFixed(1)}%` : "0%", tradesPerDay.toFixed(2)]));
     if (transfers.lossPeriodDepositCount > 0) cautions.push(t("cautionLossPeriodDeposit", [transfers.lossPeriodDepositCount]));
     if (live.openUnrealizedLossToMargin >= 0.05 || live.openUnrealizedLoss >= 5000) cautions.push(t("cautionFloatingLoss", [formatMoney(live.openUnrealizedLoss), (live.openUnrealizedLossToMargin * 100).toFixed(1)]));
     if (copierPnlToAum <= -0.05 && meta.roi > 0) cautions.push(t("cautionCopierDivergence", [`${(copierPnlToAum * 100).toFixed(1)}%`]));
@@ -784,6 +886,10 @@
       level = "avoid";
       title = t("verdictAvoid");
       evidence.push(t("evidenceLossDeposit"));
+    } else if (extremeDeadLoss) {
+      level = "avoid";
+      title = t("verdictAvoid");
+      evidence.push(t("evidenceExtremeDeadLoss"));
     } else if (destructiveMartingale) {
       level = "avoid";
       title = t("verdictAvoid");
@@ -792,17 +898,28 @@
       level = "avoid";
       title = t("verdictWait");
       evidence.push(t("evidenceFloatingLoss"));
-    } else if (meta.mdd >= 50) {
+    } else if (meta.copierPnl <= -20000 && (copierPnlToAum <= -0.20 || meta.pnl >= 0)) {
+      level = "avoid";
+      title = t("verdictAvoid");
+      evidence.push(t("evidenceCopierBleed"));
+    } else if (meta.mdd >= 50 && !hasProvenCopierProfit) {
       level = "avoid";
       title = t("verdictHighRiskAvoid");
       evidence.push(t("evidenceHugeMdd"));
-    } else if (cautions.length >= 3 || meta.mdd >= 30 || adverseRate >= 0.35 || poorPayoff) {
+    } else if (hasProvenCopierProfit && (meta.mdd >= 40 || adverseRate >= 0.35) && !severeDeadLoss && !highInitialLeverage) {
+      level = "followable";
+      title = t("verdictAggressiveGrowth");
+      evidence.push(t("evidenceAggressiveGrowth"));
+    } else if (isStagnant) {
+      level = "watch";
+      title = t("verdictWatch");
+    } else if (severeDeadLoss || highInitialLeverage || cautions.length >= 3 || meta.mdd >= 30 || adverseRate >= 0.35 || poorPayoff) {
       level = "risky";
       title = t("verdictRisky");
-    } else if (enoughHistory && lowMdd && strongPayoff && adverseRate < 0.15 && cleanOpenRisk) {
+    } else if (enoughHistory && lowMdd && strongPayoff && adverseRate < 0.15 && cleanOpenRisk && !severeDeadLoss && !highInitialLeverage) {
       level = "preferred";
       title = t("verdictPreferred");
-    } else if (meta.days >= 30 && summary.closedTrades >= 30) {
+    } else if (meta.days >= 30 && summary.closedTrades >= 30 && !severeDeadLoss && !highInitialLeverage) {
       level = "followable";
       title = t("verdictFollowSmall");
     }
@@ -812,7 +929,9 @@
       title,
       positives,
       cautions,
-      evidence
+      evidence,
+      momentumStatus,
+      alerts
     };
   }
 
@@ -914,7 +1033,12 @@
       maxLayers: 0,
       initialOrderMedian: 0,
       addOrderMedian: 0,
+      addSizeExpansion: false,
       adverseStepMedianBps: 0,
+      adverseStepMeanBps: 0,
+      adverseStepStdDevBps: 0,
+      adverseStepCv: Infinity,
+      isEquidistantLadder: false,
       dominantSymbol: summary.dominantSymbol,
       dominantSymbolShare: summary.dominantSymbolShare,
       dominantLeverage: String(firstDefined(raw.candidate?.lever, "")),
@@ -957,6 +1081,8 @@
   global.CopyTradingLensAnalysis = {
     analyzeBinance,
     analyzeOkx,
+    inferStrategy,
+    buildVerdict,
     formatPct,
     formatMoney,
     formatHours,

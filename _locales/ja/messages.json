@@ -1,154 +1,512 @@
 {
-  "extensionName": { "message": "Copy Trading Lens" },
-  "extensionShortName": { "message": "CopyLens" },
-  "extensionDescription": { "message": "現在の Binance / OKX コピートレードリーダーページから、戦略タイプ・リスク・コピーしやすさをリアルタイム分析します。" },
-  "popupHeroTitle": { "message": "コピートレーダーのリアルタイムリスク分析" },
-  "popupUsageTitle": { "message": "使い方" },
-  "popupUsageBody": { "message": "Binance または OKX の個別リーダーページを開くと、右側に分析パネルが自動表示されます。現在のブラウザーセッションで取得できるデータだけを使い、ローカルで計算します。" },
-  "popupChecksTitle": { "message": "チェック内容" },
-  "popupCheckMartingale": { "message": "マーチンゲール的な逆行ナンピンと長い含み損保有" },
-  "popupCheckMargin": { "message": "損失中の資金追加と現在の含み損リスク" },
-  "popupCheckPayoff": { "message": "損益比、期待値、サンプル数、MDD" },
-  "popupCheckScalping": { "message": "高頻度小幅利益戦略のスリッページとコピー適性" },
-  "popupPrivacyTitle": { "message": "プライバシー" },
-  "popupPrivacyBody": { "message": "cookie、header、API key、口座データを収集・アップロード・保存しません。バックエンドサービスもありません。" },
-  "launcherTitle": { "message": "Copy Trading Lens を開く" },
-  "launcherLabel": { "message": "Lens" },
-  "noDataYet": { "message": "まだデータがありません" },
-  "endpointsAvailable": { "message": "{0}/{1} endpoints available" },
-  "endpointDetail": { "message": "プロフィール" },
-  "endpointLivePositions": { "message": "現在ポジション" },
-  "endpointPositionHistory": { "message": "ポジション履歴" },
-  "endpointOrderHistory": { "message": "注文履歴" },
-  "endpointTransferHistory": { "message": "振替履歴" },
-  "endpointCandidate": { "message": "ランキング/profile" },
-  "endpointPerformance": { "message": "{0}パフォーマンス" },
-  "noWindowData": { "message": "取引所の標準時間窓データを取得できませんでした。" },
-  "colTimeRange": { "message": "期間" },
-  "colRoi": { "message": "ROI" },
-  "colAnnualized": { "message": "年率" },
-  "colMdd": { "message": "MDD" },
-  "colSource": { "message": "ソース" },
-  "histPosition": { "message": "ポジション履歴" },
-  "histOrder": { "message": "注文履歴" },
-  "histTransfer": { "message": "振替履歴" },
-  "statusNA": { "message": "N/A" },
-  "statusFail": { "message": "失敗" },
-  "statusEmpty": { "message": "データなし" },
-  "statusComplete": { "message": "完了" },
-  "statusIncomplete": { "message": "未完了" },
-  "retrySuffix": { "message": "、{0} 回再試行" },
-  "historyItem": { "message": "{0}: {1}/{2} {3}{4}" },
-  "historyDataPrefix": { "message": "履歴データ：{0}" },
-  "settingNoCopyExisting": { "message": "既存ポジションはコピーせず、次の新規エントリーを待つ。" },
-  "settingSmallRatio": { "message": "試す場合でも、小さな固定比率配分と口座全体の損切りを使う。" },
-  "settingHighMdd": { "message": "MDD が高いため、1 人のリーダーに資金を寄せすぎない。" },
-  "settingDefault": { "message": "固定比率コピー、既存ポジションをコピーしないこと、口座全体の損切りを推奨します。" },
-  "analysisInProgress": { "message": "{0} のリーダー分析中" },
-  "loadingText": { "message": "現在の公開/ログイン可視データを取得し、ローカルで分析しています。一時的に混雑している履歴ページは完了するまで再試行します。" },
-  "analysisFailed": { "message": "分析に失敗しました" },
-  "retry": { "message": "再分析" },
-  "refreshTitle": { "message": "分析を更新" },
-  "collapseTitle": { "message": "折りたたむ" },
-  "metricAllPeriodRoi": { "message": "全期間 ROI" },
-  "metricAnnualized": { "message": "年率リターン" },
-  "metricMdd": { "message": "MDD" },
-  "metricAllPeriodPnl": { "message": "全期間 PnL" },
-  "metricTradingDays": { "message": "取引日数" },
-  "metricCopierPnlAum": { "message": "コピー PnL/AUM" },
-  "metricWinRate": { "message": "勝率" },
-  "metricPayoffRatio": { "message": "損益比" },
-  "metricLossHold": { "message": "損失保有" },
-  "metricAdverseAdd": { "message": "逆行追加" },
-  "metricFloatingLoss": { "message": "現在の含み損" },
-  "metricLossPeriodDeposit": { "message": "損失期間中の入金" },
-  "lossPeriodDepositCount": { "message": "{0} 回" },
-  "lossPeriodDepositHint": { "message": "合計 {0}" },
-  "lossPeriodDepositNone": { "message": "なし" },
-  "metricRestartCount": { "message": "過去の閉鎖" },
-  "hintHistoryApi": { "message": "履歴/API" },
-  "hintMddWindowMax": { "message": "取引所期間の最大値" },
-  "hintCurrentCapitalFormula": { "message": "現在資金 + 出金 - 入金" },
-  "daysValue": { "message": "{0} 日" },
-  "closedTrades": { "message": "{0} 件の決済済み取引" },
-  "longestHold": { "message": "最長 {0}" },
-  "marginPct": { "message": "{0}% margin" },
-  "portfolioRestart": { "message": "portfolio restart" },
-  "sectionRisks": { "message": "主なリスク" },
-  "noMajorRisks": { "message": "主要なリスクルールは現在発火していませんが、安全性や利益を保証するものではありません。" },
-  "sectionPositives": { "message": "ポジティブ材料" },
-  "noPositives": { "message": "ポジティブ材料がまだ不足しています。さらにサンプルを観察してください。" },
-  "sectionSettings": { "message": "推奨コピー設定" },
-  "advancedData": { "message": "詳細データ：{0}" },
-  "advancedWindowCrossCheck": { "message": "期間クロスチェック" },
-  "disclaimer": { "message": "この分析は現在のブラウザーセッションで取得できるデータだけを使ってローカル計算します。投資助言ではなく、利益や安全性を保証しません。" },
-  "familyInsufficient": { "message": "取引履歴が不足しており、コピーリスクを判断できません" },
-  "familyNoMajorPattern": { "message": "明確な高リスク取引パターンは検出されていません" },
-  "familyMartingale": { "message": "マーチンゲール：損失時にサイズを増やすため、連続逆行でドローダウンが急拡大しやすい" },
-  "familyGrid": { "message": "グリッド / レンジ取引：分割注文でレンジを取るが、一方向相場では含み損が積み上がりやすい" },
-  "familyDcaLeft": { "message": "DCA / 左側取引：下落や逆行中に平均化するため、早すぎる参加はドローダウンを引き継ぎやすい" },
-  "familyRightTrend": { "message": "右側取引 / トレンドフォロー：方向確認後に入るため、通常は損切りの明確さが重要" },
-  "familyScalping": { "message": "スキャルピング：短時間の小幅利益が中心で、コピー遅延と手数料が結果に影響します" },
-  "familyMarketMaking": { "message": "マーケットメイク / 高頻度メイク傾向：短期取引が多く、コピー時のスリッページで優位性が消えやすい" },
-  "familySwing": { "message": "スイング取引：保有時間が長めで、コピー側が既存ポジションの変動を引き継ぐ可能性があります" },
-  "familyMeanReversionStop": { "message": "左側の反発狙いだが損切りは速い：執行品質が重要です" },
-  "familyBatchScalping": { "message": "スキャルピング：短時間の小幅利益が中心で、コピー遅延と手数料が結果に影響します" },
-  "familyLayeredMeanReversion": { "message": "DCA / 左側取引：逆行中に分割して平均化するため、早すぎる参加はドローダウンを引き継ぎやすい" },
-  "familyLowFreqSwing": { "message": "スイング取引：保有時間が長めで、コピー側が既存ポジションの変動を引き継ぐ可能性があります" },
-  "labelMartingale": { "message": "マーチンゲール" },
-  "labelGrid": { "message": "グリッド" },
-  "labelDca": { "message": "DCA" },
-  "labelLeftSide": { "message": "左側取引" },
-  "labelRightSide": { "message": "右側取引" },
-  "labelScalping": { "message": "スキャルピング" },
-  "labelMarketMaking": { "message": "マーケットメイク傾向" },
-  "labelAdverseAdd": { "message": "損失中に追加" },
-  "labelLongLossHold": { "message": "損失取引を長く保有" },
-  "labelAllowAdds": { "message": "ポジション追加あり" },
-  "labelFastLossClose": { "message": "損失を素早く切る" },
-  "labelHighFreq": { "message": "取引頻度が高い" },
-  "labelSamePriceSplits": { "message": "注文を分割" },
-  "labelLayeredAdds": { "message": "分割追加" },
-  "labelLongHold": { "message": "保有時間が長い" },
-  "labelPoorPayoff": { "message": "損益比が弱い" },
-  "labelHighWinTailRisk": { "message": "高勝率はテールリスクを隠す場合があります" },
-  "labelSingleSymbol": { "message": "単一銘柄に集中" },
-  "verdictWatch": { "message": "観察" },
-  "verdictAvoid": { "message": "フォロー非推奨" },
-  "verdictWait": { "message": "まだフォローしない" },
-  "verdictHighRiskAvoid": { "message": "高リスク。通常のコピーには不向き" },
-  "verdictRisky": { "message": "高リスク候補" },
-  "verdictPreferred": { "message": "比較的コピー候補" },
-  "verdictFollowSmall": { "message": "小額テスト候補" },
-  "positiveDays": { "message": "取引日数は約 {0} 日で、最低 30 日の観察基準を満たしています。" },
-  "positiveClosedTrades": { "message": "{0} 件の決済済み取引があり、初期の行動分析に使えます。" },
-  "positivePayoff": { "message": "平均損益比は {0} で、典型的な小勝ち大負け型ではありません。" },
-  "positiveLossHoldShort": { "message": "平均損失取引の保有時間が利益取引より短く、損切りが比較的きれいです。" },
-  "cautionTooFewDays": { "message": "取引日数は {0} 日のみで、最低 30 日の観察基準を満たしていません。" },
-  "cautionNoAllPeriodRoi": { "message": "全期間 ROI を信頼できる形で再構築できません。ページ上の一部期間だけに依存しないでください。" },
-  "cautionReconstructedNeedsCompleteness": { "message": "全期間 ROI は取得可能データから再構築されていますが、履歴の完全性と開始点に注意が必要です。" },
-  "cautionThinClosedTrades": { "message": "決済済み取引は {0} 件のみです。1 件の取引で結論が大きく歪む可能性があります。" },
-  "cautionHighMdd": { "message": "表示/API 上の MDD は約 {0} です。新規コピー側がすぐ大きなドローダウンを受ける可能性があります。" },
-  "cautionLongLossHold": { "message": "過去の損失ポジションの最長保有は {0} で、含み損を抱え続けるリスクがあります。" },
-  "cautionPoorPayoff": { "message": "平均損益比は {0} のみで、平均損失が平均利益を上回っています。" },
-  "cautionNearPerfectWin": { "message": "勝率が 100% 近く、実現損失がほぼありません。まだストレス相場で試されていない可能性があります。" },
-  "cautionMicroProfit": { "message": "高頻度小幅利益型の戦略は、コピー遅延・スリッページ・手数料で優位性が消えやすいです。" },
-  "cautionAdverseAdd": { "message": "逆行追加率は約 {0} です。市場が不利に動くほど同方向エクスポージャーが増えます。" },
-  "cautionLossPeriodDeposit": { "message": "損失ポジション中の資金追加を {0} 回検出しました。コピー側が同時に保証金を追加できるとは限りません。" },
-  "cautionFloatingLoss": { "message": "現在ポジションの含み損は約 {0}、リーダー資金の約 {1}% です。" },
-  "cautionCopierDivergence": { "message": "リーダーの ROI はプラスですが、コピー側 PnL/AUM は約 {0} です。スリッページ、参加タイミング、ポジション管理の差がある可能性があります。" },
-  "cautionCloseLeadCount": { "message": "過去の閉鎖回数は {0} 回です。旧実績と現ラウンドのデータが切れている可能性があります。" },
-  "cautionPreStartHistory": { "message": "公式開始日より {0} 日早い取引履歴を検出しました。前回の閉鎖済みリード実績が混入している可能性があり、表示中の運用日数やリターンが希薄化・誇張されている恐れがあります。" },
-  "evidenceLossDeposit": { "message": "損失期間中の資金追加は、コピー側が最も再現しにくいリスクの一つです。" },
-  "evidenceDestructiveMartingale": { "message": "逆行追加、損失決済の遅れ、損益比の悪化が同時に見られ、マーチンゲール的なテールリスクが高いです。" },
-  "evidenceFloatingLoss": { "message": "現在大きな含み損ポジションがあります。新規コピー側が本来負う必要のなかったリスクを引き継ぐ可能性があります。" },
-  "evidenceHugeMdd": { "message": "過去のドローダウンが非常に大きいです。使うとしてもごく小さな投機枠に限られます。" },
-  "annualizedSourceXirr": { "message": "XIRR/APY" },
-  "annualizedSourceCagr": { "message": "CAGR推定" },
-  "performanceSourceCashFlow": { "message": "キャッシュフロー再構築" },
-  "performanceSourceWindow": { "message": "取引所 {0} 期間" },
-  "performanceSourceFallback": { "message": "ページ/API fallback" },
-  "performanceQualityComplete": { "message": "完了" },
-  "performanceQualityReconstructed": { "message": "再構築可、完全性要確認" },
-  "performanceQualityUnavailable": { "message": "利用不可" }
+  "extensionName": {
+    "message": "Copy Trading Lens"
+  },
+  "extensionShortName": {
+    "message": "CopyLens"
+  },
+  "extensionDescription": {
+    "message": "現在の Binance / OKX コピートレードリーダーページから、戦略タイプ・リスク・コピーしやすさをリアルタイム分析します。"
+  },
+  "popupHeroTitle": {
+    "message": "コピートレーダーのリアルタイムリスク分析"
+  },
+  "popupUsageTitle": {
+    "message": "使い方"
+  },
+  "popupUsageBody": {
+    "message": "Binance または OKX の個別リーダーページを開くと、右側に分析パネルが自動表示されます。現在のブラウザーセッションで取得できるデータだけを使い、ローカルで計算します。"
+  },
+  "popupChecksTitle": {
+    "message": "チェック内容"
+  },
+  "popupCheckMartingale": {
+    "message": "マーチンゲール的な逆行ナンピンと長い含み損保有"
+  },
+  "popupCheckMargin": {
+    "message": "損失中の資金追加と現在の含み損リスク"
+  },
+  "popupCheckPayoff": {
+    "message": "損益比、期待値、サンプル数、MDD"
+  },
+  "popupCheckScalping": {
+    "message": "高頻度小幅利益戦略のスリッページとコピー適性"
+  },
+  "popupPrivacyTitle": {
+    "message": "プライバシー"
+  },
+  "popupPrivacyBody": {
+    "message": "cookie、header、API key、口座データを収集・アップロード・保存しません。バックエンドサービスもありません。"
+  },
+  "launcherTitle": {
+    "message": "Copy Trading Lens を開く"
+  },
+  "launcherLabel": {
+    "message": "Lens"
+  },
+  "noDataYet": {
+    "message": "まだデータがありません"
+  },
+  "endpointsAvailable": {
+    "message": "{0}/{1} endpoints available"
+  },
+  "endpointDetail": {
+    "message": "プロフィール"
+  },
+  "endpointLivePositions": {
+    "message": "現在ポジション"
+  },
+  "endpointPositionHistory": {
+    "message": "ポジション履歴"
+  },
+  "endpointOrderHistory": {
+    "message": "注文履歴"
+  },
+  "endpointTransferHistory": {
+    "message": "振替履歴"
+  },
+  "endpointCandidate": {
+    "message": "ランキング/profile"
+  },
+  "endpointPerformance": {
+    "message": "{0}パフォーマンス"
+  },
+  "noWindowData": {
+    "message": "取引所の標準時間窓データを取得できませんでした。"
+  },
+  "colTimeRange": {
+    "message": "期間"
+  },
+  "colRoi": {
+    "message": "ROI"
+  },
+  "colAnnualized": {
+    "message": "年率"
+  },
+  "colMdd": {
+    "message": "MDD"
+  },
+  "colSource": {
+    "message": "ソース"
+  },
+  "histPosition": {
+    "message": "ポジション履歴"
+  },
+  "histOrder": {
+    "message": "注文履歴"
+  },
+  "histTransfer": {
+    "message": "振替履歴"
+  },
+  "statusNA": {
+    "message": "N/A"
+  },
+  "statusFail": {
+    "message": "失敗"
+  },
+  "statusEmpty": {
+    "message": "データなし"
+  },
+  "statusComplete": {
+    "message": "完了"
+  },
+  "statusIncomplete": {
+    "message": "未完了"
+  },
+  "retrySuffix": {
+    "message": "、{0} 回再試行"
+  },
+  "historyItem": {
+    "message": "{0}: {1}/{2} {3}{4}"
+  },
+  "historyDataPrefix": {
+    "message": "履歴データ：{0}"
+  },
+  "settingNoCopyExisting": {
+    "message": "既存ポジションはコピーせず、次の新規エントリーを待つ。"
+  },
+  "settingSmallRatio": {
+    "message": "試す場合でも、小さな固定比率配分と口座全体の損切りを使う。"
+  },
+  "settingHighMdd": {
+    "message": "MDD が高いため、1 人のリーダーに資金を寄せすぎない。"
+  },
+  "settingDefault": {
+    "message": "固定比率コピー、既存ポジションをコピーしないこと、口座全体の損切りを推奨します。"
+  },
+  "analysisInProgress": {
+    "message": "{0} のリーダー分析中"
+  },
+  "loadingText": {
+    "message": "現在の公開/ログイン可視データを取得し、ローカルで分析しています。一時的に混雑している履歴ページは完了するまで再試行します。"
+  },
+  "analysisFailed": {
+    "message": "分析に失敗しました"
+  },
+  "retry": {
+    "message": "再分析"
+  },
+  "refreshTitle": {
+    "message": "分析を更新"
+  },
+  "collapseTitle": {
+    "message": "折りたたむ"
+  },
+  "metricAllPeriodRoi": {
+    "message": "全期間 ROI"
+  },
+  "metricAnnualized": {
+    "message": "年率リターン"
+  },
+  "metricMdd": {
+    "message": "MDD"
+  },
+  "metricAllPeriodPnl": {
+    "message": "全期間 PnL"
+  },
+  "metricTradingDays": {
+    "message": "取引日数"
+  },
+  "metricCopierPnlAum": {
+    "message": "コピー PnL/AUM"
+  },
+  "metricWinRate": {
+    "message": "勝率"
+  },
+  "metricPayoffRatio": {
+    "message": "損益比"
+  },
+  "metricLossHold": {
+    "message": "損失保有"
+  },
+  "metricAdverseAdd": {
+    "message": "逆行追加"
+  },
+  "metricFloatingLoss": {
+    "message": "現在の含み損"
+  },
+  "metricLossPeriodDeposit": {
+    "message": "損失期間中の入金"
+  },
+  "lossPeriodDepositCount": {
+    "message": "{0} 回"
+  },
+  "lossPeriodDepositHint": {
+    "message": "合計 {0}"
+  },
+  "lossPeriodDepositNone": {
+    "message": "なし"
+  },
+  "metricRestartCount": {
+    "message": "過去の閉鎖"
+  },
+  "hintHistoryApi": {
+    "message": "履歴/API"
+  },
+  "hintMddWindowMax": {
+    "message": "取引所期間の最大値"
+  },
+  "hintCurrentCapitalFormula": {
+    "message": "現在資金 + 出金 - 入金"
+  },
+  "daysValue": {
+    "message": "{0} 日"
+  },
+  "closedTrades": {
+    "message": "{0} 件の決済済み取引"
+  },
+  "longestHold": {
+    "message": "最長 {0}"
+  },
+  "marginPct": {
+    "message": "{0}% margin"
+  },
+  "portfolioRestart": {
+    "message": "portfolio restart"
+  },
+  "sectionRisks": {
+    "message": "主なリスク"
+  },
+  "noMajorRisks": {
+    "message": "主要なリスクルールは現在発火していませんが、安全性や利益を保証するものではありません。"
+  },
+  "sectionPositives": {
+    "message": "ポジティブ材料"
+  },
+  "noPositives": {
+    "message": "ポジティブ材料がまだ不足しています。さらにサンプルを観察してください。"
+  },
+  "sectionSettings": {
+    "message": "推奨コピー設定"
+  },
+  "advancedData": {
+    "message": "詳細データ：{0}"
+  },
+  "advancedWindowCrossCheck": {
+    "message": "期間クロスチェック"
+  },
+  "disclaimer": {
+    "message": "この分析は現在のブラウザーセッションで取得できるデータだけを使ってローカル計算します。投資助言ではなく、利益や安全性を保証しません。"
+  },
+  "familyInsufficient": {
+    "message": "取引履歴が不足しており、コピーリスクを判断できません"
+  },
+  "familyNoMajorPattern": {
+    "message": "明確な高リスク取引パターンは検出されていません"
+  },
+  "familyMartingale": {
+    "message": "マーチンゲール：損失時にサイズを増やすため、連続逆行でドローダウンが急拡大しやすい"
+  },
+  "familyGrid": {
+    "message": "グリッド / レンジ取引：分割注文でレンジを取るが、一方向相場では含み損が積み上がりやすい"
+  },
+  "familyDcaLeft": {
+    "message": "DCA / 左側取引：下落や逆行中に平均化するため、早すぎる参加はドローダウンを引き継ぎやすい"
+  },
+  "familyRightTrend": {
+    "message": "右側取引 / トレンドフォロー：方向確認後に入るため、通常は損切りの明確さが重要"
+  },
+  "familyScalping": {
+    "message": "スキャルピング：短時間の小幅利益が中心で、コピー遅延と手数料が結果に影響します"
+  },
+  "familyMarketMaking": {
+    "message": "マーケットメイク / 高頻度メイク傾向：短期取引が多く、コピー時のスリッページで優位性が消えやすい"
+  },
+  "familySwing": {
+    "message": "スイング取引：保有時間が長めで、コピー側が既存ポジションの変動を引き継ぐ可能性があります"
+  },
+  "familyMeanReversionStop": {
+    "message": "左側の反発狙いだが損切りは速い：執行品質が重要です"
+  },
+  "familyBatchScalping": {
+    "message": "スキャルピング：短時間の小幅利益が中心で、コピー遅延と手数料が結果に影響します"
+  },
+  "familyLayeredMeanReversion": {
+    "message": "DCA / 左側取引：逆行中に分割して平均化するため、早すぎる参加はドローダウンを引き継ぎやすい"
+  },
+  "familyLowFreqSwing": {
+    "message": "スイング取引：保有時間が長めで、コピー側が既存ポジションの変動を引き継ぐ可能性があります"
+  },
+  "labelMartingale": {
+    "message": "マーチンゲール"
+  },
+  "labelGrid": {
+    "message": "グリッド"
+  },
+  "labelDca": {
+    "message": "DCA"
+  },
+  "labelLeftSide": {
+    "message": "左側取引"
+  },
+  "labelRightSide": {
+    "message": "右側取引"
+  },
+  "labelScalping": {
+    "message": "スキャルピング"
+  },
+  "labelMarketMaking": {
+    "message": "マーケットメイク傾向"
+  },
+  "labelAdverseAdd": {
+    "message": "損失中に追加"
+  },
+  "labelLongLossHold": {
+    "message": "損失取引を長く保有"
+  },
+  "labelAllowAdds": {
+    "message": "ポジション追加あり"
+  },
+  "labelFastLossClose": {
+    "message": "損失を素早く切る"
+  },
+  "labelHighFreq": {
+    "message": "取引頻度が高い"
+  },
+  "labelSamePriceSplits": {
+    "message": "注文を分割"
+  },
+  "labelLayeredAdds": {
+    "message": "分割追加"
+  },
+  "labelLongHold": {
+    "message": "保有時間が長い"
+  },
+  "labelPoorPayoff": {
+    "message": "損益比が弱い"
+  },
+  "labelHighWinTailRisk": {
+    "message": "高勝率はテールリスクを隠す場合があります"
+  },
+  "labelSingleSymbol": {
+    "message": "単一銘柄に集中"
+  },
+  "verdictWatch": {
+    "message": "観察"
+  },
+  "verdictAvoid": {
+    "message": "フォロー非推奨"
+  },
+  "verdictWait": {
+    "message": "まだフォローしない"
+  },
+  "verdictHighRiskAvoid": {
+    "message": "高リスク。通常のコピーには不向き"
+  },
+  "verdictRisky": {
+    "message": "高リスク候補"
+  },
+  "verdictPreferred": {
+    "message": "比較的コピー候補"
+  },
+  "verdictFollowSmall": {
+    "message": "小額テスト候補"
+  },
+  "verdictAggressiveGrowth": {
+    "message": "攻め型候補（定期的な利益出金を推奨）"
+  },
+  "positiveHighCopierProfit": {
+    "message": "フォロワーの実質累計利益が {0} に達しており、高い実力を示しています。"
+  },
+  "positiveDays": {
+    "message": "取引日数は約 {0} 日で、最低 30 日の観察基準を満たしています。"
+  },
+  "positiveClosedTrades": {
+    "message": "{0} 件の決済済み取引があり、初期の行動分析に使えます。"
+  },
+  "positivePayoff": {
+    "message": "平均損益比は {0} で、典型的な小勝ち大負け型ではありません。"
+  },
+  "positiveLossHoldShort": {
+    "message": "平均損失取引の保有時間が利益取引より短く、損切りが比較的きれいです。"
+  },
+  "cautionTooFewDays": {
+    "message": "取引日数は {0} 日のみで、最低 30 日の観察基準を満たしていません。"
+  },
+  "cautionNoAllPeriodRoi": {
+    "message": "全期間 ROI を信頼できる形で再構築できません。ページ上の一部期間だけに依存しないでください。"
+  },
+  "cautionReconstructedNeedsCompleteness": {
+    "message": "全期間 ROI は取得可能データから再構築されていますが、履歴の完全性と開始点に注意が必要です。"
+  },
+  "cautionThinClosedTrades": {
+    "message": "決済済み取引は {0} 件のみです。1 件の取引で結論が大きく歪む可能性があります。"
+  },
+  "cautionHighMdd": {
+    "message": "表示/API 上の MDD は約 {0} です。新規コピー側がすぐ大きなドローダウンを受ける可能性があります。"
+  },
+  "cautionLongLossHold": {
+    "message": "過去の損失ポジションの最長保有は {0} で、含み損を抱え続けるリスクがあります。"
+  },
+  "cautionPoorPayoff": {
+    "message": "平均損益比は {0} のみで、平均損失が平均利益を上回っています。"
+  },
+  "cautionNearPerfectWin": {
+    "message": "勝率が 100% 近く、実現損失がほぼありません。まだストレス相場で試されていない可能性があります。"
+  },
+  "cautionMicroProfit": {
+    "message": "高頻度小幅利益型の戦略は、コピー遅延・スリッページ・手数料で優位性が消えやすいです。"
+  },
+  "cautionAdverseAdd": {
+    "message": "逆行追加率は約 {0} です。市場が不利に動くほど同方向エクスポージャーが増えます。"
+  },
+  "cautionLossPeriodDeposit": {
+    "message": "損失ポジション中の資金追加を {0} 回検出しました。コピー側が同時に保証金を追加できるとは限りません。"
+  },
+  "cautionFloatingLoss": {
+    "message": "現在ポジションの含み損は約 {0}、リーダー資金の約 {1}% です。"
+  },
+  "cautionCopierDivergence": {
+    "message": "リーダーの ROI はプラスですが、コピー側 PnL/AUM は約 {0} です。スリッページ、参加タイミング、ポジション管理の差がある可能性があります。"
+  },
+  "cautionCloseLeadCount": {
+    "message": "過去の閉鎖回数は {0} 回です。旧実績と現ラウンドのデータが切れている可能性があります。"
+  },
+  "cautionPreStartHistory": {
+    "message": "公式開始日より {0} 日早い取引履歴を検出しました。前回の閉鎖済みリード実績が混入している可能性があり、表示中の運用日数やリターンが希薄化・誇張されている恐れがあります。"
+  },
+  "evidenceLossDeposit": {
+    "message": "損失期間中の資金追加は、コピー側が最も再現しにくいリスクの一つです。"
+  },
+  "evidenceDestructiveMartingale": {
+    "message": "逆行追加、損失決済の遅れ、損益比の悪化が同時に見られ、マーチンゲール的なテールリスクが高いです。"
+  },
+  "evidenceFloatingLoss": {
+    "message": "現在大きな含み損ポジションがあります。新規コピー側が本来負う必要のなかったリスクを引き継ぐ可能性があります。"
+  },
+  "evidenceHugeMdd": {
+    "message": "過去のドローダウンが非常に大きいです。使うとしてもごく小さな投機枠に限られます。"
+  },
+  "evidenceAggressiveGrowth": {
+    "message": "追加入金による延命がなくフォロワーが大幅に利益を出しています。過去のドローダウンは大きいものの高いアルファがあり、少額でのフォローおよび定期的な出金を推奨します。"
+  },
+  "evidenceCopierBleed": {
+    "message": "フォロワー全体が大幅な損失を出しているか、リーダー実績と著しく乖離しており、重大なスリッページや損切りリスクがあります。"
+  },
+  "annualizedSourceXirr": {
+    "message": "XIRR/APY"
+  },
+  "annualizedSourceCagr": {
+    "message": "CAGR推定"
+  },
+  "performanceSourceCashFlow": {
+    "message": "キャッシュフロー再構築"
+  },
+  "performanceSourceWindow": {
+    "message": "取引所 {0} 期間"
+  },
+  "performanceSourceFallback": {
+    "message": "ページ/API fallback"
+  },
+  "performanceQualityComplete": {
+    "message": "完了"
+  },
+  "performanceQualityReconstructed": {
+    "message": "再構築可、完全性要確認"
+  },
+  "performanceQualityUnavailable": {
+    "message": "利用不可"
+  },
+  "familyControlledMartingale": {
+    "message": "制御型ナンピンマーチン：倍増加えるが当日中に厳格に損切り"
+  },
+  "labelControlledMartingale": {
+    "message": "高速損切り型マーチン"
+  },
+  "labelStagnantMomentum": {
+    "message": "モメンタム停滞 / 横ばい"
+  },
+  "cautionSevereDeadLoss": {
+    "message": "最大含み損保有時間が {0} であり、深刻な塩漬け傾向が見られます。"
+  },
+  "evidenceExtremeDeadLoss": {
+    "message": "12日以上の深刻な塩漬け履歴があり、急変動時にロスカット・破綻の危険性が極めて高くなります。"
+  },
+  "cautionStagnantMomentum": {
+    "message": "直近30日ROIがわずか {0}、取引頻度も極めて低く（{1} 回/日）、モメンタムが停滞しています。"
+  },
+  "cautionHighInitialLeverage": {
+    "message": "初回注文の実質レバレッジが {0}倍 に達し、逆張り追加注文を多用しているため、急変動時に破綻リスクがあります。"
+  },
+  "badgeActiveMomentum": {
+    "message": "🔥 上昇モメンタム良好"
+  },
+  "badgeStagnant": {
+    "message": "💤 モメンタム停滞"
+  },
+  "badgeInDrawdown": {
+    "message": "📉 ドローダウン中"
+  },
+  "alertLossDeposit": {
+    "message": "🚨 含み損中の追加補入金 {0}回"
+  },
+  "alertSevereDeadLoss": {
+    "message": "🚨 過去最長塩漬け {0}"
+  },
+  "familySlicedScalping": {
+    "message": "高頻度スプリットスキャルピング：秒単位の分割注文で極小利幅を獲得"
+  },
+  "labelSlicedScalping": {
+    "message": "分割注文スキャルピング"
+  }
 }
