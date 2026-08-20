@@ -228,8 +228,8 @@
       h("section", { class: "ctl-panel" }, [
         h("header", { class: "ctl-header" }, [
           h("div", {}, [
-            h("span", { class: "ctl-eyebrow", text: `${context.platform} / ${meta.id}` }),
-            h("h2", { text: meta.name })
+            h("span", { class: "ctl-eyebrow", text: `${context.platform} / ${meta.id} · ${meta.isPrivate ? t("badgePrivate") : t("badgePublic")}` }),
+            h("h2", { text: `${meta.name} (${meta.isPrivate ? t("badgePrivate") : t("badgePublic")})` })
           ]),
           h("div", { class: "ctl-actions" }, [
             h("button", { class: "ctl-icon-btn", title: t("refreshTitle"), onclick: () => runAnalysis(true) }, "↻"),

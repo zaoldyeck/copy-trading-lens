@@ -382,6 +382,8 @@
       profitSharingRate: num(detail.profitSharingRate, 0),
       positionShow: detail.positionShow,
       lastTradeTime: num(detail.lastTradeTime, 0),
+      portfolioType: String(detail.portfolioType || "").toUpperCase() === "PRIVATE" || (detail.privateLeadPortfolioId && detail.privateLeadPortfolioId === raw.id) ? "PRIVATE" : "PUBLIC",
+      isPrivate: String(detail.portfolioType || "").toUpperCase() === "PRIVATE" || (detail.privateLeadPortfolioId && detail.privateLeadPortfolioId === raw.id),
       description: String(firstDefined(detail.description, detail.descTranslate, "")),
       pageMetrics,
       performanceSource,
@@ -845,12 +847,17 @@
       && orders.addSizeExpansion
     );
 
+    const isZeroLossMartingaleBomb = summary.closedTrades >= 20
+      && summary.lossCount === 0
+      && (adverseRate >= 0.35 || orders.maxLayers >= 5);
+
     const hasProvenCopierProfit = (meta.copierPnl >= 50000 || copierPnlToAum >= 0.20)
       && transfers.lossPeriodDepositCount === 0
       && summary.expectancy > 0
       && !poorPayoff
       && summary.closedTrades >= 30
-      && !destructiveMartingale;
+      && !destructiveMartingale
+      && !isZeroLossMartingaleBomb;
 
     if (hasProvenCopierProfit) {
       positives.unshift(t("positiveHighCopierProfit", [formatMoney(meta.copierPnl)]));
@@ -871,7 +878,11 @@
       cautions.push(t("cautionLongLossHold", [formatHours(summary.maxLossHoldHours)]));
     }
     if (poorPayoff) cautions.push(t("cautionPoorPayoff", [summary.payoffRatio?.toFixed(2)]));
-    if (summary.winRate >= 0.98 && summary.lossCount <= 1 && summary.closedTrades >= 20) cautions.push(t("cautionNearPerfectWin"));
+    if (isZeroLossMartingaleBomb) {
+      cautions.push(t("cautionZeroLossMartingaleBomb", [orders.maxLayers]));
+    } else if (summary.winRate >= 0.98 && summary.lossCount <= 1 && summary.closedTrades >= 20) {
+      cautions.push(t("cautionNearPerfectWin"));
+    }
     if (orders.openOrders >= 300 && summary.avgWin > 0 && summary.avgWin <= 2) cautions.push(t("cautionMicroProfit"));
     if (adverseRate >= 0.35) cautions.push(t("cautionAdverseAdd", [`${(adverseRate * 100).toFixed(0)}%`]));
     if (highInitialLeverage) cautions.push(t("cautionHighInitialLeverage", [initialLeverage.toFixed(1)]));
@@ -890,6 +901,10 @@
       level = "avoid";
       title = t("verdictAvoid");
       evidence.push(t("evidenceExtremeDeadLoss"));
+    } else if (isZeroLossMartingaleBomb && (meta.mdd >= 40 || orders.maxLayers >= 15)) {
+      level = "avoid";
+      title = t("verdictAvoid");
+      evidence.push(t("evidenceZeroLossMartingaleBomb"));
     } else if (destructiveMartingale) {
       level = "avoid";
       title = t("verdictAvoid");
@@ -906,20 +921,20 @@
       level = "avoid";
       title = t("verdictHighRiskAvoid");
       evidence.push(t("evidenceHugeMdd"));
-    } else if (hasProvenCopierProfit && (meta.mdd >= 40 || adverseRate >= 0.35) && !severeDeadLoss && !highInitialLeverage) {
+    } else if (hasProvenCopierProfit && (meta.mdd >= 40 || adverseRate >= 0.35) && !severeDeadLoss && !highInitialLeverage && !isZeroLossMartingaleBomb) {
       level = "followable";
       title = t("verdictAggressiveGrowth");
       evidence.push(t("evidenceAggressiveGrowth"));
     } else if (isStagnant) {
       level = "watch";
       title = t("verdictWatch");
-    } else if (severeDeadLoss || highInitialLeverage || cautions.length >= 3 || meta.mdd >= 30 || adverseRate >= 0.35 || poorPayoff) {
+    } else if (severeDeadLoss || highInitialLeverage || isZeroLossMartingaleBomb || cautions.length >= 3 || meta.mdd >= 30 || adverseRate >= 0.35 || poorPayoff) {
       level = "risky";
       title = t("verdictRisky");
-    } else if (enoughHistory && lowMdd && strongPayoff && adverseRate < 0.15 && cleanOpenRisk && !severeDeadLoss && !highInitialLeverage) {
+    } else if (enoughHistory && lowMdd && strongPayoff && adverseRate < 0.15 && cleanOpenRisk && !severeDeadLoss && !highInitialLeverage && !isZeroLossMartingaleBomb) {
       level = "preferred";
       title = t("verdictPreferred");
-    } else if (meta.days >= 30 && summary.closedTrades >= 30 && !severeDeadLoss && !highInitialLeverage) {
+    } else if (meta.days >= 30 && summary.closedTrades >= 30 && !severeDeadLoss && !highInitialLeverage && !isZeroLossMartingaleBomb) {
       level = "followable";
       title = t("verdictFollowSmall");
     }

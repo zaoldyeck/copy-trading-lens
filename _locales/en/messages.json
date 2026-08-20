@@ -508,5 +508,17 @@
   },
   "labelSlicedScalping": {
     "message": "Sliced Order Scalping"
+  },
+  "evidenceZeroLossMartingaleBomb": {
+    "message": "Never closes losing trades (100% win-rate illusion) with deep adverse laddering, posing extreme liquidation risk."
+  },
+  "cautionZeroLossMartingaleBomb": {
+    "message": "Historical win rate is 100% (0 stopped losses), but adverse adds reach $1 layers — classic refusing-to-cut-loss tail risk bomb."
+  },
+  "badgePublic": {
+    "message": "Public"
+  },
+  "badgePrivate": {
+    "message": "Private"
   }
 }

@@ -508,5 +508,17 @@
   },
   "labelSlicedScalping": {
     "message": "分割注文スキャルピング"
+  },
+  "evidenceZeroLossMartingaleBomb": {
+    "message": "損失確定を全く行わない（勝率100%の見せかけ）かつ過度なナンピンであり、壊滅的なロスカットリスクを抱えています。"
+  },
+  "cautionZeroLossMartingaleBomb": {
+    "message": "確定勝率は100%（損切り0回）ですが、ナンピンが$1層に達しており、損切り拒否による破綻リスクがあります。"
+  },
+  "badgePublic": {
+    "message": "公開"
+  },
+  "badgePrivate": {
+    "message": "非公開"
   }
 }
