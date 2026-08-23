@@ -165,4 +165,54 @@ console.log("=== RUNNING UNIT TESTS FOR ANALYSIS RULES ===");
   console.log("PASS: Active momentum status detection");
 }
 
+// 7. Positions that closed before this lead portfolio started must not enter
+//    the behaviour statistics. Reproduces portfolio 5108371059752839168,
+//    which showed a 102.3-day dead loss on a portfolio only 59 days
+//    old: the losing position opened 2026-03-03 and closed 2026-06-13, while
+//    the portfolio started 2026-06-26.
+{
+  const start = Date.UTC(2026, 5, 26, 2, 30);
+  const hour = 3600 * 1000;
+  const day = 24 * hour;
+  const raw = {
+    id: "5108371059752839168",
+    detail: { startTime: start, nickname: "pre-round contamination", marginBalance: "100000" },
+    positionHistory: [
+      // Pre-round disaster: opened ~115 days before the portfolio, closed 13
+      // days before it started.
+      { symbol: "RIVERUSDT", side: "Long", opened: start - 115 * day, closed: start - 13 * day, closingPnl: "-352318.3", maxOpenInterest: 10, closedVolume: 10, avgCost: 100, avgClosePrice: 60, leverage: "10" },
+      // Straddler: opened before the start, closed 2 days into the round —
+      // the copier only held it for those 2 days.
+      { symbol: "ETHUSDT", side: "Long", opened: start - 30 * day, closed: start + 2 * day, closingPnl: "-1000", maxOpenInterest: 5, closedVolume: 5, avgCost: 100, avgClosePrice: 95, leverage: "5" },
+      // Clean in-round trades.
+      { symbol: "SKHYNIXUSDT", side: "Long", opened: start + 5 * day, closed: start + 5 * day + 6 * hour, closingPnl: "2000", maxOpenInterest: 5, closedVolume: 5, avgCost: 100, avgClosePrice: 110, leverage: "5" },
+      { symbol: "MUUSDT", side: "Short", opened: start + 9 * day, closed: start + 9 * day + 3 * hour, closingPnl: "600", maxOpenInterest: 5, closedVolume: 5, avgCost: 100, avgClosePrice: 95, leverage: "5" }
+    ],
+    orderHistory: [],
+    transferHistory: [],
+    livePositions: [],
+    performanceWindows: {},
+    historyStatus: {}
+  };
+
+  const result = analysis.analyzeBinance(raw);
+  assert.equal(result.summary.closedTrades, 3, "pre-round position must be excluded from the sample");
+  assert.equal(result.summary.preRoundPositionsExcluded, 1, "the exclusion must be reported, not silent");
+  assert.equal(result.rawCounts.positionHistoryPreRound, 1, "raw counts must show what was dropped");
+  assert.ok(
+    Math.abs(result.summary.maxLossHoldHours - 48) < 1e-6,
+    `dead-loss clock must start at the portfolio start (expected 48h, got ${result.summary.maxLossHoldHours})`
+  );
+  assert.equal(result.summary.holdClampedToRoundStart, 1, "the straddling position's clock must be reported as clamped");
+  assert.ok(result.summary.avgLoss > -352318, "the pre-round disaster must not set the average loss");
+  console.log("PASS: pre-round position history excluded from behaviour stats");
+
+  // No start time (or OKX) means no filtering — the guard must not silently
+  // eat history when the portfolio start is unknown.
+  const noStart = analysis.analyzeBinance({ ...raw, detail: { ...raw.detail, startTime: 0 } });
+  assert.equal(noStart.summary.closedTrades, 4, "without a start time nothing may be dropped");
+  assert.equal(noStart.summary.preRoundPositionsExcluded, 0, "nothing excluded when the round start is unknown");
+  console.log("PASS: unknown portfolio start disables the filter instead of dropping data");
+}
+
 console.log("\nALL ANALYSIS UNIT TESTS PASSED SUCCESSFULLY!");

@@ -398,9 +398,23 @@
     return num(firstDefined(position.closingPnl, position.pnl, position.realizedProfit), 0);
   }
 
-  function binanceHoldHours(position) {
-    const opened = num(firstDefined(position.opened, position.openTime, position.createTime), 0);
-    const closed = num(firstDefined(position.closed, position.closeTime, position.updateTime), 0);
+  function positionOpenedAt(position) {
+    return num(firstDefined(position.opened, position.openTime, position.createTime), 0);
+  }
+
+  function positionClosedAt(position) {
+    return num(firstDefined(position.closed, position.closeTime, position.updateTime), 0);
+  }
+
+  // roundStartMs clamps the holding clock to this lead portfolio's own start.
+  // A position opened before the portfolio existed and closed inside it was
+  // only "held" by a copier from the start date onward — charging them the
+  // pre-portfolio months produces dead-loss readings longer than the
+  // portfolio's entire lifetime (the tell that the caliber is wrong).
+  function binanceHoldHours(position, roundStartMs = 0) {
+    const rawOpened = positionOpenedAt(position);
+    const closed = positionClosedAt(position);
+    const opened = roundStartMs && rawOpened && rawOpened < roundStartMs ? roundStartMs : rawOpened;
     if (!opened || !closed || closed < opened) return 0;
     return (closed - opened) / HOUR_MS;
   }
@@ -643,8 +657,38 @@
     };
   }
 
-  function summarizeClosedPositions(positions, exchange) {
-    const closed = Array.isArray(positions) ? positions : [];
+  // This lead portfolio's own start. Binance's position-history endpoint
+  // returns rows from before the portfolio existed — a prior closed lead
+  // round, or the trader's personal trading — and a copier of THIS portfolio
+  // never experienced them. The cash-flow reconstruction already detects the
+  // condition (preStartHistoryDays); the behaviour statistics must actually
+  // exclude it, or one pre-portfolio disaster sets win rate, payoff ratio and
+  // dead-loss duration for a round that never contained it.
+  function roundStartMsOf(raw) {
+    const detail = raw?.detail || {};
+    return num(firstDefined(detail.startTime, 0), 0);
+  }
+
+  function splitPositionsByRound(positions, roundStartMs) {
+    const all = Array.isArray(positions) ? positions : [];
+    if (!roundStartMs) return { inRound: all, preRound: [] };
+    const inRound = [];
+    const preRound = [];
+    for (const position of all) {
+      const closed = positionClosedAt(position);
+      // closed === 0 marks a row that is still open (Binance reports 0 for
+      // partially-closed positions), which is current-round by definition.
+      if (closed > 0 && closed < roundStartMs) preRound.push(position);
+      else inRound.push(position);
+    }
+    return { inRound, preRound };
+  }
+
+  function summarizeClosedPositions(positions, exchange, options = {}) {
+    const roundStartMs = num(options.roundStartMs, 0);
+    const { inRound, preRound } = splitPositionsByRound(positions, roundStartMs);
+    const closed = inRound;
+    let holdClampedToRoundStart = 0;
     const getPnl = exchange === "OKX"
       ? (row) => num(row.pnl, 0)
       : binancePositionPnl;
@@ -654,7 +698,13 @@
         const close = num(firstDefined(row.uTime, row.closeTime), 0);
         return open && close && close >= open ? (close - open) / HOUR_MS : 0;
       }
-      : binanceHoldHours;
+      : (row) => {
+        const rawOpened = positionOpenedAt(row);
+        if (roundStartMs && rawOpened && rawOpened < roundStartMs && positionClosedAt(row) >= roundStartMs) {
+          holdClampedToRoundStart += 1;
+        }
+        return binanceHoldHours(row, roundStartMs);
+      };
 
     const wins = [];
     const losses = [];
@@ -684,6 +734,12 @@
     const winRate = safeDivide(wins.length, closed.length, 0);
     return {
       closedTrades: closed.length,
+      // Reported, not swallowed: a reader has to be able to see that N rows
+      // were dropped for predating this portfolio, and how many holding
+      // clocks were clipped at the start date.
+      preRoundPositionsExcluded: preRound.length,
+      holdClampedToRoundStart,
+      roundStartMs: roundStartMs || null,
       winCount: wins.length,
       lossCount: losses.length,
       winRate,
@@ -956,9 +1012,13 @@
   function analyzeBinance(raw) {
     const pageMetrics = parseVisibleMetrics(raw.visibleText || "");
     const meta = extractBinanceMeta(raw, pageMetrics);
-    const summary = summarizeClosedPositions(raw.positionHistory || [], "Binance");
+    const roundStart = roundStartMsOf(raw);
+    const { inRound: roundPositions, preRound: preRoundPositions } = splitPositionsByRound(raw.positionHistory || [], roundStart);
+    const summary = summarizeClosedPositions(raw.positionHistory || [], "Binance", { roundStartMs: roundStart });
     const orders = analyzeBinanceOrders(raw.orderHistory || []);
-    const losses = (raw.positionHistory || []).filter((position) => binancePositionPnl(position) < 0);
+    // Same caliber for the rescue-deposit test: a deposit is only "capital
+    // injected while bleeding" if the losing position belongs to this round.
+    const losses = roundPositions.filter((position) => binancePositionPnl(position) < 0);
     const transfers = analyzeTransfers(raw.transferHistory || [], losses, meta.marginBalance);
     const live = analyzeLivePositions(raw.livePositions || [], orders, meta.marginBalance);
     const strategy = inferStrategy(summary, orders);
@@ -975,6 +1035,7 @@
       verdict,
       rawCounts: {
         positionHistory: (raw.positionHistory || []).length,
+        positionHistoryPreRound: preRoundPositions.length,
         orderHistory: (raw.orderHistory || []).length,
         transferHistory: (raw.transferHistory || []).length,
         livePositions: (raw.livePositions || []).length,
