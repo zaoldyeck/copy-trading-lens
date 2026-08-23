@@ -68,6 +68,26 @@ for (const locale of supportedLocales.filter((name) => name !== "en")) {
   }
 }
 
+// i18n.js interpolates {0}, {1}, ... itself and calls chrome.i18n.getMessage
+// without a substitutions argument, so Chrome's native $1/$2 placeholders are
+// never expanded — they reach the panel as the literal text "$1". A message
+// that renders "adverse adds reach $1 layers" reads as a dollar amount, which
+// is the worst possible failure mode in a risk panel.
+const placeholderIndexes = (message) => [...new Set([...message.matchAll(/\{(\d+)\}/g)].map((match) => match[1]))].sort().join(",");
+for (const locale of supportedLocales) {
+  for (const [key, entry] of Object.entries(localeMessages.get(locale))) {
+    const message = String(entry?.message ?? "");
+    if (/\$\d/.test(message)) {
+      fail(`${locale}/${key} uses Chrome-style $n placeholders; src/i18n.js only expands {n}`);
+    }
+    const expected = placeholderIndexes(String(localeMessages.get("en")[key]?.message ?? ""));
+    const actual = placeholderIndexes(message);
+    if (expected !== actual) {
+      fail(`${locale}/${key} placeholder set [${actual}] differs from en [${expected}]`);
+    }
+  }
+}
+
 const jsFiles = [
   "src/i18n.js",
   "src/analysis.js",
