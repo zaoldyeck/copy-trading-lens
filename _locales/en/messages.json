@@ -423,7 +423,7 @@
     "message": "Historical closures: {0}. Old performance and current-round data may be disconnected."
   },
   "cautionPreStartHistory": {
-    "message": "Detected trade history predating the official start date by {0} days — likely bleed-through from a prior, closed lead portfolio; the displayed track record and return may be diluted or inflated."
+    "message": "Detected trade history predating the official start date by {0} days — bleed-through from a prior, closed lead portfolio. Behaviour stats (win rate, payoff, holding time) already exclude those rows; all-period ROI and drawdown still include them, so the two are on different calibers."
   },
   "evidenceLossDeposit": {
     "message": "Capital injections during loss periods are one of the hardest risks for copiers to reproduce."
