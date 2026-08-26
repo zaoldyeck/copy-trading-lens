@@ -278,15 +278,6 @@
   "familyMeanReversionStop": {
     "message": "左侧抢反弹但止损快：跟单滑价与速度很重要"
   },
-  "familyBatchScalping": {
-    "message": "剥头皮：短线高频小利，跟单延迟与手续费会影响结果"
-  },
-  "familyLayeredMeanReversion": {
-    "message": "DCA / 左侧交易：逆势分批摊平，进场太早会承接回撤"
-  },
-  "familyLowFreqSwing": {
-    "message": "波段交易：持仓时间较长，跟单者可能承接既有波动"
-  },
   "labelMartingale": {
     "message": "马丁格尔"
   },
@@ -314,17 +305,11 @@
   "labelLongLossHold": {
     "message": "亏损单持仓偏久"
   },
-  "labelAllowAdds": {
-    "message": "会加仓"
-  },
   "labelFastLossClose": {
     "message": "亏损单结束快"
   },
   "labelHighFreq": {
     "message": "交易频率高"
-  },
-  "labelSamePriceSplits": {
-    "message": "拆成多笔成交"
   },
   "labelLayeredAdds": {
     "message": "分批加仓"
@@ -473,9 +458,6 @@
   "labelControlledMartingale": {
     "message": "受控快速止损马丁"
   },
-  "labelStagnantMomentum": {
-    "message": "近期动能停滞 / 横盘死鱼"
-  },
   "cautionSevereDeadLoss": {
     "message": "历史亏损单最长持仓 {0}，有严重死扛不认赔记录。"
   },
@@ -590,24 +572,6 @@
   "posColAge": {
     "message": "已持有"
   },
-  "posConfidenceExact": {
-    "message": "逐笔还原"
-  },
-  "posConfidenceExactHint": {
-    "message": "成交记录完整覆盖这个部位从空仓到现在的每一笔进出，数量与均价是算出来的，不是估的。"
-  },
-  "posConfidencePartial": {
-    "message": "成交不齐全"
-  },
-  "posConfidencePartialHint": {
-    "message": "交易所只返回得到部分成交记录，开仓那几笔可能不在里面，实际部位可能比这里显示的更大。"
-  },
-  "posConfidenceEstimated": {
-    "message": "推估值"
-  },
-  "posConfidenceEstimatedHint": {
-    "message": "这个部位没有可用的成交记录，数量由「历史最大持仓 − 已平仓量」推得；若带单员平仓后又加回来，这个数字会偏小。它仍未平仓是交易所自己说的——你可以在本页「仓位历史」分页看到这笔标示为「部分平仓」、平仓时间是空白。"
-  },
   "posSummaryOpenCount": {
     "message": "持仓数量"
   },
@@ -717,7 +681,7 @@
     "message": "交易所的部位历史没有返回完整，部分旧部位可能缺漏。"
   },
   "posNoteEstimatedRows": {
-    "message": "有 {0} 个部位缺少可用成交记录，数量为推估值。"
+    "message": "有 {0} 个部位完全没有成交记录可用，数量标了「≈」，实际可能比显示的多。"
   },
   "posNoteMissingMarks": {
     "message": "以下币种取不到标记价格，未实现盈亏留空：{0}"
@@ -736,15 +700,6 @@
   },
   "posColPriceMove": {
     "message": "价格变动"
-  },
-  "posConfidenceReconciled": {
-    "message": "已校正"
-  },
-  "posConfidenceReconciledHint": {
-    "message": "交易所的成交记录少给了 {0} 单位的开仓，这里用交易所自己的持仓汇总（历史最大持仓、已平仓量）补回。补回的量是算出来的，但少给的成交本身看不到。这笔仍未平仓是交易所自己说的，可在本页「仓位历史」分页核对。"
-  },
-  "posNoteReconciledRows": {
-    "message": "有 {0} 个部位的成交记录不齐，数量已用交易所的持仓汇总校正。"
   },
   "posLoadingTitle": {
     "message": "正在还原 {0} 的真实仓位"
@@ -780,12 +735,48 @@
     "message": "数量不明"
   },
   "posConfidenceSizeUnknownHint": {
-    "message": "交易所仍把这个部位列为未平仓，但它公开的数字（历史最大持仓、已平仓量）在反复平仓又建仓后无法还原出剩余数量。这里如实留空，而不是猜一个数字，也不是假装这个部位不存在。"
+    "message": "币安仍把这个部位列为未平仓，但它公布的两个数字（历史最大持仓、已平仓量）在反复平仓又建仓之后推不出剩多少。这里如实留空，不猜一个数字，也不假装这个部位不存在。"
   },
   "posNoteTruncatedHistory": {
     "message": "交易所的成交记录只给到 {0} 为止，但它自己列出的部位最早开仓于 {1}——中间那段成交看不到，所以没有已平仓记录可对齐的部位一律标为「成交不齐全」。"
   },
   "posNotePartialFillRows": {
-    "message": "有 {0} 个部位的开仓成交可能不完整，显示的数量是下限，实际可能更大。"
+    "message": "有 {0} 个部位的建仓成交币安没给，数量标了「≥」，是下限而不是实际值。"
+  },
+  "posQtyAtLeast": {
+    "message": "≥ {0}"
+  },
+  "posQtyApprox": {
+    "message": "≈ {0}"
+  },
+  "posBadgeAtLeast": {
+    "message": "至少"
+  },
+  "posBadgeAtLeastHint": {
+    "message": "币安没给到这个部位建仓时的成交记录，所以这是下限——他实际持有的只可能比这里多，不会更少。"
+  },
+  "posBadgeApprox": {
+    "message": "估算"
+  },
+  "posBadgeApproxHint": {
+    "message": "这个部位完全没有成交记录可用，数量是拿币安公布的「历史最大持仓」减「已平仓量」推的。他平仓之后又加回来的话，这个数字会偏小。"
+  },
+  "posQtySourceLabel": {
+    "message": "数量怎么来的"
+  },
+  "posQtySourceExact": {
+    "message": "把每一笔成交加减出来，且和币安公布的汇总对得上"
+  },
+  "posQtySourceReconciled": {
+    "message": "把每一笔成交加减出来，并用币安公布的汇总补回它自己漏掉的 {0} 单位开仓"
+  },
+  "posQtySourcePartial": {
+    "message": "把每一笔成交加减出来，但币安没给到这个部位建仓时的成交，所以只算得出下限"
+  },
+  "posQtySourceEstimated": {
+    "message": "币安公布的历史最大持仓 {0} 减掉已平仓量 {1}"
+  },
+  "posQtySourceUnknown": {
+    "message": "币安公布的历史最大持仓 {0} 小于已平仓量 {1}（他反复平仓又建仓），推不出剩余数量"
   }
 }

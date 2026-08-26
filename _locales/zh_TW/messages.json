@@ -278,15 +278,6 @@
   "familyMeanReversionStop": {
     "message": "左側搶反彈但停損快：跟單滑價與速度很重要"
   },
-  "familyBatchScalping": {
-    "message": "剝頭皮：短線高頻小利，跟單延遲與手續費會影響結果"
-  },
-  "familyLayeredMeanReversion": {
-    "message": "DCA / 左側交易：逆勢分批攤平，進場太早會承接回撤"
-  },
-  "familyLowFreqSwing": {
-    "message": "波段交易：持倉時間較長，跟單者可能承接既有波動"
-  },
   "labelMartingale": {
     "message": "馬丁格爾"
   },
@@ -314,17 +305,11 @@
   "labelLongLossHold": {
     "message": "虧損單持倉偏久"
   },
-  "labelAllowAdds": {
-    "message": "會加倉"
-  },
   "labelFastLossClose": {
     "message": "虧損單結束快"
   },
   "labelHighFreq": {
     "message": "交易頻率高"
-  },
-  "labelSamePriceSplits": {
-    "message": "拆成多筆成交"
   },
   "labelLayeredAdds": {
     "message": "分批加倉"
@@ -473,9 +458,6 @@
   "labelControlledMartingale": {
     "message": "受控快速止損馬丁"
   },
-  "labelStagnantMomentum": {
-    "message": "近期動能停滯 / 橫盤死魚"
-  },
   "cautionSevereDeadLoss": {
     "message": "歷史虧損單最長持倉 {0}，有嚴重死扛不認賠記錄。"
   },
@@ -590,24 +572,6 @@
   "posColAge": {
     "message": "已持有"
   },
-  "posConfidenceExact": {
-    "message": "逐筆還原"
-  },
-  "posConfidenceExactHint": {
-    "message": "成交紀錄完整涵蓋這個部位從空手到現在的每一筆進出，數量與均價是算出來的，不是估的。"
-  },
-  "posConfidencePartial": {
-    "message": "成交不齊全"
-  },
-  "posConfidencePartialHint": {
-    "message": "交易所只回傳得到部分成交紀錄，開倉那幾筆可能不在裡面，實際部位可能比這裡顯示的更大。"
-  },
-  "posConfidenceEstimated": {
-    "message": "推估值"
-  },
-  "posConfidenceEstimatedHint": {
-    "message": "這個部位沒有可用的成交紀錄，數量由「歷史最大持倉 − 已平倉量」推得；若帶單員平倉後又加回來，這個數字會偏小。它仍未平倉是交易所自己說的——你可以在本頁「倉位歷史」分頁看到這筆標示為「部分平倉」、平倉時間是空白。"
-  },
   "posSummaryOpenCount": {
     "message": "持倉檔數"
   },
@@ -717,7 +681,7 @@
     "message": "交易所的部位歷史沒有回傳完整，部分舊部位可能缺漏。"
   },
   "posNoteEstimatedRows": {
-    "message": "有 {0} 個部位缺少可用成交紀錄，數量為推估值。"
+    "message": "有 {0} 個部位完全沒有成交紀錄可用，數量標了「≈」，實際可能比顯示的多。"
   },
   "posNoteMissingMarks": {
     "message": "以下幣種取不到標記價格，未實現損益留白：{0}"
@@ -736,15 +700,6 @@
   },
   "posColPriceMove": {
     "message": "價格變動"
-  },
-  "posConfidenceReconciled": {
-    "message": "已校正"
-  },
-  "posConfidenceReconciledHint": {
-    "message": "交易所的成交紀錄少給了 {0} 單位的開倉，這裡用交易所自己的部位彙總（歷史最大持倉、已平倉量）補回。補回的量是算出來的，但少給的成交本身看不到。這筆仍未平倉是交易所自己說的，可在本頁「倉位歷史」分頁核對。"
-  },
-  "posNoteReconciledRows": {
-    "message": "有 {0} 個部位的成交紀錄不齊，數量已用交易所的部位彙總校正。"
   },
   "posLoadingTitle": {
     "message": "正在還原 {0} 的真實倉位"
@@ -780,12 +735,48 @@
     "message": "數量不明"
   },
   "posConfidenceSizeUnknownHint": {
-    "message": "交易所仍把這個部位列為未平倉，但它公開的數字（歷史最大持倉、已平倉量）在反覆平倉又建倉後無法還原出剩餘數量。這裡如實留白，而不是猜一個數字，也不是假裝這個部位不存在。"
+    "message": "幣安仍把這個部位列為未平倉，但它公布的兩個數字（歷史最大持倉、已平倉量）在反覆平倉又建倉之後推不出剩多少。這裡如實留白，不猜一個數字，也不假裝這個部位不存在。"
   },
   "posNoteTruncatedHistory": {
     "message": "交易所的成交紀錄只給到 {0} 為止，但它自己列出的部位最早開倉於 {1}——中間那段成交看不到，所以沒有已平倉紀錄可對齊的部位一律標為「成交不齊全」。"
   },
   "posNotePartialFillRows": {
-    "message": "有 {0} 個部位的開倉成交可能不完整，顯示的數量是下限，實際可能更大。"
+    "message": "有 {0} 個部位的建倉成交幣安沒給，數量標了「≥」，是下限而不是實際值。"
+  },
+  "posQtyAtLeast": {
+    "message": "≥ {0}"
+  },
+  "posQtyApprox": {
+    "message": "≈ {0}"
+  },
+  "posBadgeAtLeast": {
+    "message": "至少"
+  },
+  "posBadgeAtLeastHint": {
+    "message": "幣安沒給到這個部位建倉時的成交紀錄，所以這是下限——他實際持有的只可能比這裡多，不會更少。"
+  },
+  "posBadgeApprox": {
+    "message": "估算"
+  },
+  "posBadgeApproxHint": {
+    "message": "這個部位完全沒有成交紀錄可用，數量是拿幣安公布的「歷史最大持倉」減「已平倉量」推的。他平倉之後又加回來的話，這個數字會偏小。"
+  },
+  "posQtySourceLabel": {
+    "message": "數量怎麼來的"
+  },
+  "posQtySourceExact": {
+    "message": "把每一筆成交加減出來，且和幣安公布的彙總對得上"
+  },
+  "posQtySourceReconciled": {
+    "message": "把每一筆成交加減出來，並用幣安公布的彙總補回它自己漏掉的 {0} 單位開倉"
+  },
+  "posQtySourcePartial": {
+    "message": "把每一筆成交加減出來，但幣安沒給到這個部位建倉時的成交，所以只算得出下限"
+  },
+  "posQtySourceEstimated": {
+    "message": "幣安公布的歷史最大持倉 {0} 減掉已平倉量 {1}"
+  },
+  "posQtySourceUnknown": {
+    "message": "幣安公布的歷史最大持倉 {0} 小於已平倉量 {1}（他反覆平倉又建倉），推不出剩餘數量"
   }
 }

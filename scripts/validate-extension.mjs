@@ -101,6 +101,37 @@ for (const locale of supportedLocales) {
   }
 }
 
+// A message key that is referenced but not defined renders as the raw key name
+// in the panel — "posBadgeAtLeast" where a sentence should be. A key that is
+// defined but never referenced is dead weight that survives every rename. Both
+// are invisible until someone reads the UI in a language they do not speak, so
+// they are checked here instead.
+const uiSources = ["src/content.js", "src/positions-panel.js", "src/analysis.js", "src/popup.js"];
+const referencedKeys = new Set();
+for (const file of uiSources) {
+  const text = readFileSync(join(root, file), "utf8");
+  for (const match of text.matchAll(/["'`]([A-Za-z][A-Za-z0-9_]{2,})["'`]/g)) {
+    referencedKeys.add(match[1]);
+  }
+}
+const popupHtml = readFileSync(join(root, "popup.html"), "utf8");
+for (const match of popupHtml.matchAll(/data-i18n=["']([^"']+)["']/g)) referencedKeys.add(match[1]);
+const manifestText = readFileSync(join(root, "manifest.json"), "utf8");
+for (const match of manifestText.matchAll(/__MSG_([A-Za-z0-9_]+)__/g)) referencedKeys.add(match[1]);
+
+const definedKeys = new Set(defaultKeys);
+const missing = [];
+for (const file of uiSources) {
+  const text = readFileSync(join(root, file), "utf8");
+  for (const match of text.matchAll(/\bt\(\s*["'`]([^"'`]+)["'`]/g)) {
+    if (!definedKeys.has(match[1])) missing.push(`${file}: ${match[1]}`);
+  }
+}
+if (missing.length) fail(`message keys used but not defined in _locales/en: ${missing.join(", ")}`);
+
+const unused = defaultKeys.filter((key) => !referencedKeys.has(key));
+if (unused.length) fail(`message keys defined but never referenced: ${unused.join(", ")}`);
+
 const jsFiles = [
   "src/i18n.js",
   "src/analysis.js",

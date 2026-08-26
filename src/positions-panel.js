@@ -191,24 +191,52 @@
     return value > 0 ? "is-up" : "is-down";
   }
 
+  // A reader deciding whether to follow this trader needs one thing from the
+  // provenance: can this number be taken at face value? Four internal
+  // confidence levels are the reconstruction's vocabulary, not theirs — so the
+  // uncertainty is carried by the NUMBER (">= 100", "~ 20") and the badge only
+  // marks the exception. A size that is simply correct gets no badge at all,
+  // because a badge on every row marks nothing.
+  function qtyText(position) {
+    if (position.qty === null) return "—";
+    const formatted = formatQty(position.qty);
+    if (position.confidence === "partialFills") return t("posQtyAtLeast", [formatted]);
+    if (position.confidence === "estimated") return t("posQtyApprox", [formatted]);
+    return formatted;
+  }
+
   function confidenceBadge(position) {
-    if (position.confidence === "exact") {
-      return h("span", { class: "ctl-pos-badge is-exact", text: t("posConfidenceExact"), title: t("posConfidenceExactHint") });
-    }
-    if (position.confidence === "reconciled") {
-      return h("span", {
-        class: "ctl-pos-badge is-partial",
-        text: t("posConfidenceReconciled"),
-        title: t("posConfidenceReconciledHint", [formatQty(position.reconciliation?.missingOpenVolume || 0)])
-      });
-    }
-    if (position.confidence === "partialFills") {
-      return h("span", { class: "ctl-pos-badge is-partial", text: t("posConfidencePartial"), title: t("posConfidencePartialHint") });
-    }
-    if (position.qtySource === "sizeNotDerivable") {
+    if (position.qty === null) {
       return h("span", { class: "ctl-pos-badge is-estimated", text: t("posConfidenceSizeUnknown"), title: t("posConfidenceSizeUnknownHint") });
     }
-    return h("span", { class: "ctl-pos-badge is-estimated", text: t("posConfidenceEstimated"), title: t("posConfidenceEstimatedHint") });
+    if (position.confidence === "partialFills") {
+      return h("span", { class: "ctl-pos-badge is-partial", text: t("posBadgeAtLeast"), title: t("posBadgeAtLeastHint") });
+    }
+    if (position.confidence === "estimated") {
+      return h("span", { class: "ctl-pos-badge is-estimated", text: t("posBadgeApprox"), title: t("posBadgeApproxHint") });
+    }
+    return null;
+  }
+
+  // The full provenance still belongs somewhere — just not in the row header.
+  function qtyProvenance(position) {
+    if (position.qty === null) {
+      return t("posQtySourceUnknown", [
+        formatQty(position.reconciliation?.exchangePeakQty),
+        formatQty(position.reconciliation?.exchangeClosedQty)
+      ]);
+    }
+    if (position.qtySource === "positionHistoryRemainder") {
+      return t("posQtySourceEstimated", [
+        formatQty(position.peakQty),
+        formatQty(position.closedQty)
+      ]);
+    }
+    if (position.qtySource === "exchangePeakReconciled") {
+      return t("posQtySourceReconciled", [formatQty(position.reconciliation?.missingOpenVolume || 0)]);
+    }
+    if (position.confidence === "partialFills") return t("posQtySourcePartial");
+    return t("posQtySourceExact");
   }
 
   function summaryStrip(summary, marginBalance) {
@@ -274,7 +302,7 @@
         ]),
         h("span", { class: "ctl-pos-cell" }, [
           h("small", { text: t("posColQty") }),
-          h("span", { text: formatQty(position.qty) })
+          h("span", { text: qtyText(position) })
         ]),
         h("span", { class: "ctl-pos-cell" }, [
           h("small", { text: t("posColNotional") }),
@@ -323,7 +351,8 @@
           fact(t("posFactAdds"), t("posFactAddsValue", [position.addCount, position.reduceCount])),
           fact(t("posFactMarginMode"), position.marginMode || "—"),
           fact(t("posFactExchangeStatus"), position.exchangeStatus || "—"),
-          fact(t("posFactNotionalShare"), formatPlainRatio(position.notionalToMarginBalance))
+          fact(t("posFactNotionalShare"), formatPlainRatio(position.notionalToMarginBalance)),
+          fact(t("posQtySourceLabel"), qtyProvenance(position))
         ]),
         h("h4", { class: "ctl-pos-subtitle", text: t("posLadderTitle") }),
         fillLadder(position)
@@ -354,9 +383,6 @@
     }
     if (coverage.estimatedCount > 0) {
       notes.push(t("posNoteEstimatedRows", [coverage.estimatedCount]));
-    }
-    if (coverage.reconciledCount > 0) {
-      notes.push(t("posNoteReconciledRows", [coverage.reconciledCount]));
     }
     if (marks.missing.length) {
       notes.push(t("posNoteMissingMarks", [marks.missing.join(", ")]));
@@ -411,6 +437,9 @@
           h("p", { class: "ctl-pos-subtitle-note", text: state.error || "" })
         ]),
         h("div", { class: "ctl-pos-actions" }, [
+          state.onRetry
+            ? h("button", { class: "ctl-pos-btn", type: "button", onclick: () => state.onRetry() }, t("posRetry"))
+            : null,
           h("button", { class: "ctl-pos-btn is-ghost", type: "button", onclick: restoreOriginal }, t("posRestoreOriginal"))
         ])
       ])
@@ -588,10 +617,11 @@
    * tens of seconds; without this the tab sits on the exchange's "private"
    * notice the whole time and the panel appears out of nowhere at the end.
    */
-  function beginLoading(context) {
+  function beginLoading(context, onRetry) {
     if (context.platform !== "Binance") return;
     state = {
       context,
+      onRetry: typeof onRetry === "function" ? onRetry : null,
       phase: "loading",
       nickname: "",
       progress: null,
@@ -631,6 +661,7 @@
 
     state = {
       context,
+      onRetry: state?.onRetry || null,
       phase: "ready",
       nickname: raw.detail?.nickname || "",
       progress: null,

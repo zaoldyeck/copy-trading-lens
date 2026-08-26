@@ -278,15 +278,6 @@
   "familyMeanReversionStop": {
     "message": "Left-side rebound trading with fast stops: execution quality matters"
   },
-  "familyBatchScalping": {
-    "message": "Scalping: short-duration small profits, so copier latency and fees matter"
-  },
-  "familyLayeredMeanReversion": {
-    "message": "DCA / left-side trading: averages into weakness, so early entries can inherit drawdown"
-  },
-  "familyLowFreqSwing": {
-    "message": "Swing trading: longer holds, so copiers may inherit open-position volatility"
-  },
   "labelMartingale": {
     "message": "Martingale"
   },
@@ -314,17 +305,11 @@
   "labelLongLossHold": {
     "message": "Holds losing trades"
   },
-  "labelAllowAdds": {
-    "message": "Adds to positions"
-  },
   "labelFastLossClose": {
     "message": "Cuts losses quickly"
   },
   "labelHighFreq": {
     "message": "High trading frequency"
-  },
-  "labelSamePriceSplits": {
-    "message": "Splits orders"
   },
   "labelLayeredAdds": {
     "message": "Batch adds"
@@ -473,9 +458,6 @@
   "labelControlledMartingale": {
     "message": "Controlled Fast-Cut Martingale"
   },
-  "labelStagnantMomentum": {
-    "message": "Stagnant Momentum / Flatline"
-  },
   "cautionSevereDeadLoss": {
     "message": "Max loss hold was {0}, showing severe stubborn holding habits."
   },
@@ -590,24 +572,6 @@
   "posColAge": {
     "message": "Held for"
   },
-  "posConfidenceExact": {
-    "message": "Fill-by-fill"
-  },
-  "posConfidenceExactHint": {
-    "message": "The fill history covers this position from flat to now, so the size and average entry are computed, not estimated."
-  },
-  "posConfidencePartial": {
-    "message": "Fills incomplete"
-  },
-  "posConfidencePartialHint": {
-    "message": "The exchange only returned part of the fill history, so the opening fills may be missing and the real position may be larger than shown."
-  },
-  "posConfidenceEstimated": {
-    "message": "Estimated"
-  },
-  "posConfidenceEstimatedHint": {
-    "message": "No usable fills for this position, so the size comes from peak size minus closed volume. If the trader scaled back in after a partial close, this understates it. That it is still open is the exchange's own statement — this page's Position History tab shows the row as partially closed with a blank close time."
-  },
   "posSummaryOpenCount": {
     "message": "Open positions"
   },
@@ -717,7 +681,7 @@
     "message": "The exchange's position history came back incomplete, so some older positions may be missing."
   },
   "posNoteEstimatedRows": {
-    "message": "{0} position(s) have no usable fills and their size is an estimate."
+    "message": "{0} position(s) have no usable fills; their size is marked “≈” and may be larger than shown."
   },
   "posNoteMissingMarks": {
     "message": "No mark price available for: {0} — their unrealized PnL is left blank."
@@ -736,15 +700,6 @@
   },
   "posColPriceMove": {
     "message": "Price move"
-  },
-  "posConfidenceReconciled": {
-    "message": "Reconciled"
-  },
-  "posConfidenceReconciledHint": {
-    "message": "The exchange left {0} units of opening fills out of its own fill history. The gap was closed using the exchange's position aggregates (peak size and closed volume). The added size is computed; the missing fills themselves are not visible. That the position is still open is the exchange's own statement — check this page's Position History tab."
-  },
-  "posNoteReconciledRows": {
-    "message": "{0} position(s) had incomplete fills and their size was corrected against the exchange's position aggregates."
   },
   "posLoadingTitle": {
     "message": "Rebuilding what {0} is holding"
@@ -780,12 +735,48 @@
     "message": "Size unknown"
   },
   "posConfidenceSizeUnknownHint": {
-    "message": "The exchange still lists this position as open, but the figures it publishes (peak size and closed volume) cannot yield a remaining size after repeated close-and-re-enter. Left blank rather than guessed, and reported rather than hidden."
+    "message": "Binance still lists this position as open, but the two numbers it publishes (peak size and closed volume) cannot yield a remainder after repeated closing and re-entering. Left blank rather than guessed, and reported rather than hidden."
   },
   "posNoteTruncatedHistory": {
     "message": "The exchange only served fills back to {0}, yet dates its own oldest position to {1} — the fills in between are invisible, so any position with no closed position to anchor on is marked as having incomplete fills."
   },
   "posNotePartialFillRows": {
-    "message": "{0} position(s) may be missing opening fills; the size shown is a floor and the real one may be larger."
+    "message": "{0} position(s) are missing their opening fills; their size is marked “≥” and is a floor, not the actual figure."
+  },
+  "posQtyAtLeast": {
+    "message": "≥ {0}"
+  },
+  "posQtyApprox": {
+    "message": "≈ {0}"
+  },
+  "posBadgeAtLeast": {
+    "message": "At least"
+  },
+  "posBadgeAtLeastHint": {
+    "message": "Binance did not serve the fills that opened this position, so this is a floor — what the trader actually holds can only be more than this, never less."
+  },
+  "posBadgeApprox": {
+    "message": "Approximate"
+  },
+  "posBadgeApproxHint": {
+    "message": "No fills are available for this position at all, so the size is Binance's published peak size minus its closed volume. If the trader scaled back in after closing part of it, this reads low."
+  },
+  "posQtySourceLabel": {
+    "message": "Where the size comes from"
+  },
+  "posQtySourceExact": {
+    "message": "Netted from every fill, and it agrees with Binance's own totals"
+  },
+  "posQtySourceReconciled": {
+    "message": "Netted from every fill, plus the {0} units of opening volume Binance left out of its own fill history"
+  },
+  "posQtySourcePartial": {
+    "message": "Netted from every fill, but Binance did not serve the fills that opened this position, so this is only a floor"
+  },
+  "posQtySourceEstimated": {
+    "message": "Binance's published peak size {0} minus its closed volume {1}"
+  },
+  "posQtySourceUnknown": {
+    "message": "Binance's published peak size {0} is below its closed volume {1} (repeated closing and re-entering), so no remainder can be derived"
   }
 }

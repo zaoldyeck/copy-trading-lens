@@ -315,7 +315,7 @@
     const wasCollapsed = collapsed;
     if (wasCollapsed) renderLauncher(context);
     else renderLoading(context);
-    window.CopyTradingLensPositionsPanel?.beginLoading(context);
+    window.CopyTradingLensPositionsPanel?.beginLoading(context, () => runAnalysis(true));
     try {
       const raw = await window.CopyTradingLensProviders.fetchLeadData(context, {
         onProgress: (event) => window.CopyTradingLensPositionsPanel?.setProgress(event)
