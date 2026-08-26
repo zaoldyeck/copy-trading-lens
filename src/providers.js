@@ -179,7 +179,7 @@
     return 0;
   }
 
-  async function fetchBinancePagedDetailed(path, portfolioId) {
+  async function fetchBinancePagedDetailed(path, portfolioId, onProgress) {
     const rows = [];
     let total = null;
     let pages = 0;
@@ -219,9 +219,15 @@
 
       pages = pageNumber;
       const overlap = overlapLength(rows.slice(-PAGE_SIZE), pageRows);
+      // Reported after each page rather than at the end: these histories take
+      // tens of seconds to walk, and a reader staring at a blank positions tab
+      // has no way to tell "still reading" from "broken".
       duplicateRows += overlap;
       const freshRows = overlap ? pageRows.slice(overlap) : pageRows;
       rows.push(...freshRows);
+      if (typeof onProgress === "function") {
+        onProgress({ fetched: rows.length, total: Number.isFinite(total) ? total : null, pages });
+      }
       // An entirely overlapping page means the list shifted by a full page or the
       // endpoint is repeating itself; either way there is nothing further to read.
       if (pageRows.length && !freshRows.length) break;
@@ -314,8 +320,12 @@
     return { windows, endpointResults };
   }
 
-  async function fetchBinanceLead(context) {
+  async function fetchBinanceLead(context, options = {}) {
     const portfolioId = context.id;
+    const onProgress = typeof options.onProgress === "function" ? options.onProgress : null;
+    const progressFor = (label) => (onProgress
+      ? (event) => onProgress({ label, ...event })
+      : undefined);
     const visibleText = document.body?.innerText || "";
     const pageTitle = document.title;
     const endpointResults = {};
@@ -334,13 +344,13 @@
         getBinance(`/bapi/futures/v1/friendly/future/copy-trade/lead-data/positions?portfolioId=${encodeURIComponent(portfolioId)}`)
       ),
       safeFetch("positionHistory", () =>
-        fetchBinancePagedDetailed("/bapi/futures/v1/friendly/future/copy-trade/lead-portfolio/position-history", portfolioId)
+        fetchBinancePagedDetailed("/bapi/futures/v1/friendly/future/copy-trade/lead-portfolio/position-history", portfolioId, progressFor("positionHistory"))
       ),
       safeFetch("orderHistory", () =>
-        fetchBinancePagedDetailed("/bapi/futures/v1/friendly/future/copy-trade/lead-portfolio/order-history", portfolioId)
+        fetchBinancePagedDetailed("/bapi/futures/v1/friendly/future/copy-trade/lead-portfolio/order-history", portfolioId, progressFor("orderHistory"))
       ),
       safeFetch("transferHistory", () =>
-        fetchBinancePagedDetailed("/bapi/futures/v1/friendly/future/copy-trade/lead-portfolio/transfer-history", portfolioId)
+        fetchBinancePagedDetailed("/bapi/futures/v1/friendly/future/copy-trade/lead-portfolio/transfer-history", portfolioId, progressFor("transferHistory"))
       )
     ]);
     endpointResults.livePositions = live;
@@ -505,8 +515,8 @@
     return null;
   }
 
-  async function fetchLeadData(context) {
-    if (context.platform === "Binance") return fetchBinanceLead(context);
+  async function fetchLeadData(context, options = {}) {
+    if (context.platform === "Binance") return fetchBinanceLead(context, options);
     if (context.platform === "OKX") return fetchOkxLead(context);
     throw new Error(`Unsupported platform: ${context.platform}`);
   }

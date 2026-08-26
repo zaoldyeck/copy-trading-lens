@@ -353,3 +353,41 @@
   font-size: 10px;
   opacity: 0.45;
 }
+
+/* Loading state. The history walk behind this panel runs for tens of seconds,
+   so the panel has to look alive rather than broken while it runs. */
+.ctl-pos-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ctl-pos-skeleton-row {
+  height: 46px;
+  border-radius: 8px;
+  background: #23262f;
+  border: 1px solid #2b3139;
+  animation: ctl-pos-breathe 1.6s ease-in-out infinite;
+}
+
+#ctl-positions-panel.is-light .ctl-pos-skeleton-row {
+  background: #f2f3f5;
+  border-color: #eaecef;
+}
+
+.ctl-pos-breathing {
+  animation: ctl-pos-breathe 1.6s ease-in-out infinite;
+}
+
+@keyframes ctl-pos-breathe {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.9; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ctl-pos-skeleton-row,
+  .ctl-pos-breathing {
+    animation: none;
+    opacity: 0.6;
+  }
+}

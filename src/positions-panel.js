@@ -21,12 +21,17 @@
   const PANEL_ID = "ctl-positions-panel";
   const HIDDEN_ATTR = "data-ctl-hidden-notice";
 
-  // How often the mark prices are re-read while the panel is on screen. This is
-  // a display-freshness choice, not a measured threshold — it changes nothing the
-  // reconstruction decides, only how stale the PnL on screen can be. The panel
-  // always prints the timestamp of the prices it used, so the staleness is
-  // visible rather than assumed, and the refresh button forces a read.
-  const MARK_REFRESH_MS = 3000;
+  // How often the mark prices are re-read while the panel is on screen, via
+  // REST (/fapi/v1/premiumIndex) rather than a websocket: fstream.binance.com
+  // accepted a connection but delivered no frames when this was built, and an
+  // unverifiable transport has no business on the primary path.
+  //
+  // Set by the operator. It is a display-freshness choice, not a measured
+  // threshold — it changes nothing the reconstruction decides, only how stale
+  // the PnL on screen can be. The panel always prints the timestamp of the
+  // prices it used, so the staleness is visible rather than assumed, and the
+  // refresh button forces a read.
+  const MARK_REFRESH_MS = 5000;
 
   const PRIVATE_TOKEN = /私人|私密|不公開|不公开|非公開|非公开|\bprivate\b/i;
   const POSITION_TOKEN = /倉位|仓位|持倉|持仓|ポジション|positions?/i;
@@ -166,6 +171,9 @@
     if (position.confidence === "partialFills") {
       return h("span", { class: "ctl-pos-badge is-partial", text: t("posConfidencePartial"), title: t("posConfidencePartialHint") });
     }
+    if (position.qtySource === "sizeNotDerivable") {
+      return h("span", { class: "ctl-pos-badge is-estimated", text: t("posConfidenceSizeUnknown"), title: t("posConfidenceSizeUnknownHint") });
+    }
     return h("span", { class: "ctl-pos-badge is-estimated", text: t("posConfidenceEstimated"), title: t("posConfidenceEstimatedHint") });
   }
 
@@ -304,6 +312,12 @@
     if (!coverage.positionHistoryComplete) {
       notes.push(t("posNotePositionDepthLimited"));
     }
+    if (coverage.orderHistoryTruncatedAtOldEnd) {
+      notes.push(t("posNoteTruncatedHistory", [formatClock(coverage.oldestOrderMs), formatClock(coverage.oldestPositionOpenMs)]));
+    }
+    if (coverage.partialFillsCount > 0) {
+      notes.push(t("posNotePartialFillRows", [coverage.partialFillsCount]));
+    }
     if (coverage.estimatedCount > 0) {
       notes.push(t("posNoteEstimatedRows", [coverage.estimatedCount]));
     }
@@ -317,7 +331,61 @@
     return notes;
   }
 
+  const PROGRESS_LABELS = {
+    orderHistory: "posLoadingOrders",
+    positionHistory: "posLoadingPositions",
+    transferHistory: "posLoadingTransfers"
+  };
+
+  function progressLine() {
+    const progress = state.progress;
+    if (!progress || !progress.label) return t("posLoadingStarting");
+    const label = t(PROGRESS_LABELS[progress.label] || progress.label);
+    return progress.total
+      ? t("posLoadingProgress", [label, progress.fetched, progress.total])
+      : t("posLoadingProgressUnknown", [label, progress.fetched]);
+  }
+
+  // Three skeleton rows, breathing. The count is arbitrary on purpose: the real
+  // number is not known until the history has been read, and pretending
+  // otherwise would make the panel jump.
+  function renderLoadingPanel() {
+    return h("section", { id: PANEL_ID, class: `ctl-pos-panel ${state.theme} is-loading` }, [
+      h("header", { class: "ctl-pos-header" }, [
+        h("div", { class: "ctl-pos-title" }, [
+          h("span", { class: "ctl-pos-eyebrow", text: t("posEyebrow") }),
+          h("h3", { text: t("posLoadingTitle", [state.nickname || t("posThisTrader")]) }),
+          h("p", { class: "ctl-pos-subtitle-note", text: t("posLoadingHint") })
+        ]),
+        h("div", { class: "ctl-pos-actions" }, [
+          h("span", { class: "ctl-pos-stamp ctl-pos-breathing", text: progressLine() }),
+          h("button", { class: "ctl-pos-btn is-ghost", type: "button", onclick: restoreOriginal }, t("posRestoreOriginal"))
+        ])
+      ]),
+      h("div", { class: "ctl-pos-skeleton" }, [0, 1, 2].map((index) =>
+        h("div", { class: "ctl-pos-skeleton-row", style: `animation-delay: ${index * 160}ms` })
+      ))
+    ]);
+  }
+
+  function renderErrorPanel() {
+    return h("section", { id: PANEL_ID, class: `ctl-pos-panel ${state.theme}` }, [
+      h("header", { class: "ctl-pos-header" }, [
+        h("div", { class: "ctl-pos-title" }, [
+          h("span", { class: "ctl-pos-eyebrow", text: t("posEyebrow") }),
+          h("h3", { text: t("posErrorTitle") }),
+          h("p", { class: "ctl-pos-subtitle-note", text: state.error || "" })
+        ]),
+        h("div", { class: "ctl-pos-actions" }, [
+          h("button", { class: "ctl-pos-btn is-ghost", type: "button", onclick: restoreOriginal }, t("posRestoreOriginal"))
+        ])
+      ])
+    ]);
+  }
+
   function renderPanel() {
+    if (state.phase === "loading") return renderLoadingPanel();
+    if (state.phase === "error") return renderErrorPanel();
     const { positions, coverage, marks, summary, marginBalance, nickname } = state.view;
     return h("section", { id: PANEL_ID, class: `ctl-pos-panel ${state.theme}` }, [
       h("header", { class: "ctl-pos-header" }, [
@@ -399,7 +467,7 @@
   }
 
   async function refreshMarks(force = false) {
-    if (!state) return;
+    if (!state || state.phase !== "ready") return;
     if (document.hidden && !force) return;
     const symbols = state.positions.map((position) => position.symbol);
     if (!symbols.length) return;
@@ -462,6 +530,43 @@
    *   the panel deliberately does not re-fetch it, so the page pays for the
    *   trader's full history exactly once.
    */
+  /**
+   * Claim the positions tab before the history fetch starts. Reading a lead
+   * trader's full order history walks dozens of paginated requests and takes
+   * tens of seconds; without this the tab sits on the exchange's "private"
+   * notice the whole time and the panel appears out of nowhere at the end.
+   */
+  function beginLoading(context) {
+    if (context.platform !== "Binance") return;
+    state = {
+      context,
+      phase: "loading",
+      nickname: "",
+      progress: null,
+      positions: [],
+      block: null,
+      originalDisplay: "",
+      theme: "is-dark",
+      view: null
+    };
+    scan();
+    observe();
+  }
+
+  function setProgress(event) {
+    if (!state || state.phase !== "loading") return;
+    state.progress = event;
+    paint();
+  }
+
+  function fail(error) {
+    if (!state) return;
+    stopRefresh();
+    state.phase = "error";
+    state.error = error instanceof Error ? error.message : String(error);
+    paint();
+  }
+
   async function mount(context, raw) {
     if (context.platform !== "Binance") return;
     const { positions, coverage } = global.CopyTradingLensPositions.reconstructBinanceOpenPositions(raw);
@@ -474,10 +579,13 @@
 
     state = {
       context,
+      phase: "ready",
+      nickname: raw.detail?.nickname || "",
+      progress: null,
       positions,
-      block: null,
-      originalDisplay: "",
-      theme: "is-dark",
+      block: state?.block || null,
+      originalDisplay: state?.originalDisplay || "",
+      theme: state?.theme || "is-dark",
       view: {
         positions: priced,
         coverage,
@@ -510,5 +618,5 @@
     if (!document.hidden) refreshMarks(false);
   });
 
-  global.CopyTradingLensPositionsPanel = { mount, unmount, findPrivateNotice, emptyStateBlockOf };
+  global.CopyTradingLensPositionsPanel = { beginLoading, setProgress, mount, fail, unmount, findPrivateNotice, emptyStateBlockOf };
 })(window);

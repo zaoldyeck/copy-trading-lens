@@ -531,7 +531,7 @@
     "message": "this lead trader"
   },
   "posSubtitle": {
-    "message": "This trader hid their positions, but every fill they made is still public. The book below was rebuilt from those fills — no copying required."
+    "message": "This trader set their positions to private, so normally you would have to copy them to see any of this. Their fills stayed public, and the book below was rebuilt from those fills."
   },
   "posMarkStamp": {
     "message": "Mark price as of {0}"
@@ -745,5 +745,47 @@
   },
   "posNoteReconciledRows": {
     "message": "{0} position(s) had incomplete fills and their size was corrected against the exchange's position aggregates."
+  },
+  "posLoadingTitle": {
+    "message": "Rebuilding what {0} is holding"
+  },
+  "posLoadingHint": {
+    "message": "This trader set their positions to private, so normally you would have to copy them to see any of this. Reading their public fill history to rebuild the book."
+  },
+  "posLoadingStarting": {
+    "message": "Asking the exchange for data…"
+  },
+  "posLoadingProgress": {
+    "message": "{0}: {1} of {2} rows read"
+  },
+  "posLoadingProgressUnknown": {
+    "message": "{0}: {1} rows read"
+  },
+  "posLoadingOrders": {
+    "message": "Fills"
+  },
+  "posLoadingPositions": {
+    "message": "Position history"
+  },
+  "posLoadingTransfers": {
+    "message": "Transfers"
+  },
+  "posErrorTitle": {
+    "message": "Could not rebuild the positions"
+  },
+  "posRetry": {
+    "message": "Retry"
+  },
+  "posConfidenceSizeUnknown": {
+    "message": "Size unknown"
+  },
+  "posConfidenceSizeUnknownHint": {
+    "message": "The exchange still lists this position as open, but the figures it publishes (peak size and closed volume) cannot yield a remaining size after repeated close-and-re-enter. Left blank rather than guessed, and reported rather than hidden."
+  },
+  "posNoteTruncatedHistory": {
+    "message": "The exchange only served fills back to {0}, yet dates its own oldest position to {1} — the fills in between are invisible, so any position with no closed position to anchor on is marked as having incomplete fills."
+  },
+  "posNotePartialFillRows": {
+    "message": "{0} position(s) may be missing opening fills; the size shown is a floor and the real one may be larger."
   }
 }

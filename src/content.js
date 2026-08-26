@@ -315,15 +315,18 @@
     const wasCollapsed = collapsed;
     if (wasCollapsed) renderLauncher(context);
     else renderLoading(context);
+    window.CopyTradingLensPositionsPanel?.beginLoading(context);
     try {
-      const raw = await window.CopyTradingLensProviders.fetchLeadData(context);
+      const raw = await window.CopyTradingLensProviders.fetchLeadData(context, {
+        onProgress: (event) => window.CopyTradingLensPositionsPanel?.setProgress(event)
+      });
       const analysis = context.platform === "Binance"
         ? window.CopyTradingLensAnalysis.analyzeBinance(raw)
         : window.CopyTradingLensAnalysis.analyzeOkx(raw);
       if (!collapsed) renderAnalysis(context, raw, analysis);
       window.CopyTradingLensPositionsPanel?.mount(context, raw);
     } catch (error) {
-      window.CopyTradingLensPositionsPanel?.unmount();
+      window.CopyTradingLensPositionsPanel?.fail(error);
       if (!collapsed) renderError(context, error);
     }
   }

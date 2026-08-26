@@ -136,7 +136,22 @@
    * the entry price), and a fill large enough to flip direction restarts the
    * basis at the flipped remainder's price.
    */
-  function replayFills(key, fills) {
+  function replayFills(key, fills, options = {}) {
+    // Only a one-way symbol can flip through zero: hedge mode keeps the long and
+    // the short book separate, so a hedge bucket that nets NEGATIVE has not
+    // reversed — it is missing opening fills that fell outside the fetched order
+    // history. Reporting the flip anyway invents a position on the opposite side
+    // AND leaves the real one to be re-reported by another code path, which is
+    // how one trader's four real positions rendered as nine.
+    const allowFlip = options.allowFlip !== false;
+    // In hedge mode the bucket itself fixes which direction opens it: the long
+    // book is only ever opened by a BUY, the short book only by a SELL. Without
+    // this, a bucket whose first visible fill is a CLOSE (because the opening
+    // fills predate the fetched order history) treats that close as an opening
+    // trade and reports a position on the wrong side — the same trader then gets
+    // two "ETHUSDT SHORT" rows, one of them fabricated from their long book.
+    const openSign = key.endsWith("|SHORT") ? -1 : 1;
+    let unmatchedCloseQty = 0n;
     let signedQty = 0n;
     let costBasis = 0;
     let realizedFromExchange = 0;
@@ -153,7 +168,9 @@
       if (delta === 0n) continue;
       const price = num(fill.avgPrice, 0);
       const time = num(fill.orderUpdateTime, num(fill.orderTime, 0));
-      const opening = signedQty === 0n || (delta > 0n) === (signedQty > 0n);
+      const opening = allowFlip
+        ? (signedQty === 0n || (delta > 0n) === (signedQty > 0n))
+        : (delta > 0n) === (openSign > 0);
 
       if (opening) {
         if (signedQty === 0n) {
@@ -168,8 +185,18 @@
         signedQty += delta;
         events.push({ time, kind: "open", qty: fromScaledQty(absBig(delta)), price, pnl: 0, orderType: fill.type });
       } else {
-        const reduce = absBig(delta) < absBig(signedQty) ? absBig(delta) : absBig(signedQty);
         const priorQty = absBig(signedQty);
+        let reduce = absBig(delta) < priorQty ? absBig(delta) : priorQty;
+        if (!allowFlip && absBig(delta) > priorQty) {
+          unmatchedCloseQty += absBig(delta) - priorQty;
+          reduce = priorQty;
+        }
+        if (reduce === 0n) {
+          // Nothing of ours to close: this fill belongs to size we never saw
+          // opened. Recorded as unmatched above, not as a trade on this book.
+          lastFillAt = time;
+          continue;
+        }
         const avgEntry = priorQty > 0n ? costBasis / fromScaledQty(priorQty) : 0;
         costBasis -= avgEntry * fromScaledQty(reduce);
         closedQty += reduce;
@@ -178,7 +205,9 @@
         const fillPnl = num(fill.totalPnl, (price - avgEntry) * fromScaledQty(reduce) * direction);
         realizedFromExchange += num(fill.totalPnl, 0);
         events.push({ time, kind: "close", qty: fromScaledQty(reduce), price, pnl: fillPnl, orderType: fill.type });
-        signedQty += delta;
+        signedQty = allowFlip
+          ? signedQty + delta
+          : signedQty + (direction > 0 ? -reduce : reduce);
         if (signedQty !== 0n && (signedQty > 0n) !== (direction > 0)) {
           // Flipped through zero: the leftover is a brand-new position.
           costBasis = fromScaledQty(absBig(signedQty)) * price;
@@ -195,9 +224,14 @@
       lastFillAt = time;
     }
 
-    if (signedQty === 0n) return null;
+    if (signedQty === 0n) {
+      return unmatchedCloseQty > 0n
+        ? { flat: true, unmatchedCloseQty: fromScaledQty(unmatchedCloseQty) }
+        : null;
+    }
     const qty = fromScaledQty(absBig(signedQty));
     return {
+      unmatchedCloseQty: fromScaledQty(unmatchedCloseQty),
       side: signedQty > 0n ? "LONG" : "SHORT",
       qty,
       entryPrice: qty > 0 ? costBasis / qty : 0,
@@ -236,6 +270,54 @@
     return { leverage: 0, source: "unknown" };
   }
 
+  /**
+   * Can the fetched fills actually reconstruct this bucket?
+   *
+   * Netting is only a reconstruction if the fills reach back to an instant where
+   * the bucket was provably empty, and the strength of that proof differs:
+   *
+   *  - A fully-closed position on this bucket is the strongest: the bucket was
+   *    empty the moment it closed, so fills after that close are the whole story
+   *    — provided the fetched history starts at or before that close.
+   *  - Otherwise, a still-open position row dates the bucket's current life. If
+   *    the fetched history starts AFTER the position opened, its opening fills
+   *    are missing. Binance was observed serving an order history that began
+   *    three days after the portfolio itself did, while still reporting the
+   *    fetch complete — which is exactly how one trader's four real positions
+   *    rendered as nine.
+   *  - With no position-history row at all there is no evidence of earlier
+   *    activity on this bucket, so a complete order history is taken at its word.
+   */
+  function coverageOf({ anchor, openRow, oldestOrderMs, orderStatus, roundStartMs }) {
+    const complete = orderStatus?.complete !== false;
+    if (anchor > 0) {
+      return {
+        flatPoint: anchor,
+        flatPointSource: "closedPosition",
+        oldestOrderMs,
+        fillsReachFlatPoint: complete && oldestOrderMs > 0 && oldestOrderMs <= anchor
+      };
+    }
+    const openedAt = num(openRow?.opened, 0);
+    if (openedAt > 0) {
+      return {
+        flatPoint: openedAt,
+        flatPointSource: "openPositionRow",
+        oldestOrderMs,
+        fillsReachFlatPoint: complete && oldestOrderMs > 0 && oldestOrderMs <= openedAt
+      };
+    }
+    return {
+      flatPoint: roundStartMs,
+      flatPointSource: "noPositionHistory",
+      oldestOrderMs,
+      // With no position-history row for this bucket there is nothing to date it
+      // against, so the order history is taken at its word — unless the
+      // portfolio as a whole proves that word is wrong (see truncatedAtOldEnd).
+      fillsReachFlatPoint: complete && !orderStatus.truncatedAtOldEnd
+    };
+  }
+
   function openPositionRows(positionHistory) {
     const byKey = new Map();
     for (const row of positionHistory || []) {
@@ -256,6 +338,11 @@
     const orderHistory = Array.isArray(raw?.orderHistory) ? raw.orderHistory : [];
     const orderStatus = raw?.historyStatus?.orderHistory || {};
     const positionStatus = raw?.historyStatus?.positionHistory || {};
+    // The portfolio's own start is the weakest flat proof available: before it
+    // existed it held nothing. Position history can carry rows from before that
+    // instant (a prior lead round, or the trader's personal account), so it is
+    // only used when the bucket offers nothing better.
+    const roundStartMs = num(raw?.detail?.startTime, 0);
 
     const oneWaySymbols = new Set();
     for (const order of orderHistory) {
@@ -263,6 +350,23 @@
     }
 
     const anchors = flatAnchors(positionHistory, oneWaySymbols);
+
+    // A position that the exchange says opened BEFORE the oldest fill we hold is
+    // proof that the order history is cut off at its old end, whatever the
+    // endpoint claims about completeness. Binance was observed serving an order
+    // history that began three days after the portfolio did while reporting the
+    // fetch complete; without this, every bucket with no closed position to
+    // anchor on inherited that lie and reported a netted size as exact.
+    //
+    // The gap alone proves nothing — a trader who simply did not trade for three
+    // days looks identical. A position dated inside the gap is what settles it.
+    const oldestPositionOpenMs = positionHistory.reduce(
+      (oldest, row) => {
+        const opened = num(row.opened, 0);
+        return opened > 0 && opened < oldest ? opened : oldest;
+      },
+      Number.POSITIVE_INFINITY
+    );
 
     const buckets = new Map();
     let oldestOrderMs = Number.POSITIVE_INFINITY;
@@ -275,30 +379,68 @@
     }
     if (!Number.isFinite(oldestOrderMs)) oldestOrderMs = 0;
 
+    const truncatedAtOldEnd = Number.isFinite(oldestPositionOpenMs)
+      && oldestOrderMs > 0
+      && oldestPositionOpenMs < oldestOrderMs;
+
     const openRows = openPositionRows(positionHistory);
     const positions = [];
     const seen = new Set();
 
     for (const [key, fills] of buckets) {
       fills.sort((a, b) => num(a.orderUpdateTime, 0) - num(b.orderUpdateTime, 0));
+      const symbol = symbolOfKey(key);
+      const oneWay = isOneWayBucket(key);
       const anchor = anchors.get(key) || 0;
       const afterFlat = fills.filter((fill) => num(fill.orderUpdateTime, 0) > anchor);
       if (!afterFlat.length) continue;
-      const replayed = replayFills(key, afterFlat);
-      if (!replayed) continue;
+      const replayed = replayFills(key, afterFlat, { allowFlip: oneWay });
+      if (!replayed || replayed.flat) {
+        // A hedge bucket that closed more than it ever opened is proof the
+        // opening fills are out of reach, not proof the trader is flat. The
+        // position-history fallback below still gets its chance at it.
+        continue;
+      }
 
-      const symbol = symbolOfKey(key);
       const openRow = openRows.get(`${symbol}|${replayed.side}`) || null;
       const leverage = leverageFor(symbol, replayed.side, openRow, positionHistory);
-      // The fills only reconstruct the position if they reach back past the
-      // last flat point. When order history is depth-capped, its oldest row can
-      // start AFTER the anchor, in which case the opening fills are missing and
-      // the netted size is a floor, not the size.
-      const fillsReachAnchor = anchor > 0
-        ? oldestOrderMs <= anchor
-        : orderStatus.complete !== false;
+
+      const coverage = coverageOf({
+        anchor,
+        openRow,
+        oldestOrderMs,
+        orderStatus: { ...orderStatus, truncatedAtOldEnd },
+        roundStartMs
+      });
+      const fillsReachFlatPoint = coverage.fillsReachFlatPoint;
+      const flatPoint = coverage.flatPoint;
+
       const reconciliation = reconcileAgainstPositionRow(replayed, openRow);
-      if (reconciliation.correction) {
+      const trustNetting = fillsReachFlatPoint && !(replayed.unmatchedCloseQty > 0);
+
+      if (!trustNetting && openRow) {
+        // The exchange's own aggregates outrank fills that cannot see the whole
+        // position. They understate a scale-back-in, which is why the row says so.
+        const remainder = num(openRow.maxOpenInterest, 0) - num(openRow.closedVolume, 0);
+        if (remainder > 0) {
+          positions.push(buildPosition({
+            symbol,
+            side: replayed.side,
+            replayed: { ...replayed, qty: remainder },
+            openRow,
+            leverage,
+            confidence: "estimated",
+            qtySource: "positionHistoryRemainder",
+            reconciliation,
+            coverage,
+            oneWay
+          }));
+          seen.add(`${symbol}|${replayed.side}`);
+          continue;
+        }
+      }
+
+      if (reconciliation.correction && trustNetting) {
         replayed.qty += reconciliation.correction;
         replayed.peakQty = Math.max(replayed.peakQty, reconciliation.exchangePeakQty);
       }
@@ -309,12 +451,13 @@
         replayed,
         openRow,
         leverage,
-        confidence: reconciliation.correction
-          ? "reconciled"
-          : (fillsReachAnchor ? "exact" : "partialFills"),
-        qtySource: reconciliation.correction ? "orderNettingReconciled" : "orderNetting",
+        confidence: !trustNetting
+          ? "partialFills"
+          : (reconciliation.correction ? "reconciled" : "exact"),
+        qtySource: (trustNetting && reconciliation.correction) ? "orderNettingReconciled" : "orderNetting",
         reconciliation,
-        oneWay: isOneWayBucket(key)
+        coverage,
+        oneWay
       }));
       seen.add(`${symbol}|${replayed.side}`);
     }
@@ -328,14 +471,19 @@
       if (seen.has(key)) continue;
       const [symbol, side] = [symbolOfKey(key), key.slice(key.lastIndexOf("|") + 1)];
       const remaining = num(row.maxOpenInterest, 0) - num(row.closedVolume, 0);
-      if (!(remaining > 0)) continue;
       const leverage = leverageFor(symbol, side, row, positionHistory);
+      // closedVolume can exceed maxOpenInterest when a position was closed and
+      // re-entered repeatedly, which leaves no derivable size. Dropping the row
+      // would tell the reader the trader holds nothing here, when the exchange
+      // is explicitly still listing the position as open — so it is reported
+      // with an unknown size instead of not reported at all.
+      const sizeUnknown = !(remaining > 0);
       positions.push(buildPosition({
         symbol,
         side,
         replayed: {
           side,
-          qty: remaining,
+          qty: sizeUnknown ? null : remaining,
           entryPrice: num(row.avgCost, 0),
           peakQty: num(row.maxOpenInterest, 0),
           closedQty: num(row.closedVolume, 0),
@@ -350,7 +498,7 @@
         openRow: row,
         leverage,
         confidence: "estimated",
-        qtySource: "positionHistoryRemainder",
+        qtySource: sizeUnknown ? "sizeNotDerivable" : "positionHistoryRemainder",
         oneWay: oneWaySymbols.has(symbol)
       }));
     }
@@ -366,6 +514,8 @@
         positionHistoryComplete: positionStatus.complete !== false,
         oldestOrderMs,
         oneWayMode: oneWaySymbols.size > 0,
+        orderHistoryTruncatedAtOldEnd: truncatedAtOldEnd,
+        oldestPositionOpenMs: Number.isFinite(oldestPositionOpenMs) ? oldestPositionOpenMs : null,
         exactCount: positions.filter((p) => p.confidence === "exact").length,
         estimatedCount: positions.filter((p) => p.confidence === "estimated").length,
         reconciledCount: positions.filter((p) => p.confidence === "reconciled").length,
@@ -415,12 +565,17 @@
     };
   }
 
-  function buildPosition({ symbol, side, replayed, openRow, leverage, confidence, qtySource, reconciliation, oneWay }) {
+  function buildPosition({ symbol, side, replayed, openRow, leverage, confidence, qtySource, reconciliation, coverage, oneWay }) {
     const direction = side === "SHORT" ? -1 : 1;
-    const qty = replayed.qty;
-    const entryPrice = replayed.entryPrice;
-    const entryNotional = qty * entryPrice;
-    const peakQty = Math.max(replayed.peakQty, qty);
+    // A null size is a deliberate state, not a missing field: the exchange still
+    // lists the position but publishes nothing that yields its size. Everything
+    // derived from size has to stay null rather than quietly become 0 or NaN.
+    const qty = Number.isFinite(replayed.qty) ? replayed.qty : null;
+    const entryPrice = num(replayed.entryPrice, 0);
+    const entryNotional = qty === null ? null : qty * entryPrice;
+    const peakQty = qty === null
+      ? num(replayed.peakQty, 0)
+      : Math.max(num(replayed.peakQty, 0), qty);
     const closedQty = replayed.closedQty;
     return {
       symbol,
@@ -435,14 +590,14 @@
       // Initial margin the position consumed at entry. Binance charges margin
       // on entry notional / leverage; mark-to-market moves land in unrealized
       // PnL, not in this number.
-      initialMargin: leverage.leverage > 0 ? entryNotional / leverage.leverage : null,
+      initialMargin: leverage.leverage > 0 && entryNotional !== null ? entryNotional / leverage.leverage : null,
       openedAt: replayed.openedAt,
       lastFillAt: replayed.lastFillAt,
       // Filled in by enrichWithMarks, which is where "now" is known.
       ageHours: null,
       peakQty,
       closedQty,
-      closedRatio: peakQty > 0 ? closedQty / peakQty : 0,
+      closedRatio: peakQty > 0 ? closedQty / peakQty : null,
       partiallyClosed: closedQty > 0,
       addCount: replayed.addCount,
       reduceCount: replayed.reduceCount,
@@ -454,6 +609,8 @@
       confidence,
       qtySource,
       reconciliation: reconciliation || { checked: false, correction: 0 },
+      coverage: coverage || { flatPoint: 0, oldestOrderMs: 0, fillsReachFlatPoint: false },
+      unmatchedCloseQty: num(replayed.unmatchedCloseQty, 0),
       events: replayed.events,
       // Filled in by enrichWithMarks once mark prices are known.
       markPrice: null,
@@ -482,8 +639,8 @@
       enriched.ageHours = position.openedAt && nowMs > position.openedAt
         ? (nowMs - position.openedAt) / HOUR_MS
         : null;
-      if (!mark) return enriched;
-      enriched.markPrice = mark;
+      enriched.markPrice = mark || null;
+      if (!mark || position.qty === null) return enriched;
       enriched.notional = position.qty * mark;
       enriched.unrealizedPnl = (mark - position.entryPrice) * position.qty * position.direction;
       enriched.pnlPercentOnNotional = position.entryPrice > 0

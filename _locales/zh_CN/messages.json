@@ -531,7 +531,7 @@
     "message": "这位带单员"
   },
   "posSubtitle": {
-    "message": "带单员把仓位设为私密，但成交记录仍然公开。以下持仓由每一笔成交回推而来，无需跟单。"
+    "message": "这位带单员把仓位设为私密，照理要跟单之后才看得到。但他的成交记录仍然公开，以下持仓就是从每一笔成交回推出来的。"
   },
   "posMarkStamp": {
     "message": "标记价格时间：{0}"
@@ -745,5 +745,47 @@
   },
   "posNoteReconciledRows": {
     "message": "有 {0} 个部位的成交记录不齐，数量已用交易所的持仓汇总校正。"
+  },
+  "posLoadingTitle": {
+    "message": "正在还原 {0} 的真实仓位"
+  },
+  "posLoadingHint": {
+    "message": "这位带单员把仓位设为私密，照理要跟单之后才看得到。正在读取他公开的成交记录，回推当前持仓。"
+  },
+  "posLoadingStarting": {
+    "message": "正在向交易所要数据…"
+  },
+  "posLoadingProgress": {
+    "message": "{0}：已读取 {1} / {2} 笔"
+  },
+  "posLoadingProgressUnknown": {
+    "message": "{0}：已读取 {1} 笔"
+  },
+  "posLoadingOrders": {
+    "message": "成交记录"
+  },
+  "posLoadingPositions": {
+    "message": "仓位历史"
+  },
+  "posLoadingTransfers": {
+    "message": "转账记录"
+  },
+  "posErrorTitle": {
+    "message": "仓位还原失败"
+  },
+  "posRetry": {
+    "message": "重试"
+  },
+  "posConfidenceSizeUnknown": {
+    "message": "数量不明"
+  },
+  "posConfidenceSizeUnknownHint": {
+    "message": "交易所仍把这个部位列为未平仓，但它公开的数字（历史最大持仓、已平仓量）在反复平仓又建仓后无法还原出剩余数量。这里如实留空，而不是猜一个数字，也不是假装这个部位不存在。"
+  },
+  "posNoteTruncatedHistory": {
+    "message": "交易所的成交记录只给到 {0} 为止，但它自己列出的部位最早开仓于 {1}——中间那段成交看不到，所以没有已平仓记录可对齐的部位一律标为「成交不齐全」。"
+  },
+  "posNotePartialFillRows": {
+    "message": "有 {0} 个部位的开仓成交可能不完整，显示的数量是下限，实际可能更大。"
   }
 }

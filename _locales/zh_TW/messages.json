@@ -531,7 +531,7 @@
     "message": "這位帶單員"
   },
   "posSubtitle": {
-    "message": "帶單員把倉位設為私人，但成交紀錄仍是公開的。以下持倉由每一筆成交回推而來，不需要跟單。"
+    "message": "這位帶單員把倉位設為私人，照理要跟單之後才看得到。但他的成交紀錄仍然公開，以下持倉就是從每一筆成交回推出來的。"
   },
   "posMarkStamp": {
     "message": "標記價格時間：{0}"
@@ -745,5 +745,47 @@
   },
   "posNoteReconciledRows": {
     "message": "有 {0} 個部位的成交紀錄不齊，數量已用交易所的部位彙總校正。"
+  },
+  "posLoadingTitle": {
+    "message": "正在還原 {0} 的真實倉位"
+  },
+  "posLoadingHint": {
+    "message": "這位帶單員把倉位設為私人，照理要跟單之後才看得到。正在讀取他公開的成交紀錄，回推目前持倉。"
+  },
+  "posLoadingStarting": {
+    "message": "正在向交易所要資料…"
+  },
+  "posLoadingProgress": {
+    "message": "{0}：已讀取 {1} / {2} 筆"
+  },
+  "posLoadingProgressUnknown": {
+    "message": "{0}：已讀取 {1} 筆"
+  },
+  "posLoadingOrders": {
+    "message": "成交紀錄"
+  },
+  "posLoadingPositions": {
+    "message": "倉位歷史"
+  },
+  "posLoadingTransfers": {
+    "message": "轉帳紀錄"
+  },
+  "posErrorTitle": {
+    "message": "倉位還原失敗"
+  },
+  "posRetry": {
+    "message": "重試"
+  },
+  "posConfidenceSizeUnknown": {
+    "message": "數量不明"
+  },
+  "posConfidenceSizeUnknownHint": {
+    "message": "交易所仍把這個部位列為未平倉，但它公開的數字（歷史最大持倉、已平倉量）在反覆平倉又建倉後無法還原出剩餘數量。這裡如實留白，而不是猜一個數字，也不是假裝這個部位不存在。"
+  },
+  "posNoteTruncatedHistory": {
+    "message": "交易所的成交紀錄只給到 {0} 為止，但它自己列出的部位最早開倉於 {1}——中間那段成交看不到，所以沒有已平倉紀錄可對齊的部位一律標為「成交不齊全」。"
+  },
+  "posNotePartialFillRows": {
+    "message": "有 {0} 個部位的開倉成交可能不完整，顯示的數量是下限，實際可能更大。"
   }
 }

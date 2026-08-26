@@ -531,7 +531,7 @@
     "message": "このリードトレーダー"
   },
   "posSubtitle": {
-    "message": "このトレーダーはポジションを非公開にしていますが、約定履歴は公開されたままです。以下はその約定から組み立て直した建玉で、コピーする必要はありません。"
+    "message": "このトレーダーはポジションを非公開にしており、本来はコピーして初めて見られるものです。約定履歴は公開されたままなので、以下の建玉はその約定から組み立て直しています。"
   },
   "posMarkStamp": {
     "message": "マーク価格の時刻：{0}"
@@ -745,5 +745,47 @@
   },
   "posNoteReconciledRows": {
     "message": "{0} 件の建玉で約定履歴が不完全だったため、取引所のポジション集計で数量を補正しました。"
+  },
+  "posLoadingTitle": {
+    "message": "{0} の保有ポジションを復元中"
+  },
+  "posLoadingHint": {
+    "message": "このトレーダーはポジションを非公開にしており、本来はコピーして初めて見られるものです。公開されている約定履歴を読み込んで建玉を復元しています。"
+  },
+  "posLoadingStarting": {
+    "message": "取引所にデータを要求しています…"
+  },
+  "posLoadingProgress": {
+    "message": "{0}：{1} / {2} 件を読み込み"
+  },
+  "posLoadingProgressUnknown": {
+    "message": "{0}：{1} 件を読み込み"
+  },
+  "posLoadingOrders": {
+    "message": "約定履歴"
+  },
+  "posLoadingPositions": {
+    "message": "ポジション履歴"
+  },
+  "posLoadingTransfers": {
+    "message": "入出金履歴"
+  },
+  "posErrorTitle": {
+    "message": "ポジションを復元できませんでした"
+  },
+  "posRetry": {
+    "message": "再試行"
+  },
+  "posConfidenceSizeUnknown": {
+    "message": "数量不明"
+  },
+  "posConfidenceSizeUnknownHint": {
+    "message": "取引所はこの建玉を未決済として掲載していますが、公開されている数値（最大建玉・決済済み数量）では、決済と再建玉を繰り返した後の残数量を復元できません。推測せず空欄にし、建玉自体は隠さず掲載しています。"
+  },
+  "posNoteTruncatedHistory": {
+    "message": "取引所の約定履歴は {0} までしか返らない一方、取引所自身が最も古い建玉を {1} と記録しています。その間の約定は見えないため、決済済みポジションで基準を取れない建玉はすべて「約定が不完全」と表示します。"
+  },
+  "posNotePartialFillRows": {
+    "message": "{0} 件の建玉は新規建ての約定が欠けている可能性があり、表示数量は下限です。"
   }
 }

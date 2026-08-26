@@ -44,8 +44,15 @@ function closedPosition(symbol, side, closedAt, extra = {}) {
   };
 }
 
-function reconstruct(orderHistory, positionHistory = []) {
+// The portfolio start defaults to just before the first fill, i.e. the fills
+// provably cover the whole portfolio. Tests that want the opposite — an order
+// history that starts after the portfolio did — pass an earlier startTime.
+function reconstruct(orderHistory, positionHistory = [], startTime = null) {
+  const firstFill = orderHistory.length
+    ? Math.min(...orderHistory.map((order) => order.orderUpdateTime))
+    : Date.parse("2026-01-01T00:00:00Z");
   return Positions.reconstructBinanceOpenPositions({
+    detail: { startTime: startTime === null ? firstFill - 1 : startTime },
     orderHistory,
     positionHistory,
     historyStatus: { orderHistory: { complete: true, fetched: orderHistory.length, total: orderHistory.length } }
@@ -267,10 +274,15 @@ test("a size the fills understate is repaired from the exchange's own aggregates
   // history omitted one opening fill, so netting reported 400 against a real
   // 440. The position row's peak size proves the missing volume existed, and
   // its closed volume proves that volume was never closed.
+  const fills = [
+    order("SPCXUSDT", "SELL", "BOTH", 400, 140.8),
+    order("SPCXUSDT", "BUY", "BOTH", 40, 133.63, 267.8),
+    order("SPCXUSDT", "SELL", "BOTH", 40, 139.45)
+  ];
   const openRow = {
     symbol: "SPCXUSDT",
     side: "Short",
-    opened: 1699000000000,
+    opened: fills[0].orderUpdateTime,
     closed: null,
     avgCost: 140.25,
     closingPnl: 267.8,
@@ -281,11 +293,7 @@ test("a size the fills understate is repaired from the exchange's own aggregates
     updateTime: 1699500000000,
     leverage: "9"
   };
-  const { positions } = reconstruct([
-    order("SPCXUSDT", "SELL", "BOTH", 400, 140.8),
-    order("SPCXUSDT", "BUY", "BOTH", 40, 133.63, 267.8),
-    order("SPCXUSDT", "SELL", "BOTH", 40, 139.45)
-  ], [openRow]);
+  const { positions } = reconstruct(fills, [openRow]);
   assert.equal(positions.length, 1);
   assert.equal(positions[0].qty, 440);
   assert.equal(positions[0].confidence, "reconciled");
@@ -295,10 +303,14 @@ test("a size the fills understate is repaired from the exchange's own aggregates
 });
 
 test("fills that agree with the exchange aggregates stay exact and untouched", () => {
+  const fills = [
+    order("ZORAUSDT", "BUY", "BOTH", 1100000, 0.00688),
+    order("ZORAUSDT", "SELL", "BOTH", 300000, 0.0072, 96)
+  ];
   const openRow = {
     symbol: "ZORAUSDT",
     side: "Long",
-    opened: 1699000000000,
+    opened: fills[0].orderUpdateTime,
     closed: null,
     avgCost: 0.00688,
     closingPnl: 10,
@@ -309,10 +321,7 @@ test("fills that agree with the exchange aggregates stay exact and untouched", (
     updateTime: 1699500000000,
     leverage: "10"
   };
-  const { positions } = reconstruct([
-    order("ZORAUSDT", "BUY", "BOTH", 1100000, 0.00688),
-    order("ZORAUSDT", "SELL", "BOTH", 300000, 0.0072, 96)
-  ], [openRow]);
+  const { positions } = reconstruct(fills, [openRow]);
   assert.equal(positions[0].qty, 800000);
   assert.equal(positions[0].confidence, "exact");
   assert.equal(positions[0].reconciliation.correction, 0);
@@ -321,10 +330,15 @@ test("fills that agree with the exchange aggregates stay exact and untouched", (
 test("a position scaled back in past its old peak is not falsely repaired", () => {
   // maxOpenInterest is a running maximum, so a bucket whose fills already reach
   // that peak must be left alone — repairing it would double-count the re-add.
+  const fills = [
+    order("TRUMPUSDT", "BUY", "BOTH", 42000, 2.49),
+    order("TRUMPUSDT", "SELL", "BOTH", 26000, 2.6, 2860),
+    order("TRUMPUSDT", "BUY", "BOTH", 15000, 2.55)
+  ];
   const openRow = {
     symbol: "TRUMPUSDT",
     side: "Long",
-    opened: 1699000000000,
+    opened: fills[0].orderUpdateTime,
     closed: null,
     avgCost: 2.49,
     closingPnl: 100,
@@ -335,13 +349,92 @@ test("a position scaled back in past its old peak is not falsely repaired", () =
     updateTime: 1699500000000,
     leverage: "10"
   };
-  const { positions } = reconstruct([
-    order("TRUMPUSDT", "BUY", "BOTH", 42000, 2.49),
-    order("TRUMPUSDT", "SELL", "BOTH", 26000, 2.6, 2860),
-    order("TRUMPUSDT", "BUY", "BOTH", 15000, 2.55)
-  ], [openRow]);
+  const { positions } = reconstruct(fills, [openRow]);
   assert.equal(positions[0].qty, 31000);
   assert.equal(positions[0].confidence, "exact");
+});
+
+test("a hedge long book whose opening fills predate the history is not reported as a short", () => {
+  // Live case (portfolio 5108371059752839168, 2026-08-26): the ETH long book was
+  // opened before Binance's order history begins, so the only visible ETH long
+  // fills are SELLs. Treating the first of them as an opening trade invented an
+  // "ETHUSDT SHORT" that the trader did not hold — on top of the real ETH short,
+  // so the same symbol and side appeared twice.
+  const { positions } = reconstruct([
+    order("ETHUSDT", "SELL", "LONG", 50, 2509),
+    order("ETHUSDT", "SELL", "SHORT", 100, 2476.5)
+  ]);
+  assert.equal(positions.length, 1);
+  assert.equal(positions[0].side, "SHORT");
+  assert.equal(positions[0].qty, 100);
+});
+
+test("one-way mode still flips, because there is only one book to flip", () => {
+  const { positions } = reconstruct([
+    order("ETHUSDT", "BUY", "BOTH", 10, 2000),
+    order("ETHUSDT", "SELL", "BOTH", 25, 2100, 1000)
+  ]);
+  assert.equal(positions.length, 1);
+  assert.equal(positions[0].side, "SHORT");
+  assert.equal(positions[0].qty, 15);
+});
+
+test("a position dated before the oldest fill proves the history is cut off", () => {
+  // Binance served an order history starting three days after the portfolio did
+  // while still reporting the fetch complete. A position the exchange dates
+  // inside that gap is the proof; the gap on its own is not, since a trader who
+  // simply did not trade for three days looks identical.
+  const fills = [order("BTCUSDT", "SELL", "SHORT", 50, 77649)];
+  const staleOpenRow = {
+    symbol: "ETHUSDT",
+    side: "Long",
+    opened: fills[0].orderUpdateTime - 86400000,
+    closed: null,
+    avgCost: 1730,
+    closingPnl: 100,
+    maxOpenInterest: 423,
+    closedVolume: 403,
+    isolated: "Cross",
+    status: "Partially Closed",
+    updateTime: fills[0].orderUpdateTime,
+    leverage: "20"
+  };
+  const { positions, coverage } = reconstruct(fills, [staleOpenRow]);
+  assert.equal(coverage.orderHistoryTruncatedAtOldEnd, true);
+  const btc = positions.find((p) => p.symbol === "BTCUSDT");
+  assert.equal(btc.confidence, "partialFills", "no anchor and a truncated history cannot be exact");
+  const eth = positions.find((p) => p.symbol === "ETHUSDT");
+  assert.equal(eth.qty, 20);
+  assert.equal(eth.confidence, "estimated");
+});
+
+test("a still-open position with no derivable size is reported, not dropped", () => {
+  // closedVolume can exceed maxOpenInterest after repeated close-and-re-enter.
+  // Dropping the row would tell the reader the trader holds nothing on that
+  // symbol while the exchange is explicitly still listing the position.
+  const openRow = {
+    symbol: "SKHYNIXUSDT",
+    side: "Short",
+    opened: Date.parse("2026-07-01T00:00:00Z"),
+    closed: null,
+    avgCost: 1391.06,
+    closingPnl: 188230,
+    maxOpenInterest: 395,
+    closedVolume: 685.06,
+    isolated: "Cross",
+    status: "Partially Closed",
+    updateTime: Date.parse("2026-08-05T00:00:00Z"),
+    leverage: "19"
+  };
+  const { positions } = reconstruct([], [openRow]);
+  assert.equal(positions.length, 1);
+  assert.equal(positions[0].qty, null);
+  assert.equal(positions[0].qtySource, "sizeNotDerivable");
+  assert.equal(positions[0].entryPrice, 1391.06);
+  const priced = Positions.enrichWithMarks(positions, { SKHYNIXUSDT: 1200 }, { nowMs: Date.now(), marginBalance: 1000 });
+  assert.equal(priced[0].markPrice, 1200);
+  assert.equal(priced[0].notional, null, "an unknown size must not produce a notional");
+  assert.equal(priced[0].unrealizedPnl, null);
 });
 
 let failed = 0;
