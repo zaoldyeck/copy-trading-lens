@@ -213,7 +213,7 @@
 
   function positionRow(position) {
     const directionClass = position.side === "LONG" ? "is-long" : "is-short";
-    const detailsId = `ctl-pos-detail-${position.symbol}-${position.side}`;
+    const detailsId = `ctl-pos-detail-${position.symbol}-${position.side}`.replace(/\s+/g, "-");
     return h("details", { class: "ctl-pos-row", id: detailsId }, [
       h("summary", { class: "ctl-pos-row-head" }, [
         h("span", { class: `ctl-pos-symbol ${directionClass}` }, [
@@ -346,7 +346,17 @@
   function paint() {
     if (!state || !state.block || !state.block.isConnected) return false;
     const existing = document.getElementById(PANEL_ID);
+    // The mark-price refresh repaints the whole panel every few seconds. Without
+    // this, a reader who opened a position's fill ladder would watch it snap shut
+    // on the next tick, which makes the detail effectively unreadable.
+    const expanded = existing
+      ? new Set([...existing.querySelectorAll("details[open]")].map((row) => row.id))
+      : new Set();
     const panel = renderPanel();
+    for (const id of expanded) {
+      const row = panel.querySelector(`#${CSS.escape(id)}`);
+      if (row) row.open = true;
+    }
     if (existing) existing.replaceWith(panel);
     else state.block.insertAdjacentElement("afterend", panel);
     state.block.setAttribute(HIDDEN_ATTR, "1");
