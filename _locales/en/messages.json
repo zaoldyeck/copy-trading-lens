@@ -606,7 +606,7 @@
     "message": "Estimated"
   },
   "posConfidenceEstimatedHint": {
-    "message": "No usable fills for this position, so the size comes from peak size minus closed volume. If the trader scaled back in after a partial close, this understates it."
+    "message": "No usable fills for this position, so the size comes from peak size minus closed volume. If the trader scaled back in after a partial close, this understates it. That it is still open is the exchange's own statement — this page's Position History tab shows the row as partially closed with a blank close time."
   },
   "posSummaryOpenCount": {
     "message": "Open positions"
@@ -741,7 +741,7 @@
     "message": "Reconciled"
   },
   "posConfidenceReconciledHint": {
-    "message": "The exchange left {0} units of opening fills out of its own fill history. The gap was closed using the exchange's position aggregates (peak size and closed volume). The added size is computed; the missing fills themselves are not visible."
+    "message": "The exchange left {0} units of opening fills out of its own fill history. The gap was closed using the exchange's position aggregates (peak size and closed volume). The added size is computed; the missing fills themselves are not visible. That the position is still open is the exchange's own statement — check this page's Position History tab."
   },
   "posNoteReconciledRows": {
     "message": "{0} position(s) had incomplete fills and their size was corrected against the exchange's position aggregates."
