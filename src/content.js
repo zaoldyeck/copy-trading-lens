@@ -333,6 +333,15 @@
     routeTimer = setTimeout(() => runAnalysis(false), 350);
   }
 
+  // Tell the service worker a content script just loaded. In an unpacked build
+  // that is what triggers the stale-build check (see src/background.js); in a
+  // packed build nothing listens and the message is a no-op.
+  try {
+    chrome.runtime?.sendMessage?.({ type: "ctl:content-loaded" });
+  } catch (_error) {
+    // Extension context can be invalidated mid-reload; nothing to recover.
+  }
+
   window.addEventListener("popstate", scheduleRouteCheck);
   setInterval(scheduleRouteCheck, 1500);
   runAnalysis(false);
