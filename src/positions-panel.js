@@ -68,8 +68,7 @@
 
   /**
    * The private-positions notice, found by what it says rather than by how it
-   * is styled. The deepest element that carries the whole sentence wins, so a
-   * page wrapper that happens to contain the notice is never mistaken for it.
+   * is styled.
    */
   function findPrivateNotice() {
     const candidates = [];
@@ -78,27 +77,62 @@
       const text = ownText(element);
       if (text.length < NOTICE_MIN_CHARS || text.length > NOTICE_MAX_CHARS) continue;
       if (!PRIVATE_TOKEN.test(text) || !POSITION_TOKEN.test(text)) continue;
-      candidates.push({ element, length: text.length });
+      candidates.push(element);
     }
     if (!candidates.length) return null;
-    candidates.sort((a, b) => a.length - b.length);
-    return candidates[0].element;
+    // Every ancestor of the notice carries exactly the same text, so ranking by
+    // text length is a tie across the whole chain and document order then hands
+    // back the OUTERMOST match. On Binance that is the container holding every
+    // tab pane — the inactive panes render empty, so they add no text — and
+    // hiding it blanked every tab, not just Positions. Keep only elements that
+    // contain no other match: the innermost node carrying the sentence.
+    const innermost = candidates.filter((element) =>
+      !candidates.some((other) => other !== element && element.contains(other))
+    );
+    return innermost[0] || candidates[candidates.length - 1];
   }
 
   /**
-   * Grow the notice into the whole empty-state block it belongs to: keep
-   * climbing while the parent adds no text of its own (it only adds the
-   * illustration and padding around the same sentence). Stops as soon as a
-   * parent contributes other content, so the tab bar and sibling panels are
-   * never swallowed.
+   * The tab panel the notice lives in. Scoping the takeover to that panel is
+   * what makes it travel with the tab: when the reader switches away, Binance
+   * hides the panel and our panel goes with it.
+   *
+   * `role="tabpanel"` is the standard handle and is tried first. Binance ships
+   * a class-based variant instead, so `tab-pane` is accepted too — but never
+   * `tab-pane-list`, which is the container of ALL panes and is precisely what
+   * must not be touched.
+   */
+  function tabPanelOf(notice) {
+    const byRole = notice.closest('[role="tabpanel"]');
+    if (byRole) return byRole;
+    let node = notice.parentElement;
+    while (node && node !== document.body) {
+      const className = typeof node.className === "string" ? node.className : "";
+      if (/(^|[\s-])tab-?pane(?!-?list)/.test(className) || /(^|[\s-])tab-?panel(?!-?list)/.test(className)) {
+        return node;
+      }
+      node = node.parentElement;
+    }
+    return null;
+  }
+
+  /**
+   * Grow the notice into the empty-state block it belongs to — the illustration
+   * and padding wrapped around the same sentence — without ever climbing out of
+   * the tab panel. Above the panel sit its sibling panes and the tab strip, and
+   * none of them carry text until the reader visits them, so "the parent adds no
+   * text" walks straight past them on its own.
    */
   function emptyStateBlockOf(notice) {
+    const panel = tabPanelOf(notice);
     let block = notice;
     const baseline = ownText(notice).length;
     while (block.parentElement && block.parentElement !== document.body) {
-      const parentText = ownText(block.parentElement).length;
-      if (parentText > baseline) break;
-      block = block.parentElement;
+      const parent = block.parentElement;
+      if (panel && (parent === panel || !panel.contains(parent))) break;
+      if (ownText(parent).length > baseline) break;
+      if (parent.querySelector('[role="tab"], [role="tablist"]')) break;
+      block = parent;
     }
     return block;
   }
@@ -411,6 +445,22 @@
     ]);
   }
 
+  /**
+   * Last line of defence before anything on the exchange's page is hidden.
+   *
+   * The anchor search picks the block by meaning, and a wrong pick blanked every
+   * tab on the page once already. This refuses the destructive half of the
+   * takeover for any node that carries the tab strip or more than one tab panel:
+   * the panel still renders, the page stays intact.
+   */
+  function isSafeToHide(block) {
+    if (!block) return false;
+    if (block.querySelector('[role="tab"], [role="tablist"]')) return false;
+    if (block.querySelectorAll('[role="tabpanel"]').length > 1) return false;
+    if (block.querySelectorAll('[class*="tab-pane"], [class*="tab-panel"]').length > 1) return false;
+    return true;
+  }
+
   function paint() {
     if (!state || !state.block || !state.block.isConnected) return false;
     const existing = document.getElementById(PANEL_ID);
@@ -427,8 +477,10 @@
     }
     if (existing) existing.replaceWith(panel);
     else state.block.insertAdjacentElement("afterend", panel);
-    state.block.setAttribute(HIDDEN_ATTR, "1");
-    state.block.style.display = "none";
+    if (isSafeToHide(state.block)) {
+      state.block.setAttribute(HIDDEN_ATTR, "1");
+      state.block.style.display = "none";
+    }
     return true;
   }
 
@@ -618,5 +670,15 @@
     if (!document.hidden) refreshMarks(false);
   });
 
-  global.CopyTradingLensPositionsPanel = { beginLoading, setProgress, mount, fail, unmount, findPrivateNotice, emptyStateBlockOf };
+  global.CopyTradingLensPositionsPanel = {
+    beginLoading,
+    setProgress,
+    mount,
+    fail,
+    unmount,
+    findPrivateNotice,
+    emptyStateBlockOf,
+    tabPanelOf,
+    isSafeToHide
+  };
 })(window);

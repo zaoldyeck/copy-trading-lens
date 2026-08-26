@@ -111,6 +111,7 @@ const jsFiles = [
   "src/background.js",
   "src/popup.js",
   "scripts/generate-icons.mjs",
+  "scripts/test-positions-panel-anchor.mjs",
   "scripts/validate-extension.mjs",
   "scripts/package-extension.mjs"
 ];
