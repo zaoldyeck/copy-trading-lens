@@ -297,7 +297,7 @@ test("a size the fills understate is repaired from the exchange's own aggregates
   assert.equal(positions.length, 1);
   assert.equal(positions[0].qty, 440);
   assert.equal(positions[0].confidence, "reconciled");
-  assert.equal(positions[0].qtySource, "orderNettingReconciled");
+  assert.equal(positions[0].qtySource, "exchangePeakReconciled");
   assert.equal(positions[0].reconciliation.missingOpenVolume, 40);
   assert.equal(positions[0].reconciliation.missingCloseVolume, 0);
 });

@@ -224,15 +224,13 @@
       lastFillAt = time;
     }
 
-    if (signedQty === 0n) {
-      return unmatchedCloseQty > 0n
-        ? { flat: true, unmatchedCloseQty: fromScaledQty(unmatchedCloseQty) }
-        : null;
-    }
+    if (!events.length) return null;
     const qty = fromScaledQty(absBig(signedQty));
     return {
       unmatchedCloseQty: fromScaledQty(unmatchedCloseQty),
-      side: signedQty > 0n ? "LONG" : "SHORT",
+      side: signedQty === 0n
+        ? (openSign > 0 ? "LONG" : "SHORT")
+        : (signedQty > 0n ? "LONG" : "SHORT"),
       qty,
       entryPrice: qty > 0 ? costBasis / qty : 0,
       peakQty: fromScaledQty(peakQty),
@@ -395,14 +393,16 @@
       const afterFlat = fills.filter((fill) => num(fill.orderUpdateTime, 0) > anchor);
       if (!afterFlat.length) continue;
       const replayed = replayFills(key, afterFlat, { allowFlip: oneWay });
-      if (!replayed || replayed.flat) {
-        // A hedge bucket that closed more than it ever opened is proof the
-        // opening fills are out of reach, not proof the trader is flat. The
-        // position-history fallback below still gets its chance at it.
-        continue;
-      }
+      if (!replayed) continue;
 
       const openRow = openRows.get(`${symbol}|${replayed.side}`) || null;
+      // Netting can land on zero for two very different reasons: the trader
+      // really closed out, or the opening fills are out of reach and the closes
+      // ate the whole visible book. Only the exchange still listing the position
+      // as open distinguishes them, and only its aggregates can then size it —
+      // so a zero with no open row is a genuine flat and drops out here.
+      if (replayed.qty === 0 && !openRow) continue;
+      if (replayed.qty === 0 && !replayed.entryPrice) replayed.entryPrice = num(openRow.avgCost, 0);
       const leverage = leverageFor(symbol, replayed.side, openRow, positionHistory);
 
       const coverage = coverageOf({
@@ -417,6 +417,48 @@
 
       const reconciliation = reconcileAgainstPositionRow(replayed, openRow);
       const trustNetting = fillsReachFlatPoint && !(replayed.unmatchedCloseQty > 0);
+
+      // The exchange's peak can size a book the fills cannot — but only when the
+      // fills already span the position's whole life, so that the gap between
+      // its peak and theirs is genuinely omitted rows.
+      //
+      // Measured live on portfolio 5108371059752839168: its SKHYNIXUSDT short
+      // book opened after the order history begins yet shows 669 opened against
+      // 685.06 closed, impossible on its own, while the exchange reports a peak
+      // of 395 against the fills' 328.94. The 66.06 of opening volume that peak
+      // proves existed resolves the book to 50 still open.
+      //
+      // Its ETHUSDT long book looks similar and must NOT be treated the same
+      // way: that position opened three days BEFORE the order history does, so
+      // the size held at the window's edge is unknown and the same arithmetic
+      // yields only an upper bound (0 < size <= 50). Sizing it from the
+      // exchange's own peak-minus-closed instead understates a scale-back-in,
+      // which is why it lands on "estimated" rather than a repaired number.
+      const reconciledQty = replayed.qty + reconciliation.correction;
+      if (fillsReachFlatPoint && reconciliation.correction > 0 && reconciledQty > 0) {
+        positions.push(buildPosition({
+          symbol,
+          side: replayed.side,
+          replayed: {
+          ...replayed,
+          // Both terms come from decimal quantities summed as doubles; round back
+          // to the exchange's 8-decimal precision so a repaired size reads as
+          // "50" rather than "50.00000000000006".
+          qty: Math.round(reconciledQty * 1e8) / 1e8,
+          peakQty: reconciliation.exchangePeakQty
+        },
+          openRow,
+          leverage,
+          confidence: "reconciled",
+          qtySource: "exchangePeakReconciled",
+          reconciliation,
+          coverage,
+          oneWay
+        }));
+        seen.add(`${symbol}|${replayed.side}`);
+        continue;
+      }
+      if (replayed.qty === 0) continue;
 
       if (!trustNetting && openRow) {
         // The exchange's own aggregates outrank fills that cannot see the whole
@@ -440,21 +482,14 @@
         }
       }
 
-      if (reconciliation.correction && trustNetting) {
-        replayed.qty += reconciliation.correction;
-        replayed.peakQty = Math.max(replayed.peakQty, reconciliation.exchangePeakQty);
-      }
-
       positions.push(buildPosition({
         symbol,
         side: replayed.side,
         replayed,
         openRow,
         leverage,
-        confidence: !trustNetting
-          ? "partialFills"
-          : (reconciliation.correction ? "reconciled" : "exact"),
-        qtySource: (trustNetting && reconciliation.correction) ? "orderNettingReconciled" : "orderNetting",
+        confidence: trustNetting ? "exact" : "partialFills",
+        qtySource: "orderNetting",
         reconciliation,
         coverage,
         oneWay
