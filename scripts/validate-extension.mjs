@@ -54,6 +54,16 @@ for (const host of manifest.host_permissions) {
     fail(`unexpected host permission ${host}`);
   }
 }
+// A chrome.* API used without its permission fails silently at runtime — the
+// call simply does nothing and the feature that depends on it dies quietly.
+// Anything the extension actually calls must be declared here.
+const declaredPermissions = new Set(manifest.permissions || []);
+if (!declaredPermissions.has("storage")) {
+  fail("src/background.js calls chrome.storage; the manifest must declare the storage permission");
+}
+for (const permission of declaredPermissions) {
+  if (!["storage"].includes(permission)) fail(`unexpected permission ${permission}`);
+}
 
 const localeMessages = new Map();
 for (const locale of supportedLocales) {
