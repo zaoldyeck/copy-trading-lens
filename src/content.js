@@ -302,24 +302,29 @@
     if (!context) {
       currentKey = "";
       clearRoot();
+      window.CopyTradingLensPositionsPanel?.unmount();
       return;
     }
     const key = `${context.platform}:${context.id}:${location.href}`;
     if (!force && currentKey === key && root) return;
     currentKey = key;
-    if (collapsed) {
-      renderLauncher(context);
-      return;
-    }
-    renderLoading(context);
+    // The in-page positions panel needs the same payload as the overlay, so the
+    // fetch happens even when the overlay is collapsed — a lead trader's full
+    // history is paginated over dozens of requests and must be paid for once,
+    // not once per consumer.
+    const wasCollapsed = collapsed;
+    if (wasCollapsed) renderLauncher(context);
+    else renderLoading(context);
     try {
       const raw = await window.CopyTradingLensProviders.fetchLeadData(context);
       const analysis = context.platform === "Binance"
         ? window.CopyTradingLensAnalysis.analyzeBinance(raw)
         : window.CopyTradingLensAnalysis.analyzeOkx(raw);
-      renderAnalysis(context, raw, analysis);
+      if (!collapsed) renderAnalysis(context, raw, analysis);
+      window.CopyTradingLensPositionsPanel?.mount(context, raw);
     } catch (error) {
-      renderError(context, error);
+      window.CopyTradingLensPositionsPanel?.unmount();
+      if (!collapsed) renderError(context, error);
     }
   }
 

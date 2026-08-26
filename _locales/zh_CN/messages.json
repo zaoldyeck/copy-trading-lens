@@ -520,5 +520,230 @@
   },
   "badgePrivate": {
     "message": "私有"
+  },
+  "posEyebrow": {
+    "message": "Copy Trading Lens · 仓位还原"
+  },
+  "posTitle": {
+    "message": "{0} 当前的真实仓位"
+  },
+  "posThisTrader": {
+    "message": "这位带单员"
+  },
+  "posSubtitle": {
+    "message": "带单员把仓位设为私密，但成交记录仍然公开。以下持仓由每一笔成交回推而来，无需跟单。"
+  },
+  "posMarkStamp": {
+    "message": "标记价格时间：{0}"
+  },
+  "posRefresh": {
+    "message": "更新价格"
+  },
+  "posRestoreOriginal": {
+    "message": "还原原始画面"
+  },
+  "posEmpty": {
+    "message": "依成交记录回推，这位带单员当前空仓（没有未平仓的部位）。"
+  },
+  "posDisclaimer": {
+    "message": "本内容为第三方推算结果，仅供研究参考，不构成投资建议，也非 Binance 官方数据。"
+  },
+  "posLong": {
+    "message": "多"
+  },
+  "posShort": {
+    "message": "空"
+  },
+  "posLeverageUnknown": {
+    "message": "杠杆未知"
+  },
+  "posLeverageInferred": {
+    "message": "杠杆为推估"
+  },
+  "posLeverageInferredHint": {
+    "message": "这笔持仓本身没有披露杠杆，这里沿用同一币种最近一次已平仓部位的杠杆。"
+  },
+  "posLeverageUnknownHint": {
+    "message": "这笔持仓和该币种的历史记录都没有杠杆数据，因此保证金与收益率无法计算。"
+  },
+  "posLeverageReadHint": {
+    "message": "杠杆直接读自交易所这笔持仓的记录。"
+  },
+  "posColQty": {
+    "message": "持仓量"
+  },
+  "posColNotional": {
+    "message": "名义价值"
+  },
+  "posColEntry": {
+    "message": "开仓均价"
+  },
+  "posColMark": {
+    "message": "标记价格"
+  },
+  "posColUnrealized": {
+    "message": "未实现盈亏"
+  },
+  "posColRoi": {
+    "message": "收益率（本金）"
+  },
+  "posColAge": {
+    "message": "已持有"
+  },
+  "posConfidenceExact": {
+    "message": "逐笔还原"
+  },
+  "posConfidenceExactHint": {
+    "message": "成交记录完整覆盖这个部位从空仓到现在的每一笔进出，数量与均价是算出来的，不是估的。"
+  },
+  "posConfidencePartial": {
+    "message": "成交不齐全"
+  },
+  "posConfidencePartialHint": {
+    "message": "交易所只返回得到部分成交记录，开仓那几笔可能不在里面，实际部位可能比这里显示的更大。"
+  },
+  "posConfidenceEstimated": {
+    "message": "推估值"
+  },
+  "posConfidenceEstimatedHint": {
+    "message": "这个部位没有可用的成交记录，数量由「历史最大持仓 − 已平仓量」推得；若带单员平仓后又加回来，这个数字会偏小。"
+  },
+  "posSummaryOpenCount": {
+    "message": "持仓数量"
+  },
+  "posSummaryGrossNotional": {
+    "message": "总名义价值"
+  },
+  "posSummaryGrossLeverage": {
+    "message": "相当于保证金的 {0}"
+  },
+  "posSummaryUnrealized": {
+    "message": "未实现盈亏"
+  },
+  "posSummaryMarginUsed": {
+    "message": "已投入本金"
+  },
+  "posSummaryDirection": {
+    "message": "多空分布"
+  },
+  "posSummaryLongShort": {
+    "message": "多 {0} / 空 {1}"
+  },
+  "posSummaryNetLong": {
+    "message": "净多单 {0}"
+  },
+  "posSummaryNetShort": {
+    "message": "净空单 {0}"
+  },
+  "posSummaryConcentration": {
+    "message": "最大单一持仓占比"
+  },
+  "posSummaryConcentrationHint": {
+    "message": "占总名义价值的比例"
+  },
+  "posFactOpened": {
+    "message": "开仓时间"
+  },
+  "posFactLastFill": {
+    "message": "最后一笔成交"
+  },
+  "posFactPriceMove": {
+    "message": "价格变动"
+  },
+  "posFactInitialMargin": {
+    "message": "投入本金"
+  },
+  "posFactPeakQty": {
+    "message": "历史最大持仓"
+  },
+  "posFactClosedSoFar": {
+    "message": "已平仓"
+  },
+  "posFactClosedValue": {
+    "message": "{0}（占最大持仓 {1}）"
+  },
+  "posFactNotClosed": {
+    "message": "尚未平仓任何一部分"
+  },
+  "posFactRealized": {
+    "message": "本仓已实现盈亏"
+  },
+  "posFactAdds": {
+    "message": "加仓／减仓次数"
+  },
+  "posFactAddsValue": {
+    "message": "加仓 {0} 次、减仓 {1} 次"
+  },
+  "posFactMarginMode": {
+    "message": "保证金模式"
+  },
+  "posFactExchangeStatus": {
+    "message": "交易所标示状态"
+  },
+  "posFactNotionalShare": {
+    "message": "名义价值／保证金余额"
+  },
+  "posLadderTitle": {
+    "message": "完整进出明细"
+  },
+  "posLadderTime": {
+    "message": "时间"
+  },
+  "posLadderAction": {
+    "message": "动作"
+  },
+  "posLadderQty": {
+    "message": "数量"
+  },
+  "posLadderPrice": {
+    "message": "成交价"
+  },
+  "posLadderPnl": {
+    "message": "本笔已实现"
+  },
+  "posLadderOpenFill": {
+    "message": "开仓／加仓"
+  },
+  "posLadderCloseFill": {
+    "message": "平仓／减仓"
+  },
+  "posNoLadder": {
+    "message": "这个部位没有可用的逐笔成交记录。"
+  },
+  "posNoteOrderDepthLimited": {
+    "message": "交易所只给到 {0} 笔成交记录（声称共 {1} 笔），较早的开仓可能看不到。"
+  },
+  "posNotePositionDepthLimited": {
+    "message": "交易所的部位历史没有返回完整，部分旧部位可能缺漏。"
+  },
+  "posNoteEstimatedRows": {
+    "message": "有 {0} 个部位缺少可用成交记录，数量为推估值。"
+  },
+  "posNoteMissingMarks": {
+    "message": "以下币种取不到标记价格，未实现盈亏留空：{0}"
+  },
+  "posNoteNotDerivable": {
+    "message": "无法推算的项目：强制平仓价、资金费用累计、逐仓保证金分配（这些交易所完全不公开）。"
+  },
+  "posAgeMinutes": {
+    "message": "{0} 分钟"
+  },
+  "posAgeHours": {
+    "message": "{0} 小时"
+  },
+  "posAgeDays": {
+    "message": "{0} 天"
+  },
+  "posColPriceMove": {
+    "message": "价格变动"
+  },
+  "posConfidenceReconciled": {
+    "message": "已校正"
+  },
+  "posConfidenceReconciledHint": {
+    "message": "交易所的成交记录少给了 {0} 单位的开仓，这里用交易所自己的持仓汇总（历史最大持仓、已平仓量）补回。补回的量是算出来的，但少给的成交本身看不到。"
+  },
+  "posNoteReconciledRows": {
+    "message": "有 {0} 个部位的成交记录不齐，数量已用交易所的持仓汇总校正。"
   }
 }

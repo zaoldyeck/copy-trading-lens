@@ -35,10 +35,13 @@
         "src/i18n.js",
         "src/analysis.js",
         "src/providers.js",
+        "src/positions.js",
+        "src/positions-panel.js",
         "src/content.js"
       ],
       "css": [
-        "src/content.css"
+        "src/content.css",
+        "src/positions-panel.css"
       ],
       "run_at": "document_idle"
     }

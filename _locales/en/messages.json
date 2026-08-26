@@ -520,5 +520,230 @@
   },
   "badgePrivate": {
     "message": "Private"
+  },
+  "posEyebrow": {
+    "message": "Copy Trading Lens · Positions rebuilt"
+  },
+  "posTitle": {
+    "message": "What {0} is actually holding right now"
+  },
+  "posThisTrader": {
+    "message": "this lead trader"
+  },
+  "posSubtitle": {
+    "message": "This trader hid their positions, but every fill they made is still public. The book below was rebuilt from those fills — no copying required."
+  },
+  "posMarkStamp": {
+    "message": "Mark price as of {0}"
+  },
+  "posRefresh": {
+    "message": "Refresh prices"
+  },
+  "posRestoreOriginal": {
+    "message": "Show original notice"
+  },
+  "posEmpty": {
+    "message": "Rebuilt from their fills, this trader is currently flat — nothing open."
+  },
+  "posDisclaimer": {
+    "message": "Third-party reconstruction for research only. Not investment advice and not official Binance data."
+  },
+  "posLong": {
+    "message": "Long"
+  },
+  "posShort": {
+    "message": "Short"
+  },
+  "posLeverageUnknown": {
+    "message": "leverage unknown"
+  },
+  "posLeverageInferred": {
+    "message": "leverage inferred"
+  },
+  "posLeverageInferredHint": {
+    "message": "This position does not disclose its leverage, so the leverage from this symbol's most recent closed position is used instead."
+  },
+  "posLeverageUnknownHint": {
+    "message": "Neither this position nor the symbol's history carries a leverage, so margin and ROI cannot be computed."
+  },
+  "posLeverageReadHint": {
+    "message": "Leverage read straight from the exchange's record for this position."
+  },
+  "posColQty": {
+    "message": "Size"
+  },
+  "posColNotional": {
+    "message": "Notional"
+  },
+  "posColEntry": {
+    "message": "Avg entry"
+  },
+  "posColMark": {
+    "message": "Mark"
+  },
+  "posColUnrealized": {
+    "message": "Unrealized"
+  },
+  "posColRoi": {
+    "message": "ROI (on margin)"
+  },
+  "posColAge": {
+    "message": "Held for"
+  },
+  "posConfidenceExact": {
+    "message": "Fill-by-fill"
+  },
+  "posConfidenceExactHint": {
+    "message": "The fill history covers this position from flat to now, so the size and average entry are computed, not estimated."
+  },
+  "posConfidencePartial": {
+    "message": "Fills incomplete"
+  },
+  "posConfidencePartialHint": {
+    "message": "The exchange only returned part of the fill history, so the opening fills may be missing and the real position may be larger than shown."
+  },
+  "posConfidenceEstimated": {
+    "message": "Estimated"
+  },
+  "posConfidenceEstimatedHint": {
+    "message": "No usable fills for this position, so the size comes from peak size minus closed volume. If the trader scaled back in after a partial close, this understates it."
+  },
+  "posSummaryOpenCount": {
+    "message": "Open positions"
+  },
+  "posSummaryGrossNotional": {
+    "message": "Gross notional"
+  },
+  "posSummaryGrossLeverage": {
+    "message": "{0} of margin balance"
+  },
+  "posSummaryUnrealized": {
+    "message": "Unrealized PnL"
+  },
+  "posSummaryMarginUsed": {
+    "message": "Margin committed"
+  },
+  "posSummaryDirection": {
+    "message": "Long / short split"
+  },
+  "posSummaryLongShort": {
+    "message": "Long {0} / Short {1}"
+  },
+  "posSummaryNetLong": {
+    "message": "Net long {0}"
+  },
+  "posSummaryNetShort": {
+    "message": "Net short {0}"
+  },
+  "posSummaryConcentration": {
+    "message": "Largest single position"
+  },
+  "posSummaryConcentrationHint": {
+    "message": "Share of gross notional"
+  },
+  "posFactOpened": {
+    "message": "Opened"
+  },
+  "posFactLastFill": {
+    "message": "Last fill"
+  },
+  "posFactPriceMove": {
+    "message": "Price move"
+  },
+  "posFactInitialMargin": {
+    "message": "Margin committed"
+  },
+  "posFactPeakQty": {
+    "message": "Peak size"
+  },
+  "posFactClosedSoFar": {
+    "message": "Closed so far"
+  },
+  "posFactClosedValue": {
+    "message": "{0} ({1} of peak)"
+  },
+  "posFactNotClosed": {
+    "message": "Nothing closed yet"
+  },
+  "posFactRealized": {
+    "message": "Realized on this position"
+  },
+  "posFactAdds": {
+    "message": "Adds / reduces"
+  },
+  "posFactAddsValue": {
+    "message": "{0} adds, {1} reduces"
+  },
+  "posFactMarginMode": {
+    "message": "Margin mode"
+  },
+  "posFactExchangeStatus": {
+    "message": "Exchange status"
+  },
+  "posFactNotionalShare": {
+    "message": "Notional / margin balance"
+  },
+  "posLadderTitle": {
+    "message": "Every fill in this position"
+  },
+  "posLadderTime": {
+    "message": "Time"
+  },
+  "posLadderAction": {
+    "message": "Action"
+  },
+  "posLadderQty": {
+    "message": "Size"
+  },
+  "posLadderPrice": {
+    "message": "Price"
+  },
+  "posLadderPnl": {
+    "message": "Realized"
+  },
+  "posLadderOpenFill": {
+    "message": "Open / add"
+  },
+  "posLadderCloseFill": {
+    "message": "Close / reduce"
+  },
+  "posNoLadder": {
+    "message": "No fill-level history is available for this position."
+  },
+  "posNoteOrderDepthLimited": {
+    "message": "The exchange returned {0} of a claimed {1} fills, so older entries may be invisible."
+  },
+  "posNotePositionDepthLimited": {
+    "message": "The exchange's position history came back incomplete, so some older positions may be missing."
+  },
+  "posNoteEstimatedRows": {
+    "message": "{0} position(s) have no usable fills and their size is an estimate."
+  },
+  "posNoteMissingMarks": {
+    "message": "No mark price available for: {0} — their unrealized PnL is left blank."
+  },
+  "posNoteNotDerivable": {
+    "message": "Not derivable from public data: liquidation price, accrued funding, isolated-margin allocation."
+  },
+  "posAgeMinutes": {
+    "message": "{0} min"
+  },
+  "posAgeHours": {
+    "message": "{0} h"
+  },
+  "posAgeDays": {
+    "message": "{0} d"
+  },
+  "posColPriceMove": {
+    "message": "Price move"
+  },
+  "posConfidenceReconciled": {
+    "message": "Reconciled"
+  },
+  "posConfidenceReconciledHint": {
+    "message": "The exchange left {0} units of opening fills out of its own fill history. The gap was closed using the exchange's position aggregates (peak size and closed volume). The added size is computed; the missing fills themselves are not visible."
+  },
+  "posNoteReconciledRows": {
+    "message": "{0} position(s) had incomplete fills and their size was corrected against the exchange's position aggregates."
   }
 }

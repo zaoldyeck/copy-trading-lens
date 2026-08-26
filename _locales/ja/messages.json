@@ -520,5 +520,230 @@
   },
   "badgePrivate": {
     "message": "非公開"
+  },
+  "posEyebrow": {
+    "message": "Copy Trading Lens · ポジション復元"
+  },
+  "posTitle": {
+    "message": "{0} が今まさに持っているポジション"
+  },
+  "posThisTrader": {
+    "message": "このリードトレーダー"
+  },
+  "posSubtitle": {
+    "message": "このトレーダーはポジションを非公開にしていますが、約定履歴は公開されたままです。以下はその約定から組み立て直した建玉で、コピーする必要はありません。"
+  },
+  "posMarkStamp": {
+    "message": "マーク価格の時刻：{0}"
+  },
+  "posRefresh": {
+    "message": "価格を更新"
+  },
+  "posRestoreOriginal": {
+    "message": "元の表示に戻す"
+  },
+  "posEmpty": {
+    "message": "約定履歴から復元した結果、このトレーダーは現在ノーポジションです。"
+  },
+  "posDisclaimer": {
+    "message": "第三者による推計であり、調査目的のみに使用してください。投資助言ではなく、Binance 公式データでもありません。"
+  },
+  "posLong": {
+    "message": "ロング"
+  },
+  "posShort": {
+    "message": "ショート"
+  },
+  "posLeverageUnknown": {
+    "message": "レバレッジ不明"
+  },
+  "posLeverageInferred": {
+    "message": "レバレッジは推定"
+  },
+  "posLeverageInferredHint": {
+    "message": "この建玉自体にレバレッジの開示がないため、同じ銘柄の直近の決済済みポジションのレバレッジを流用しています。"
+  },
+  "posLeverageUnknownHint": {
+    "message": "この建玉にも当該銘柄の履歴にもレバレッジがないため、証拠金と利益率は算出できません。"
+  },
+  "posLeverageReadHint": {
+    "message": "レバレッジは取引所のこの建玉の記録から直接読み取っています。"
+  },
+  "posColQty": {
+    "message": "数量"
+  },
+  "posColNotional": {
+    "message": "想定元本"
+  },
+  "posColEntry": {
+    "message": "平均建値"
+  },
+  "posColMark": {
+    "message": "マーク価格"
+  },
+  "posColUnrealized": {
+    "message": "含み損益"
+  },
+  "posColRoi": {
+    "message": "利益率（証拠金比）"
+  },
+  "posColAge": {
+    "message": "保有期間"
+  },
+  "posConfidenceExact": {
+    "message": "約定単位で復元"
+  },
+  "posConfidenceExactHint": {
+    "message": "ノーポジションから現在までの全約定が揃っているため、数量と平均建値は推定ではなく計算値です。"
+  },
+  "posConfidencePartial": {
+    "message": "約定が不完全"
+  },
+  "posConfidencePartialHint": {
+    "message": "取引所が約定履歴の一部しか返さなかったため、建玉を作った約定が欠けている可能性があり、実際のポジションはこれより大きい場合があります。"
+  },
+  "posConfidenceEstimated": {
+    "message": "推定値"
+  },
+  "posConfidenceEstimatedHint": {
+    "message": "この建玉には利用できる約定がないため、数量は「最大建玉 − 決済済み数量」から推定しています。部分決済後に買い増していた場合は過小評価になります。"
+  },
+  "posSummaryOpenCount": {
+    "message": "保有銘柄数"
+  },
+  "posSummaryGrossNotional": {
+    "message": "想定元本合計"
+  },
+  "posSummaryGrossLeverage": {
+    "message": "証拠金残高の {0}"
+  },
+  "posSummaryUnrealized": {
+    "message": "含み損益"
+  },
+  "posSummaryMarginUsed": {
+    "message": "投入証拠金"
+  },
+  "posSummaryDirection": {
+    "message": "ロング／ショート構成"
+  },
+  "posSummaryLongShort": {
+    "message": "ロング {0} ／ ショート {1}"
+  },
+  "posSummaryNetLong": {
+    "message": "ネットロング {0}"
+  },
+  "posSummaryNetShort": {
+    "message": "ネットショート {0}"
+  },
+  "posSummaryConcentration": {
+    "message": "最大銘柄の比率"
+  },
+  "posSummaryConcentrationHint": {
+    "message": "想定元本合計に占める割合"
+  },
+  "posFactOpened": {
+    "message": "建玉開始"
+  },
+  "posFactLastFill": {
+    "message": "最終約定"
+  },
+  "posFactPriceMove": {
+    "message": "価格変動"
+  },
+  "posFactInitialMargin": {
+    "message": "投入証拠金"
+  },
+  "posFactPeakQty": {
+    "message": "最大建玉"
+  },
+  "posFactClosedSoFar": {
+    "message": "決済済み"
+  },
+  "posFactClosedValue": {
+    "message": "{0}（最大建玉の {1}）"
+  },
+  "posFactNotClosed": {
+    "message": "まだ一度も決済していません"
+  },
+  "posFactRealized": {
+    "message": "この建玉の実現損益"
+  },
+  "posFactAdds": {
+    "message": "買い増し／一部決済の回数"
+  },
+  "posFactAddsValue": {
+    "message": "買い増し {0} 回、一部決済 {1} 回"
+  },
+  "posFactMarginMode": {
+    "message": "証拠金モード"
+  },
+  "posFactExchangeStatus": {
+    "message": "取引所のステータス表示"
+  },
+  "posFactNotionalShare": {
+    "message": "想定元本／証拠金残高"
+  },
+  "posLadderTitle": {
+    "message": "この建玉の全約定"
+  },
+  "posLadderTime": {
+    "message": "時刻"
+  },
+  "posLadderAction": {
+    "message": "区分"
+  },
+  "posLadderQty": {
+    "message": "数量"
+  },
+  "posLadderPrice": {
+    "message": "約定価格"
+  },
+  "posLadderPnl": {
+    "message": "実現損益"
+  },
+  "posLadderOpenFill": {
+    "message": "新規／買い増し"
+  },
+  "posLadderCloseFill": {
+    "message": "決済／一部決済"
+  },
+  "posNoLadder": {
+    "message": "この建玉には約定単位の履歴がありません。"
+  },
+  "posNoteOrderDepthLimited": {
+    "message": "取引所は全 {1} 件のうち {0} 件の約定しか返さなかったため、古い建玉が見えていない可能性があります。"
+  },
+  "posNotePositionDepthLimited": {
+    "message": "取引所のポジション履歴が不完全なため、古い建玉が欠けている可能性があります。"
+  },
+  "posNoteEstimatedRows": {
+    "message": "{0} 件の建玉は利用できる約定がなく、数量は推定値です。"
+  },
+  "posNoteMissingMarks": {
+    "message": "マーク価格を取得できなかった銘柄：{0}（含み損益は空欄）"
+  },
+  "posNoteNotDerivable": {
+    "message": "公開データからは分からない項目：強制決済価格、累計ファンディング、分離証拠金の配分。"
+  },
+  "posAgeMinutes": {
+    "message": "{0} 分"
+  },
+  "posAgeHours": {
+    "message": "{0} 時間"
+  },
+  "posAgeDays": {
+    "message": "{0} 日"
+  },
+  "posColPriceMove": {
+    "message": "価格変動"
+  },
+  "posConfidenceReconciled": {
+    "message": "補正済み"
+  },
+  "posConfidenceReconciledHint": {
+    "message": "取引所の約定履歴から新規建て {0} 単位が欠落していたため、取引所自身のポジション集計（最大建玉・決済済み数量）で補いました。補った数量は計算値で、欠落した約定そのものは見えません。"
+  },
+  "posNoteReconciledRows": {
+    "message": "{0} 件の建玉で約定履歴が不完全だったため、取引所のポジション集計で数量を補正しました。"
   }
 }

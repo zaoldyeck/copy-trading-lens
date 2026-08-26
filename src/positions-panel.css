@@ -1,0 +1,355 @@
+/* In-page panel that replaces Binance's "positions are private" empty state.
+   Every selector is prefixed `ctl-pos-` and every property is set explicitly,
+   because this markup lives inside the exchange's own stylesheet cascade —
+   anything left unset inherits whatever Binance happens to ship that week. */
+
+#ctl-positions-panel {
+  --ctl-pos-up: #2ebd85;
+  --ctl-pos-down: #f6465d;
+  --ctl-pos-accent: #f0b90b;
+  all: initial;
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  margin: 12px 0 20px;
+  padding: 18px 20px 16px;
+  border-radius: 12px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", Roboto, sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: left;
+}
+
+#ctl-positions-panel * {
+  box-sizing: border-box;
+}
+
+#ctl-positions-panel.is-dark {
+  background: #1e2026;
+  border: 1px solid #2b3139;
+  color: #eaecef;
+}
+
+#ctl-positions-panel.is-light {
+  background: #ffffff;
+  border: 1px solid #eaecef;
+  color: #1e2026;
+}
+
+#ctl-positions-panel.is-light .ctl-pos-row,
+#ctl-positions-panel.is-light .ctl-pos-summary-cell,
+#ctl-positions-panel.is-light .ctl-pos-row-body {
+  background: #fafafa;
+  border-color: #eaecef;
+}
+
+.ctl-pos-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.ctl-pos-eyebrow {
+  display: inline-block;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ctl-pos-accent);
+  margin-bottom: 2px;
+}
+
+#ctl-positions-panel h3 {
+  all: unset;
+  display: block;
+  font-size: 17px;
+  font-weight: 600;
+  margin: 0 0 2px;
+}
+
+#ctl-positions-panel h4 {
+  all: unset;
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.8;
+  margin: 14px 0 6px;
+}
+
+.ctl-pos-subtitle-note {
+  margin: 0;
+  font-size: 12px;
+  opacity: 0.65;
+}
+
+.ctl-pos-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ctl-pos-stamp {
+  font-size: 11px;
+  opacity: 0.6;
+}
+
+.ctl-pos-btn {
+  all: unset;
+  cursor: pointer;
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--ctl-pos-accent);
+  color: #1e2026;
+}
+
+.ctl-pos-btn.is-ghost {
+  background: transparent;
+  border: 1px solid currentColor;
+  color: inherit;
+  opacity: 0.7;
+}
+
+.ctl-pos-btn:hover {
+  opacity: 0.85;
+}
+
+.ctl-pos-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.ctl-pos-summary-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #23262f;
+  border: 1px solid #2b3139;
+}
+
+.ctl-pos-summary-label {
+  font-size: 11px;
+  opacity: 0.6;
+}
+
+.ctl-pos-summary-value {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.ctl-pos-summary-hint {
+  font-size: 11px;
+  opacity: 0.55;
+}
+
+.ctl-pos-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ctl-pos-row {
+  border-radius: 8px;
+  background: #23262f;
+  border: 1px solid #2b3139;
+  overflow: hidden;
+}
+
+.ctl-pos-row-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  padding: 10px 12px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.ctl-pos-row-head::-webkit-details-marker {
+  display: none;
+}
+
+.ctl-pos-row-head::before {
+  content: "▸";
+  font-size: 10px;
+  opacity: 0.5;
+}
+
+.ctl-pos-row[open] > .ctl-pos-row-head::before {
+  content: "▾";
+}
+
+.ctl-pos-symbol {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 190px;
+}
+
+.ctl-pos-symbol strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ctl-pos-symbol em {
+  font-style: normal;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.ctl-pos-symbol.is-long em {
+  background: rgba(46, 189, 133, 0.15);
+  color: var(--ctl-pos-up);
+}
+
+.ctl-pos-symbol.is-short em {
+  background: rgba(246, 70, 93, 0.15);
+  color: var(--ctl-pos-down);
+}
+
+.ctl-pos-leverage {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.ctl-pos-cell {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 76px;
+}
+
+.ctl-pos-cell small {
+  font-size: 10px;
+  opacity: 0.5;
+}
+
+.ctl-pos-cell span {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ctl-pos-cell.is-up span,
+.ctl-pos-summary-cell.is-up .ctl-pos-summary-value {
+  color: var(--ctl-pos-up);
+}
+
+.ctl-pos-cell.is-down span,
+.ctl-pos-summary-cell.is-down .ctl-pos-summary-value {
+  color: var(--ctl-pos-down);
+}
+
+.ctl-pos-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.ctl-pos-badge.is-exact {
+  background: rgba(46, 189, 133, 0.15);
+  color: var(--ctl-pos-up);
+}
+
+.ctl-pos-badge.is-partial,
+.ctl-pos-badge.is-inferred {
+  background: rgba(240, 185, 11, 0.15);
+  color: var(--ctl-pos-accent);
+}
+
+.ctl-pos-badge.is-estimated {
+  background: rgba(240, 185, 11, 0.15);
+  color: var(--ctl-pos-accent);
+}
+
+.ctl-pos-row-body {
+  padding: 4px 14px 14px;
+  border-top: 1px solid #2b3139;
+}
+
+.ctl-pos-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 6px 14px;
+  margin-top: 10px;
+}
+
+.ctl-pos-fact {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  padding: 3px 0;
+  border-bottom: 1px dashed rgba(127, 127, 127, 0.2);
+}
+
+.ctl-pos-fact span {
+  opacity: 0.6;
+}
+
+.ctl-pos-fact strong {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.ctl-pos-ladder {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.ctl-pos-ladder th,
+.ctl-pos-ladder td {
+  text-align: left;
+  padding: 4px 8px;
+  border-bottom: 1px solid rgba(127, 127, 127, 0.15);
+  font-variant-numeric: tabular-nums;
+}
+
+.ctl-pos-ladder th {
+  font-weight: 500;
+  opacity: 0.55;
+  font-size: 11px;
+}
+
+.ctl-pos-ladder .is-up {
+  color: var(--ctl-pos-up);
+}
+
+.ctl-pos-ladder .is-down {
+  color: var(--ctl-pos-down);
+}
+
+.ctl-pos-notes {
+  margin: 14px 0 0;
+  padding-left: 18px;
+  font-size: 11px;
+  opacity: 0.65;
+}
+
+.ctl-pos-notes li {
+  margin: 2px 0;
+}
+
+.ctl-pos-empty,
+.ctl-pos-muted {
+  font-size: 12px;
+  opacity: 0.6;
+  margin: 8px 0;
+}
+
+.ctl-pos-disclaimer {
+  margin: 10px 0 0;
+  font-size: 10px;
+  opacity: 0.45;
+}

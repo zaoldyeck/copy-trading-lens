@@ -138,6 +138,47 @@
   // accepting the depth cap and reporting the fetch as incomplete instead of hanging.
   const MAX_PREMATURE_RETRIES = 3;
 
+  function rowIdentity(row) {
+    return JSON.stringify(row);
+  }
+
+  // These endpoints are offset-paginated over a NEWEST-FIRST list that the trader
+  // keeps writing to while we read it. Every fill that lands mid-pagination pushes
+  // the whole list down one index, so the next fixed offset window starts one row
+  // earlier than it should and re-serves rows we already hold. Blindly appending
+  // therefore inflates the row count with duplicates, the `rows.length >= total`
+  // stop condition fires early, and the OLDEST rows are silently never fetched.
+  //
+  // Measured 2026-08-26 on portfolio 5156305122364875520: 1796 rows fetched, 2 of
+  // them duplicates, and the position rebuilt from those fills came out 40 units
+  // short of what the exchange reported as open. The shift only ever duplicates —
+  // it cannot invent or reorder rows — so trimming the overlap between the tail we
+  // already hold and the head of each new page restores the exact sequence.
+  //
+  // Overlap is matched by position, not by a global key set: two genuinely
+  // distinct fills can be byte-identical (same millisecond, size and price on a
+  // grid strategy), and a global de-duplication would delete one of them.
+  function overlapLength(tailRows, headRows) {
+    // Identities are computed once per row rather than inside the comparison
+    // loop: a naive version re-serializes the same rows O(pageSize) times, which
+    // on a 61-page order history is hundreds of thousands of redundant
+    // JSON.stringify calls on the extension's critical path.
+    const tail = tailRows.map(rowIdentity);
+    const head = headRows.map(rowIdentity);
+    const maxOverlap = Math.min(tail.length, head.length);
+    for (let length = maxOverlap; length > 0; length -= 1) {
+      let matches = true;
+      for (let offset = 0; offset < length; offset += 1) {
+        if (tail[tail.length - length + offset] !== head[offset]) {
+          matches = false;
+          break;
+        }
+      }
+      if (matches) return length;
+    }
+    return 0;
+  }
+
   async function fetchBinancePagedDetailed(path, portfolioId) {
     const rows = [];
     let total = null;
@@ -146,6 +187,7 @@
     let lastRetryError = "";
     let prematureRetries = 0;
     let depthLimited = false;
+    let duplicateRows = 0;
     for (let pageNumber = 1; ; pageNumber += 1) {
       const page = await fetchBinancePagedPage(path, portfolioId, pageNumber, PAGE_SIZE);
       const response = page.response;
@@ -176,9 +218,20 @@
       prematureRetries = 0;
 
       pages = pageNumber;
-      rows.push(...pageRows);
+      const overlap = overlapLength(rows.slice(-PAGE_SIZE), pageRows);
+      duplicateRows += overlap;
+      const freshRows = overlap ? pageRows.slice(overlap) : pageRows;
+      rows.push(...freshRows);
+      // An entirely overlapping page means the list shifted by a full page or the
+      // endpoint is repeating itself; either way there is nothing further to read.
+      if (pageRows.length && !freshRows.length) break;
+      // A short page that the premature check above did NOT flag is the real end
+      // of the list. This has to end the loop regardless of `total`, because the
+      // rows prepended during the read inflate `total` beyond anything this pass
+      // can ever collect — `rows.length >= total` alone would spin forever on any
+      // account that traded while we were reading it.
+      if (pageRows.length < PAGE_SIZE) break;
       if (Number.isFinite(total) && rows.length >= total) break;
-      if (!Number.isFinite(total) && pageRows.length < PAGE_SIZE) break;
       await sleep(120);
     }
     return {
@@ -187,6 +240,10 @@
       fetched: rows.length,
       pages,
       complete: !depthLimited,
+      // Non-zero means the trader wrote to this history while we were reading it.
+      // The overlap trim already repaired the sequence; this is kept so callers can
+      // see that the read raced a live account rather than sat on a static list.
+      duplicateRows,
       retryCount,
       lastRetryError
     };
@@ -313,6 +370,7 @@
           fetched: positionData.fetched,
           pages: positionData.pages,
           complete: positionData.complete,
+          duplicateRows: positionData.duplicateRows,
           retryCount: positionData.retryCount,
           lastRetryError: positionData.lastRetryError
         } : { total: 0, fetched: 0, pages: 0, complete: false, error: positionHistory.error },
@@ -321,6 +379,7 @@
           fetched: orderData.fetched,
           pages: orderData.pages,
           complete: orderData.complete,
+          duplicateRows: orderData.duplicateRows,
           retryCount: orderData.retryCount,
           lastRetryError: orderData.lastRetryError
         } : { total: 0, fetched: 0, pages: 0, complete: false, error: orderHistory.error },
@@ -329,12 +388,62 @@
           fetched: transferData.fetched,
           pages: transferData.pages,
           complete: transferData.complete,
+          duplicateRows: transferData.duplicateRows,
           retryCount: transferData.retryCount,
           lastRetryError: transferData.lastRetryError
         } : { total: 0, fetched: 0, pages: 0, complete: false, error: transferHistory.error }
       },
       endpointResults
     };
+  }
+
+  // Binance values open futures positions on MARK price (fapi premiumIndex),
+  // not on last trade price: unrealized PnL, ROI and liquidation all key off
+  // the mark. Pricing a reconstructed position on last-traded price would put
+  // this panel on a different caliber than the number the exchange itself
+  // shows the trader. www.binance.com proxies /fapi/*, so this stays inside
+  // the host permissions the extension already holds.
+  //
+  // /fapi/v1/premiumIndex costs request weight 1 when a symbol is given and 10
+  // when it is not (and then returns every symbol). So the cheapest call shape
+  // is per-symbol up to 10 symbols and one all-symbols call beyond that — the
+  // crossover is the documented weight, not a tuning choice.
+  const PREMIUM_INDEX_ALL_WEIGHT = 10;
+
+  async function fetchBinanceMarkPrices(symbols) {
+    const wanted = Array.from(new Set(asArray(symbols).map((value) => String(value)).filter(Boolean)));
+    if (!wanted.length) return { marks: {}, missing: [], fetchedAtMs: Date.now(), source: "none" };
+
+    const marks = {};
+    let source = "";
+    if (wanted.length > PREMIUM_INDEX_ALL_WEIGHT) {
+      const all = await safeFetch("mark:all", () =>
+        fetchJson(`${BINANCE_BASE}/fapi/v1/premiumIndex`, { method: "GET" })
+      );
+      source = "premiumIndex:all";
+      if (all.ok) {
+        const wantedSet = new Set(wanted);
+        for (const row of asArray(all.data)) {
+          if (!wantedSet.has(String(row.symbol))) continue;
+          const price = Number(row.markPrice);
+          if (Number.isFinite(price) && price > 0) marks[String(row.symbol)] = price;
+        }
+      }
+    } else {
+      source = "premiumIndex:perSymbol";
+      const results = await Promise.all(wanted.map((symbol) =>
+        safeFetch(`mark:${symbol}`, () =>
+          fetchJson(`${BINANCE_BASE}/fapi/v1/premiumIndex?symbol=${encodeURIComponent(symbol)}`, { method: "GET" })
+        )
+      ));
+      results.forEach((result, index) => {
+        const price = Number(result.ok ? result.data?.markPrice : NaN);
+        if (Number.isFinite(price) && price > 0) marks[wanted[index]] = price;
+      });
+    }
+
+    const missing = wanted.filter((symbol) => !(symbol in marks));
+    return { marks, missing, fetchedAtMs: Date.now(), source };
   }
 
   async function okxGet(pathWithQuery) {
@@ -405,6 +514,7 @@
   global.CopyTradingLensProviders = {
     detectLeadPage,
     fetchLeadData,
-    fetchBinanceListPage
+    fetchBinanceListPage,
+    fetchBinanceMarkPrices
   };
 })(window);

@@ -520,5 +520,230 @@
   },
   "badgePrivate": {
     "message": "私人"
+  },
+  "posEyebrow": {
+    "message": "Copy Trading Lens · 倉位還原"
+  },
+  "posTitle": {
+    "message": "{0} 目前的真實倉位"
+  },
+  "posThisTrader": {
+    "message": "這位帶單員"
+  },
+  "posSubtitle": {
+    "message": "帶單員把倉位設為私人，但成交紀錄仍是公開的。以下持倉由每一筆成交回推而來，不需要跟單。"
+  },
+  "posMarkStamp": {
+    "message": "標記價格時間：{0}"
+  },
+  "posRefresh": {
+    "message": "更新價格"
+  },
+  "posRestoreOriginal": {
+    "message": "還原原始畫面"
+  },
+  "posEmpty": {
+    "message": "依成交紀錄回推，這位帶單員目前空手（沒有未平倉的部位）。"
+  },
+  "posDisclaimer": {
+    "message": "本內容為第三方推算結果，僅供研究參考，不構成投資建議，也非 Binance 官方資料。"
+  },
+  "posLong": {
+    "message": "多"
+  },
+  "posShort": {
+    "message": "空"
+  },
+  "posLeverageUnknown": {
+    "message": "槓桿未知"
+  },
+  "posLeverageInferred": {
+    "message": "槓桿為推估"
+  },
+  "posLeverageInferredHint": {
+    "message": "這筆持倉本身沒有揭露槓桿，這裡沿用同一幣種最近一次已平倉部位的槓桿。"
+  },
+  "posLeverageUnknownHint": {
+    "message": "這筆持倉和該幣種的歷史紀錄都沒有槓桿資料，因此保證金與報酬率無法計算。"
+  },
+  "posLeverageReadHint": {
+    "message": "槓桿直接讀自交易所這筆持倉的紀錄。"
+  },
+  "posColQty": {
+    "message": "持倉量"
+  },
+  "posColNotional": {
+    "message": "名目價值"
+  },
+  "posColEntry": {
+    "message": "開倉均價"
+  },
+  "posColMark": {
+    "message": "標記價格"
+  },
+  "posColUnrealized": {
+    "message": "未實現損益"
+  },
+  "posColRoi": {
+    "message": "報酬率（本金）"
+  },
+  "posColAge": {
+    "message": "已持有"
+  },
+  "posConfidenceExact": {
+    "message": "逐筆還原"
+  },
+  "posConfidenceExactHint": {
+    "message": "成交紀錄完整涵蓋這個部位從空手到現在的每一筆進出，數量與均價是算出來的，不是估的。"
+  },
+  "posConfidencePartial": {
+    "message": "成交不齊全"
+  },
+  "posConfidencePartialHint": {
+    "message": "交易所只回傳得到部分成交紀錄，開倉那幾筆可能不在裡面，實際部位可能比這裡顯示的更大。"
+  },
+  "posConfidenceEstimated": {
+    "message": "推估值"
+  },
+  "posConfidenceEstimatedHint": {
+    "message": "這個部位沒有可用的成交紀錄，數量由「歷史最大持倉 − 已平倉量」推得；若帶單員平倉後又加回來，這個數字會偏小。"
+  },
+  "posSummaryOpenCount": {
+    "message": "持倉檔數"
+  },
+  "posSummaryGrossNotional": {
+    "message": "總名目價值"
+  },
+  "posSummaryGrossLeverage": {
+    "message": "相當於保證金的 {0}"
+  },
+  "posSummaryUnrealized": {
+    "message": "未實現損益"
+  },
+  "posSummaryMarginUsed": {
+    "message": "已投入本金"
+  },
+  "posSummaryDirection": {
+    "message": "多空分布"
+  },
+  "posSummaryLongShort": {
+    "message": "多 {0} / 空 {1}"
+  },
+  "posSummaryNetLong": {
+    "message": "淨多單 {0}"
+  },
+  "posSummaryNetShort": {
+    "message": "淨空單 {0}"
+  },
+  "posSummaryConcentration": {
+    "message": "最大單一持倉佔比"
+  },
+  "posSummaryConcentrationHint": {
+    "message": "佔總名目價值的比例"
+  },
+  "posFactOpened": {
+    "message": "開倉時間"
+  },
+  "posFactLastFill": {
+    "message": "最後一筆成交"
+  },
+  "posFactPriceMove": {
+    "message": "價格變動"
+  },
+  "posFactInitialMargin": {
+    "message": "投入本金"
+  },
+  "posFactPeakQty": {
+    "message": "歷史最大持倉"
+  },
+  "posFactClosedSoFar": {
+    "message": "已平倉"
+  },
+  "posFactClosedValue": {
+    "message": "{0}（佔最大持倉 {1}）"
+  },
+  "posFactNotClosed": {
+    "message": "尚未平倉任何一部分"
+  },
+  "posFactRealized": {
+    "message": "本倉已實現損益"
+  },
+  "posFactAdds": {
+    "message": "加倉／減倉次數"
+  },
+  "posFactAddsValue": {
+    "message": "加倉 {0} 次、減倉 {1} 次"
+  },
+  "posFactMarginMode": {
+    "message": "保證金模式"
+  },
+  "posFactExchangeStatus": {
+    "message": "交易所標示狀態"
+  },
+  "posFactNotionalShare": {
+    "message": "名目價值／保證金餘額"
+  },
+  "posLadderTitle": {
+    "message": "完整進出明細"
+  },
+  "posLadderTime": {
+    "message": "時間"
+  },
+  "posLadderAction": {
+    "message": "動作"
+  },
+  "posLadderQty": {
+    "message": "數量"
+  },
+  "posLadderPrice": {
+    "message": "成交價"
+  },
+  "posLadderPnl": {
+    "message": "本筆已實現"
+  },
+  "posLadderOpenFill": {
+    "message": "開倉／加倉"
+  },
+  "posLadderCloseFill": {
+    "message": "平倉／減倉"
+  },
+  "posNoLadder": {
+    "message": "這個部位沒有可用的逐筆成交紀錄。"
+  },
+  "posNoteOrderDepthLimited": {
+    "message": "交易所只給到 {0} 筆成交紀錄（宣稱共 {1} 筆），較早的開倉可能看不到。"
+  },
+  "posNotePositionDepthLimited": {
+    "message": "交易所的部位歷史沒有回傳完整，部分舊部位可能缺漏。"
+  },
+  "posNoteEstimatedRows": {
+    "message": "有 {0} 個部位缺少可用成交紀錄，數量為推估值。"
+  },
+  "posNoteMissingMarks": {
+    "message": "以下幣種取不到標記價格，未實現損益留白：{0}"
+  },
+  "posNoteNotDerivable": {
+    "message": "無法推算的項目：強制平倉價、資金費用累計、逐倉保證金分配（這些交易所完全不公開）。"
+  },
+  "posAgeMinutes": {
+    "message": "{0} 分鐘"
+  },
+  "posAgeHours": {
+    "message": "{0} 小時"
+  },
+  "posAgeDays": {
+    "message": "{0} 天"
+  },
+  "posColPriceMove": {
+    "message": "價格變動"
+  },
+  "posConfidenceReconciled": {
+    "message": "已校正"
+  },
+  "posConfidenceReconciledHint": {
+    "message": "交易所的成交紀錄少給了 {0} 單位的開倉，這裡用交易所自己的部位彙總（歷史最大持倉、已平倉量）補回。補回的量是算出來的，但少給的成交本身看不到。"
+  },
+  "posNoteReconciledRows": {
+    "message": "有 {0} 個部位的成交紀錄不齊，數量已用交易所的部位彙總校正。"
   }
 }
