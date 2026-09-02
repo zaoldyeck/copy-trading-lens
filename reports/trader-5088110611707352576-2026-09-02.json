@@ -1,0 +1,351 @@
+{
+  "platform": "Binance",
+  "generatedAt": "2026-09-02T00:57:56.353Z",
+  "meta": {
+    "name": "重生之我在币圈捡垃圾-",
+    "id": "5088110611707352576",
+    "exchange": "Binance",
+    "url": "https://www.binance.com/zh-TC/copy-trading/lead-details/5088110611707352576?timeRange=30D",
+    "days": 81.91262291666666,
+    "roi": 289.837139853285,
+    "annualizedReturn": 42849.33625926298,
+    "annualizedSource": "CAGR估算",
+    "mdd": 63.833696,
+    "pnl": 36969.6200811,
+    "copierPnl": 79242.20521378,
+    "aum": 875325.45531486,
+    "marginBalance": 11974.92814818,
+    "currentCopyCount": 558,
+    "maxCopyCount": 600,
+    "totalCopyCount": 1363,
+    "mockCopyCount": 975,
+    "closeLeadCount": 7,
+    "profitSharingRate": 10,
+    "positionShow": false,
+    "lastTradeTime": 1788301809744,
+    "portfolioType": "PUBLIC",
+    "isPrivate": false,
+    "description": "跟单请勾选TradFi！小仓位捡垃圾模式！节奏有可能会慢点，盈利后偶尔会沉淀几天！急于求成勿跟！",
+    "pageMetrics": {
+      "roi": null,
+      "pnl": null,
+      "copierPnl": null,
+      "sharpe": null,
+      "mdd": null,
+      "winRate": null,
+      "winningPositions": null,
+      "totalPositions": null,
+      "tradingDays": null,
+      "closeLeadCount": null
+    },
+    "performanceSource": "歷史現金流重建",
+    "performanceQuality": "完整",
+    "primaryWindow": "30D",
+    "allPeriodPerformance": {
+      "roi": 289.837139853285,
+      "annualizedReturn": 42849.33625926298,
+      "annualizedSource": "CAGR估算",
+      "mdd": 204.18224317729047,
+      "netProfit": 36969.6200811,
+      "realizedPnl": 35409.005777969986,
+      "grossDeposits": 12755.308067080001,
+      "withdrawals": 37750,
+      "currentEquity": 11974.92814818,
+      "currentEquityFromEvents": 10414.31384505,
+      "firstEventTime": 1781233425611,
+      "lastEventTime": 1788307650513,
+      "closedTrades": 257,
+      "curvePoints": 304,
+      "cashFlowCount": 47,
+      "complete": true,
+      "reliable": true,
+      "startGapDays": 0.0000011458333333333333,
+      "preStartHistoryDays": 0.0000011458333333333333,
+      "source": "cash-flow-reconstruction"
+    },
+    "performanceWindows": {
+      "7D": {
+        "timeRange": "7D",
+        "roi": 18.91582799,
+        "annualizedReturn": 837836.4033689017,
+        "mdd": 0.00624046,
+        "pnl": 2074.02618568,
+        "startTime": 1781233425710,
+        "chartPoints": 7,
+        "lookupSource": "nickname",
+        "searchedPages": 1
+      },
+      "365D": {
+        "timeRange": "365D",
+        "roi": 1246.60158591,
+        "annualizedReturn": 1246.60158591,
+        "mdd": 63.833696,
+        "pnl": 37038.10806778,
+        "startTime": 1781233425710,
+        "chartPoints": 365,
+        "lookupSource": "nickname",
+        "searchedPages": 1
+      },
+      "30D": {
+        "timeRange": "30D",
+        "roi": 359.73105046,
+        "annualizedReturn": 11493792404.732046,
+        "mdd": 17.750451,
+        "pnl": 19396.56454058,
+        "startTime": 1781233425710,
+        "chartPoints": 30,
+        "lookupSource": "nickname",
+        "searchedPages": 1
+      },
+      "180D": {
+        "timeRange": "180D",
+        "roi": 1246.60158591,
+        "annualizedReturn": 19391.532958305164,
+        "mdd": 63.833696,
+        "pnl": 37038.10806778,
+        "startTime": 1781233425710,
+        "chartPoints": 180,
+        "lookupSource": "nickname",
+        "searchedPages": 1
+      },
+      "90D": {
+        "timeRange": "90D",
+        "roi": 1246.60158591,
+        "annualizedReturn": 3799098.5706469654,
+        "mdd": 63.833696,
+        "pnl": 37038.10806778,
+        "startTime": 1781233425710,
+        "chartPoints": 90,
+        "lookupSource": "nickname",
+        "searchedPages": 1
+      }
+    }
+  },
+  "summary": {
+    "closedTrades": 257,
+    "winCount": 225,
+    "lossCount": 32,
+    "winRate": 0.8754863813229572,
+    "avgWin": 287.2028971244889,
+    "avgLoss": -912.863939845,
+    "payoffRatio": 0.3146174195173649,
+    "expectancy": 137.77823259910505,
+    "avgWinHoldHours": 6.768574895061726,
+    "avgLossHoldHours": 24.06806068576389,
+    "maxLossHoldHours": 291.2915261111111,
+    "medianWinHoldHours": 0.6449877777777778,
+    "medianLossHoldHours": 1.3806193055555556,
+    "lossHoldRatio": 3.5558534933732755,
+    "dominantSymbol": "SNDKUSDT",
+    "dominantSymbolShare": 0.11673151750972763,
+    "tpMedianBps": 128.79064450847187,
+    "lossMoveP90Bps": 447.21521486643326
+  },
+  "orders": {
+    "openOrders": 375,
+    "closeOrders": 246,
+    "adverseAdds": 192,
+    "adverseAddRate": 0.512,
+    "maxLayers": 16,
+    "initialOrderMedian": 7635.4,
+    "addOrderMedian": 14129.48432058,
+    "addSizeExpansion": true,
+    "medianOrderIntervalSec": 1883.3925,
+    "orderBurstRate60s": 0.03387096774193549,
+    "adverseStepMedianBps": 121.5458794226132,
+    "adverseStepMeanBps": 437.3430486434159,
+    "adverseStepStdDevBps": 2070.024235235012,
+    "adverseStepCv": 4.733181976153437,
+    "isEquidistantLadder": true,
+    "dominantSymbol": "SNDKUSDT",
+    "dominantSymbolShare": 0.21578099838969403,
+    "dominantLeverage": "undefined",
+    "sampleOrders": 621
+  },
+  "transfers": {
+    "depositCount": 16,
+    "depositTotal": 12750.419306849999,
+    "maxDeposit": 2250,
+    "lossPeriodDepositCount": 6,
+    "lossPeriodDepositTotal": 3433.1162656,
+    "maxDepositToMargin": 0.18789256788500766,
+    "lossPeriodDepositToMargin": 0.28669201377394316,
+    "totalDepositToMargin": 1.0647595667442782,
+    "rescueTimeline": [
+      {
+        "time": 1781794499358,
+        "amount": 42.3481462,
+        "positions": [
+          {
+            "symbol": "BEATUSDT",
+            "pnl": -1607.25081031,
+            "opened": 1781663410122,
+            "closed": 1782405582739
+          },
+          {
+            "symbol": "ETHUSDT",
+            "pnl": -765.93144084,
+            "opened": 1781761151280,
+            "closed": 1781797993260
+          }
+        ]
+      },
+      {
+        "time": 1781837634345,
+        "amount": 1474.92,
+        "positions": [
+          {
+            "symbol": "BEATUSDT",
+            "pnl": -1607.25081031,
+            "opened": 1781663410122,
+            "closed": 1782405582739
+          }
+        ]
+      },
+      {
+        "time": 1783004557072,
+        "amount": 376.35252781,
+        "positions": [
+          {
+            "symbol": "ETHUSDT",
+            "pnl": -3972.47770624,
+            "opened": 1782993203944,
+            "closed": 1783089942700
+          }
+        ]
+      },
+      {
+        "time": 1783087677759,
+        "amount": 398.19250402,
+        "positions": [
+          {
+            "symbol": "ETHUSDT",
+            "pnl": -3972.47770624,
+            "opened": 1782993203944,
+            "closed": 1783089942700
+          }
+        ]
+      },
+      {
+        "time": 1783519984954,
+        "amount": 399.03216907,
+        "positions": [
+          {
+            "symbol": "SOLUSDT",
+            "pnl": -8218.97276119,
+            "opened": 1783468904227,
+            "closed": 1783903187802
+          }
+        ]
+      },
+      {
+        "time": 1783833459022,
+        "amount": 742.2709185,
+        "positions": [
+          {
+            "symbol": "SOLUSDT",
+            "pnl": -8218.97276119,
+            "opened": 1783468904227,
+            "closed": 1783903187802
+          }
+        ]
+      }
+    ]
+  },
+  "live": {
+    "openCount": 0,
+    "losingOpenCount": 0,
+    "openUnrealizedLoss": 0,
+    "openUnrealizedProfit": 0,
+    "openUnrealizedLossToMargin": 0,
+    "openNotional": 0,
+    "openNotionalToMargin": 0,
+    "dominantOpenSymbols": [],
+    "orderAnalysis": {
+      "openOrders": 375,
+      "closeOrders": 246,
+      "adverseAdds": 192,
+      "adverseAddRate": 0.512,
+      "maxLayers": 16,
+      "initialOrderMedian": 7635.4,
+      "addOrderMedian": 14129.48432058,
+      "addSizeExpansion": true,
+      "medianOrderIntervalSec": 1883.3925,
+      "orderBurstRate60s": 0.03387096774193549,
+      "adverseStepMedianBps": 121.5458794226132,
+      "adverseStepMeanBps": 437.3430486434159,
+      "adverseStepStdDevBps": 2070.024235235012,
+      "adverseStepCv": 4.733181976153437,
+      "isEquidistantLadder": true,
+      "dominantSymbol": "SNDKUSDT",
+      "dominantSymbolShare": 0.21578099838969403,
+      "dominantLeverage": "undefined",
+      "sampleOrders": 621
+    }
+  },
+  "strategy": {
+    "family": "馬丁格爾：虧損時加大倉位，連續錯邊會快速放大回撤",
+    "labels": [
+      "馬丁格爾",
+      "虧損時加倉",
+      "虧損單持倉偏久",
+      "盈虧比偏弱"
+    ]
+  },
+  "verdict": {
+    "level": "avoid",
+    "title": "不建議跟",
+    "positives": [
+      "交易天數約 82 天，已達最低觀察門檻。",
+      "已平倉樣本 257 筆，可初步判讀交易行為。"
+    ],
+    "cautions": [
+      "頁面/排行可見 MDD 約 63.8%，新跟單者可能一開始就承受大回撤。",
+      "歷史虧損單最長持倉 12.1d，有嚴重死扛不認賠記錄。",
+      "平均盈虧比只有 0.31，代表平均虧損大於平均獲利。",
+      "逆勢加倉率約 51%，不利行情下會擴大同方向曝險。",
+      "偵測到 6 次虧損持倉期間資金轉入，跟單者未必能同步補保證金。"
+    ],
+    "evidence": [
+      "虧損期補資金是跟單者最難複製的風險來源。"
+    ],
+    "momentumStatus": "active",
+    "alerts": [
+      "🚨 虧損期補入金 6 次續命",
+      "🚨 歷史死扛虧損 12.1d"
+    ]
+  },
+  "rawCounts": {
+    "positionHistory": 257,
+    "orderHistory": 621,
+    "transferHistory": 46,
+    "livePositions": 0,
+    "performanceWindows": 5,
+    "historyStatus": {
+      "positionHistory": {
+        "total": 257,
+        "fetched": 257,
+        "pages": 3,
+        "complete": true,
+        "retryCount": 0,
+        "lastRetryError": ""
+      },
+      "orderHistory": {
+        "total": 621,
+        "fetched": 621,
+        "pages": 7,
+        "complete": true,
+        "retryCount": 10,
+        "lastRetryError": "Binance /bapi/futures/v1/friendly/future/copy-trade/lead-portfolio/order-history returned code 11012005: 系統目前忙碌中。請稍後再試一次。"
+      },
+      "transferHistory": {
+        "total": 46,
+        "fetched": 46,
+        "pages": 1,
+        "complete": true,
+        "retryCount": 0,
+        "lastRetryError": ""
+      }
+    }
+  }
+}
