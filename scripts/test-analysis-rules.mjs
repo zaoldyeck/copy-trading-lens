@@ -245,18 +245,31 @@ console.log("=== RUNNING UNIT TESTS FOR ANALYSIS RULES ===");
 {
   const hour = 3600 * 1000;
   const start = Date.UTC(2026, 6, 1);
-  const orderHistory = [];
-  for (let k = 0; k < 30; k += 1) {
-    orderHistory.push({ symbol: "BTCUSDT", side: "BUY", positionSide: "LONG", executedQty: 0.01, avgPrice: 60000, totalPnl: 0, orderTime: start + k * 2 * hour, type: "LIMIT" });
-    orderHistory.push({ symbol: "BTCUSDT", side: "SELL", positionSide: "LONG", executedQty: 0.01, avgPrice: 60300, totalPnl: 3, orderTime: start + (k * 2 + 1) * hour, type: "LIMIT" });
-  }
-  const style = global.CopyTradingLensStyle.classify(orderHistory);
+  // One round trip every `every` hours: buy, sell an hour later.
+  const roundTrips = (count, every) => Array.from({ length: count }, (_, k) => [
+    { symbol: "BTCUSDT", side: "BUY", positionSide: "LONG", executedQty: 0.01, avgPrice: 60000, totalPnl: 0, orderTime: start + k * every * hour, type: "LIMIT" },
+    { symbol: "BTCUSDT", side: "SELL", positionSide: "LONG", executedQty: 0.01, avgPrice: 60300, totalPnl: 3, orderTime: start + (k * every + 1) * hour, type: "LIMIT" }
+  ]).flat();
+  const style = global.CopyTradingLensStyle.classify(roundTrips(10, 2));
   assert.equal(style.family, "insufficient");
-  assert.deepEqual([...style.insufficient], ["shortWindow"], "60 fills and 30 closed positions pass; 59 hours does not");
+  assert.deepEqual([...style.insufficient], ["shortWindow"], "20 fills pass; 10 closed positions in 19 hours do not");
   const strategy = analysis.inferStrategy({ payoffRatio: null, winRate: 1, dominantSymbolShare: 1 }, style);
   assert.equal(strategy.family, zhTwMessages.familyInsufficient.message);
-  assert.ok(strategy.labels.includes("成交紀錄只涵蓋 2.4 天，至少要 7 天"), `labels: ${strategy.labels}`);
+  assert.ok(strategy.labels.includes("成交紀錄只涵蓋 0.7 天、完整倉位 10 個；不滿 7 天時，要涵蓋至少 2 天且至少 16 個完整倉位"), `labels: ${strategy.labels}`);
   console.log("PASS: a withheld style says which gate it failed");
+
+  // What makes a short record readable is how many positions it shows: a busy
+  // trader's few days (Binance serves only the latest ~6,000 fills) are read,
+  // as long as they cover two days.
+  const Style = global.CopyTradingLensStyle;
+  const busy = Style.classify(roundTrips(16, 4));
+  assert.ok(busy.evidence.spanDays >= 2 && busy.evidence.spanDays < 7, `2-7 days (got ${busy.evidence.spanDays})`);
+  assert.notEqual(busy.family, "insufficient", "16 closed positions over 2.5 days are enough");
+  assert.equal(Style.classify(roundTrips(15, 4)).family, "insufficient", "15 are not");
+  const burst = Style.classify(roundTrips(40, 1));
+  assert.ok(burst.evidence.spanDays < 2 && burst.evidence.closedEpisodes === 40);
+  assert.equal(burst.family, "insufficient", "40 positions inside two days are still a burst");
+  console.log("PASS: a short window with enough closed positions over two days is read");
 }
 
 // 10. The loss-period deposit card dates the latest rescue deposit, not only

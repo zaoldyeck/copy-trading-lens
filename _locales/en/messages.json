@@ -267,7 +267,7 @@
     "message": "Only {0} positions seen from open to close in the records; at least {1} needed"
   },
   "styleNeedWindow": {
-    "message": "Fill records cover only {0} days; at least {1} needed"
+    "message": "Fill records cover only {0} days with {1} complete positions; under {2} days, at least {3} days and {4} complete positions are needed"
   },
   "styleMostlyCutOff": {
     "message": "{0} positions opened before the records begin, more than the {1} seen whole"

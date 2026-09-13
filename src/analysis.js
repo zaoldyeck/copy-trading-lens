@@ -752,7 +752,9 @@
     fewOrders: (evidence, bars) => t("styleNeedOrders", [evidence.orders, bars.MIN_ORDERS]),
     fewClosedPositions: (evidence, bars) => t("styleNeedClosedPositions", [evidence.closedEpisodes, bars.MIN_CLOSED_EPISODES]),
     // Rounded down: 6.96 days shown as "7.0, at least 7" would contradict itself.
-    shortWindow: (evidence, bars) => t("styleNeedWindow", [(Math.floor(evidence.spanDays * 10) / 10).toFixed(1), bars.MIN_SPAN_DAYS]),
+    shortWindow: (evidence, bars) => t("styleNeedWindow", [
+      (Math.floor(evidence.spanDays * 10) / 10).toFixed(1), evidence.closedEpisodes, bars.MIN_SPAN_DAYS, bars.MIN_SHORT_WINDOW_DAYS, bars.MIN_CLOSED_IN_SHORT_WINDOW
+    ]),
     mostlyCutOff: (evidence) => t("styleMostlyCutOff", [evidence.cutOffPositions, evidence.closedEpisodes])
   };
 

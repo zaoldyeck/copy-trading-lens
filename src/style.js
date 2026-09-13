@@ -106,6 +106,26 @@
   // closed positions and for a window of 6-16 days.
   const MIN_CLOSED_EPISODES = 5;
   const MIN_SPAN_DAYS = 7;
+  // A window shorter than that is still read when it holds this many closed
+  // positions: what makes a short record readable is how many positions it
+  // shows, not how many days. A very active trader never has more than a few
+  // days of fills, because Binance serves only the latest ~6,000.
+  // Measured on 256 cached traders (2026-09-14): each record was cut at 14 days
+  // before its last fill, the older part classified as the reference, and cuts
+  // of 1-14 days from that instant scored against it. With the number of closed
+  // positions held equal, cuts under 7 days agree with the reference as often
+  // as 7-14 day cuts (5-10 positions 60% vs 59%, 40-80 66% vs 66%, 80+ 78% vs
+  // 79%). Scanned 5-80 in steps of 1, short cuts holding at least C positions
+  // stay level with the 7-14 day cuts (within a point or above) for C = 13-20
+  // on both the 148 never-labelled traders (59-62% vs 60%) and the
+  // hand-labelled ones scored against their labels (64-69% vs 65%); below 13
+  // the labelled set falls to 56-64%. 16 sits mid-band.
+  const MIN_CLOSED_IN_SHORT_WINDOW = 16;
+  // ...but not below two days. Same cuts, 16+ closed positions, by length on
+  // the never-labelled traders: 0-1 day 50%, 1-2 days 47% (27 traders), then
+  // 2-3 61%, 3-4 58%, 4-7 59-60% against the 7-14 day cuts' 60%. Under two
+  // days a burst of sliced orders reads as a style it is not.
+  const MIN_SHORT_WINDOW_DAYS = 2;
   // Fewer orders than this in the window is too little to read a style from.
   // On 180 labelled traders accuracy rises from 147 to 150-151 for any
   // minimum between 16 and 29 orders (traders labelled insufficient that were
@@ -159,8 +179,8 @@
   const SWING_HOLD_HOURS = 24;
 
   const THRESHOLDS = Object.freeze({
-    MIN_CLOSED_EPISODES, MIN_SPAN_DAYS, MIN_ORDERS, MIN_GRID_BOOKS, MIN_GRID_NOTIONAL_SHARE, MIN_GRID_REENTRIES, MIN_MULTIPLIER, MIN_MULTIPLIER_EPISODE_SHARE,
-    MAX_MULTIPLIER_SPREAD, MIN_DEEP_ADD_SHARE, STOP_LOSS_SHARE, SWING_HOLD_HOURS
+    MIN_CLOSED_EPISODES, MIN_SPAN_DAYS, MIN_CLOSED_IN_SHORT_WINDOW, MIN_SHORT_WINDOW_DAYS, MIN_ORDERS, MIN_GRID_BOOKS, MIN_GRID_NOTIONAL_SHARE,
+    MIN_GRID_REENTRIES, MIN_MULTIPLIER, MIN_MULTIPLIER_EPISODE_SHARE, MAX_MULTIPLIER_SPREAD, MIN_DEEP_ADD_SHARE, STOP_LOSS_SHARE, SWING_HOLD_HOURS
   });
 
   function quantile(values, p) {
@@ -389,7 +409,7 @@
 
   function classify(orders, overrides = {}) {
     const {
-      MIN_CLOSED_EPISODES, MIN_SPAN_DAYS, MIN_ORDERS, MIN_GRID_BOOKS, MIN_GRID_NOTIONAL_SHARE, MIN_GRID_REENTRIES, MIN_MULTIPLIER_EPISODE_SHARE,
+      MIN_CLOSED_EPISODES, MIN_SPAN_DAYS, MIN_CLOSED_IN_SHORT_WINDOW, MIN_SHORT_WINDOW_DAYS, MIN_ORDERS, MIN_GRID_BOOKS, MIN_GRID_NOTIONAL_SHARE, MIN_GRID_REENTRIES, MIN_MULTIPLIER_EPISODE_SHARE,
       MAX_MULTIPLIER_SPREAD, MIN_DEEP_ADD_SHARE, STOP_LOSS_SHARE, SWING_HOLD_HOURS
     } = { ...THRESHOLDS, ...overrides };
     MIN_GRID_REENTRIES_CURRENT.value = MIN_GRID_REENTRIES;
@@ -408,7 +428,7 @@
     const insufficient = [
       orderCount < MIN_ORDERS && "fewOrders",
       closed.length < MIN_CLOSED_EPISODES && "fewClosedPositions",
-      spanDays < MIN_SPAN_DAYS && "shortWindow",
+      spanDays < MIN_SPAN_DAYS && !(spanDays >= MIN_SHORT_WINDOW_DAYS && closed.length >= MIN_CLOSED_IN_SHORT_WINDOW) && "shortWindow",
       cutOffPositions > closed.length && "mostlyCutOff"
     ].filter(Boolean);
     if (insufficient.length) {
