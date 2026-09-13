@@ -118,6 +118,13 @@
   // of them passed with 1-2 re-entries on 5-9 entries — chance, not a grid.
   const MIN_GRID_REENTRIES = 15;
   const MIN_GRID_BOOKS = 1;
+  // A trader is a grid trader when grid books carry real capital, not when one
+  // symbol runs a small grid beside everything else. Rounds 1-4: the labelled
+  // grid traders put 14-69% of their traded notional through grid books; a
+  // maker scalper whose only grid book traded ~5 USDT lots put under 0.5%.
+  // Below this the grid is reported as a secondary label. Set after round 4
+  // was scored, so it has no holdout of its own yet.
+  const MIN_GRID_NOTIONAL_SHARE = 0.05;
   // Lot rounding: a fixed-size grid's quantities (or notionals) stay within 5%.
   const LOT_TOLERANCE = 0.05;
   // Round-trip distance tolerance: on low-priced symbols one price tick is
@@ -148,7 +155,7 @@
   const SWING_HOLD_HOURS = 24;
 
   const THRESHOLDS = Object.freeze({
-    MIN_CLOSED_EPISODES, MIN_SPAN_DAYS, MIN_GRID_BOOKS, MIN_GRID_REENTRIES, MIN_MULTIPLIER, MIN_MULTIPLIER_EPISODE_SHARE,
+    MIN_CLOSED_EPISODES, MIN_SPAN_DAYS, MIN_GRID_BOOKS, MIN_GRID_NOTIONAL_SHARE, MIN_GRID_REENTRIES, MIN_MULTIPLIER, MIN_MULTIPLIER_EPISODE_SHARE,
     MAX_MULTIPLIER_SPREAD, MIN_DEEP_ADD_SHARE, STOP_LOSS_SHARE, SWING_HOLD_HOURS
   });
 
@@ -365,7 +372,7 @@
 
   function classify(orders, overrides = {}) {
     const {
-      MIN_CLOSED_EPISODES, MIN_SPAN_DAYS, MIN_GRID_BOOKS, MIN_GRID_REENTRIES, MIN_MULTIPLIER_EPISODE_SHARE,
+      MIN_CLOSED_EPISODES, MIN_SPAN_DAYS, MIN_GRID_BOOKS, MIN_GRID_NOTIONAL_SHARE, MIN_GRID_REENTRIES, MIN_MULTIPLIER_EPISODE_SHARE,
       MAX_MULTIPLIER_SPREAD, MIN_DEEP_ADD_SHARE, STOP_LOSS_SHARE, SWING_HOLD_HOURS
     } = { ...THRESHOLDS, ...overrides };
     MIN_GRID_REENTRIES_CURRENT.value = MIN_GRID_REENTRIES;
@@ -411,8 +418,12 @@
       if (!episodesByBook.has(key)) episodesByBook.set(key, []);
       episodesByBook.get(key).push(episode);
     }
-    const gridBooks = books(episodes).filter((book) => !isMartingaleBook(episodesByBook.get(book.key)) && isGridBook(book)).length;
-    const grid = gridBooks >= MIN_GRID_BOOKS;
+    const gridBookKeys = books(episodes).filter((book) => !isMartingaleBook(episodesByBook.get(book.key)) && isGridBook(book)).map((book) => book.key);
+    const gridBooks = gridBookKeys.length;
+    const notionalOf = (list) => list.reduce((sum, episode) => sum + episode.entries.reduce((total, fill) => total + fill.notional, 0), 0);
+    const totalNotional = notionalOf(episodes);
+    const gridNotionalShare = totalNotional ? notionalOf(gridBookKeys.flatMap((key) => episodesByBook.get(key))) / totalNotional : 0;
+    const grid = gridBooks >= MIN_GRID_BOOKS && gridNotionalShare >= MIN_GRID_NOTIONAL_SHARE;
 
     const holdHours = median(closed.map((episode) => (episode.end - episode.start) / HOUR_MS));
     Object.assign(evidence, {
@@ -423,6 +434,7 @@
       multiplierMedian: median(multipliers),
       multiplierSpread,
       gridBooks,
+      gridNotionalShare,
       holdHours
     });
 
@@ -440,6 +452,7 @@
     } else {
       family = holdHours < SWING_HOLD_HOURS ? "shortTerm" : "swing";
     }
+    if (!grid && gridBooks >= MIN_GRID_BOOKS) secondary.push("grid");
     if (losingShare === 0) secondary.push("neverRealisedLoss");
     return { family, secondary, evidence };
   }

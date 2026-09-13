@@ -730,8 +730,9 @@
     // fact worth showing. Measured on 89 hand-labelled traders, occasional
     // averagers and discretionary traders overlap completely between 6% and 14%,
     // so the share is stated rather than forced into either family.
-    if ((style.family === "shortTerm" || style.family === "swing") && evidence.deepAddShare > 0) {
-      labels.push(t("labelSomeDeepAdds", [Math.max(1, Math.round(evidence.deepAddShare * 100))]));
+    const deepAddPercent = Math.round((evidence.deepAddShare || 0) * 100);
+    if ((style.family === "shortTerm" || style.family === "swing") && deepAddPercent >= 1) {
+      labels.push(t("labelSomeDeepAdds", [deepAddPercent]));
     }
     // Binance serves only the most recent fills (about 60 days, at most ~6,000
     // orders), so the style describes that window, not the whole portfolio.

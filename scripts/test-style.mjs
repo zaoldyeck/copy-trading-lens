@@ -173,6 +173,23 @@ test("an evenly spaced book traded again only a few times is not a grid", () => 
   assert.equal(result.evidence.gridBooks, 0);
 });
 
+test("one small grid book beside a larger scalping book is a secondary grid, not the family", () => {
+  // A maker scalper ran a ~5 USDT-lot moving grid on one symbol, while the
+  // capital went through short scalps elsewhere.
+  const orders = movingGridOrders({ lot: 1 });
+  let t = START;
+  for (let k = 0; k < 60; k += 1) {
+    t += 3 * HOUR;
+    orders.push(orderAt(t, "BTCUSDT", "BUY", "LONG", 1, 60000 + k * 37));
+    orders.push(orderAt(t + HOUR, "BTCUSDT", "SELL", "LONG", 1, 60050 + k * 37, 50));
+  }
+  const result = Style.classify(orders);
+  assert.equal(result.evidence.gridBooks, 1);
+  assert.ok(result.evidence.gridNotionalShare < 0.05, `grid share ${result.evidence.gridNotionalShare}`);
+  assert.notEqual(result.family, "grid");
+  assert.ok(result.secondary.includes("grid"));
+});
+
 test("a doubling martingale is a martingale", () => {
   const result = Style.classify(martingaleOrders({}));
   assert.equal(result.family, "martingale");
