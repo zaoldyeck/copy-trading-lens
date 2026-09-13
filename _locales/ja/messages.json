@@ -176,6 +176,12 @@
   "metricPayoffRatio": {
     "message": "損益比"
   },
+  "payoffNoClosedTrades": {
+    "message": "決済済みの取引がまだなく、計算できません"
+  },
+  "payoffNoLosses": {
+    "message": "決済済み {0} 件に損失が 1 件もなく、平均損失で割れません"
+  },
   "metricLossHold": {
     "message": "損失保有"
   },

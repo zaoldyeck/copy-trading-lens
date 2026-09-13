@@ -176,6 +176,12 @@
   "metricPayoffRatio": {
     "message": "Payoff ratio"
   },
+  "payoffNoClosedTrades": {
+    "message": "No closed trades yet, nothing to compute"
+  },
+  "payoffNoLosses": {
+    "message": "None of the {0} closed trades lost, so there is no average loss to divide by"
+  },
   "metricLossHold": {
     "message": "Loss holding"
   },

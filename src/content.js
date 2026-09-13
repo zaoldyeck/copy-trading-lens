@@ -215,6 +215,14 @@
     return "is-watch";
   }
 
+  // Payoff divides the average win by the average loss, so it has no value
+  // until at least one closed trade lost. Say which of the two gaps it is.
+  function payoffUnavailableReason(summary) {
+    if (summary.payoffRatio !== null) return "";
+    if (summary.closedTrades === 0) return t("payoffNoClosedTrades");
+    return t("payoffNoLosses", [summary.closedTrades]);
+  }
+
   function renderAnalysis(context, raw, analysis) {
     const fmt = window.CopyTradingLensAnalysis;
     const meta = analysis.meta;
@@ -267,7 +275,11 @@
               ? t("closedTradesOpenExcluded", [summary.closedTrades, summary.openPositionsExcluded])
               : t("closedTrades", [summary.closedTrades])
           ),
-          metricCard(t("metricPayoffRatio"), summary.payoffRatio === null ? "N/A" : summary.payoffRatio.toFixed(2)),
+          metricCard(
+            t("metricPayoffRatio"),
+            summary.payoffRatio === null ? "N/A" : summary.payoffRatio.toFixed(2),
+            payoffUnavailableReason(summary)
+          ),
           metricCard(t("metricLossHold"), fmt.formatHours(summary.avgLossHoldHours), t("longestHold", [fmt.formatHours(summary.maxLossHoldHours)])),
           metricCard(t("metricAdverseAdd"), fmt.formatPct(orders.adverseAddRate * 100), `${orders.adverseAdds}/${orders.openOrders}`),
           metricCard(t("metricFloatingLoss"), fmt.formatMoney(live.openUnrealizedLoss), t("marginPct", [(live.openUnrealizedLossToMargin * 100).toFixed(1)])),

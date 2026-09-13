@@ -176,6 +176,12 @@
   "metricPayoffRatio": {
     "message": "盈亏比"
   },
+  "payoffNoClosedTrades": {
+    "message": "还没有已平仓的单，无从计算"
+  },
+  "payoffNoLosses": {
+    "message": "{0} 笔已平仓没有一笔亏损，没有平均亏损可除"
+  },
   "metricLossHold": {
     "message": "亏损持仓"
   },
