@@ -284,6 +284,12 @@
   "labelNeverRealisedLoss": {
     "message": "從未認賠平倉"
   },
+  "labelSomeDeepAdds": {
+    "message": "{0}% 的倉位曾在虧損超過平均停利幅度時加碼"
+  },
+  "labelStyleWindow": {
+    "message": "風格依最近 {0} 天的成交判斷"
+  },
   "labelSingleSymbol": {
     "message": "集中押單一幣"
   },

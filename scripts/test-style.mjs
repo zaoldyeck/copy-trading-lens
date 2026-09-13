@@ -35,17 +35,17 @@ const round = (value) => Math.round(value * 1e8) / 1e8;
 
 // Long grid: levels every `step` from `low`, `lot` per level; price walks a
 // saw-tooth, buying a level on the way down and selling it one level up.
-function gridOrders({ symbol = "ETCUSDT", low = 7, step = 0.1, levels = 8, lot = 3, cycles = 12, lotAfter = null }) {
+function gridOrders({ symbol = "ETCUSDT", low = 7, step = 0.1, levels = 8, lot = 3, cycles = 12, lotAfter = null, hoursPerFill = 2 }) {
   const orders = [];
   let t = START;
   for (let c = 0; c < cycles; c += 1) {
     const size = lotAfter && c >= cycles / 2 ? lotAfter : lot;
     for (let i = levels - 1; i >= 1; i -= 1) {
-      t += 2 * HOUR;
+      t += hoursPerFill * HOUR;
       orders.push(orderAt(t, symbol, "BUY", "LONG", size, round(low + (i - 1) * step)));
     }
     for (let i = 1; i < levels; i += 1) {
-      t += 2 * HOUR;
+      t += hoursPerFill * HOUR;
       orders.push(orderAt(t, symbol, "SELL", "LONG", size, round(low + i * step), size * step));
     }
   }
@@ -111,12 +111,66 @@ function slicedOrders({ symbol = "BTCUSDT", episodes = 12 }) {
   return orders;
 }
 
+// Grid on a lattice that follows price: short a lot, cover it
+// one step lower, short again at the covered price, walking down and back.
+function movingGridOrders({ symbol = "SATSUSDT", step = 0.009, cycles = 60, lot = 1000 }) {
+  const orders = [];
+  let t = START;
+  let price = 10;
+  for (let c = 0; c < cycles; c += 1) {
+    const direction = c % 20 < 10 ? -1 : 1;
+    t += 2 * HOUR;
+    orders.push(orderAt(t, symbol, "SELL", "SHORT", lot, round(price)));
+    t += HOUR;
+    orders.push(orderAt(t, symbol, "BUY", "SHORT", lot, round(price * (1 - step)), lot * price * step));
+    price = direction < 0 ? price * (1 - step) : price * (1 + step);
+  }
+  return orders;
+}
+
+// An evenly spaced ladder placed once per position and closed level by level,
+// never re-entering a level: averaging in, not a grid.
+function oneShotLadderOrders({ symbol = "BTWUSDT", episodes = 10 }) {
+  const orders = [];
+  let t = START;
+  for (let e = 0; e < episodes; e += 1) {
+    const base = 1 + e * 0.5;
+    for (let k = 0; k < 6; k += 1) {
+      t += 60 * 1000;
+      orders.push(orderAt(t, symbol, "SELL", "SHORT", 200, round(base * (1 + 0.02 * k))));
+    }
+    for (let k = 5; k >= 0; k -= 1) {
+      t += 2 * HOUR;
+      orders.push(orderAt(t, symbol, "BUY", "SHORT", 200, round(base * (1 + 0.02 * k) * 0.98), 4));
+    }
+    t += 12 * HOUR;
+  }
+  return orders;
+}
+
 test("a textbook grid is a grid", () => {
   assert.equal(Style.classify(gridOrders({})).family, "grid");
 });
 
 test("a grid that changes its lot halfway is still a grid", () => {
   assert.equal(Style.classify(gridOrders({ lotAfter: 5 })).family, "grid");
+});
+
+test("a grid on a lattice that follows price is a grid", () => {
+  assert.equal(Style.classify(movingGridOrders({})).family, "grid");
+});
+
+test("an evenly spaced ladder that never re-enters a level is not a grid", () => {
+  const result = Style.classify(oneShotLadderOrders({}));
+  assert.notEqual(result.family, "grid");
+  assert.equal(result.evidence.gridBooks, 0);
+});
+
+test("an evenly spaced book traded again only a few times is not a grid", () => {
+  // 5 cycles over 4 levels: 12 re-entries, under the 15 a grid has to show
+  const result = Style.classify(gridOrders({ cycles: 5, levels: 4, hoursPerFill: 8 }));
+  assert.notEqual(result.family, "insufficient", "the fixture must reach the grid test");
+  assert.equal(result.evidence.gridBooks, 0);
 });
 
 test("a doubling martingale is a martingale", () => {
@@ -150,6 +204,18 @@ test("one decision sliced into market clips is neither a grid nor a martingale",
 
 test("too few closed positions is insufficient, not a style", () => {
   assert.equal(Style.classify(averagingOrders({ episodes: 3 })).family, "insufficient");
+});
+
+test("more exits of unseen positions than positions seen whole is insufficient", () => {
+  const orders = averagingOrders({ episodes: 6 });
+  let t = START - 30 * 24 * HOUR;
+  for (let k = 0; k < 7; k += 1) {
+    t += HOUR;
+    orders.push(orderAt(t + 40 * 24 * HOUR, "ETHUSDT", "SELL", "LONG", 1, 2000, 10));
+  }
+  const result = Style.classify(orders);
+  assert.equal(result.evidence.orphanExits, 7);
+  assert.equal(result.family, "insufficient");
 });
 
 test("a one-way fill larger than the position closes it and opens the rest on the other side", () => {

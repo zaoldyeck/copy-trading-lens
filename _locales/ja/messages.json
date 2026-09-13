@@ -284,6 +284,12 @@
   "labelNeverRealisedLoss": {
     "message": "損失での決済なし"
   },
+  "labelSomeDeepAdds": {
+    "message": "{0}% のポジションで平均利確幅を超える含み損時に買い増し"
+  },
+  "labelStyleWindow": {
+    "message": "直近 {0} 日の約定からスタイルを判定"
+  },
   "labelSingleSymbol": {
     "message": "単一銘柄に集中"
   },

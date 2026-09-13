@@ -284,6 +284,12 @@
   "labelNeverRealisedLoss": {
     "message": "Never closed a position at a loss"
   },
+  "labelSomeDeepAdds": {
+    "message": "{0}% of positions added while losing more than the average take-profit"
+  },
+  "labelStyleWindow": {
+    "message": "Style read from the last {0} days of fills"
+  },
   "labelSingleSymbol": {
     "message": "Concentrated in one coin"
   },

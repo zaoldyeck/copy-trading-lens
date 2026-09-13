@@ -284,6 +284,12 @@
   "labelNeverRealisedLoss": {
     "message": "从未认赔平仓"
   },
+  "labelSomeDeepAdds": {
+    "message": "{0}% 的仓位曾在亏损超过平均止盈幅度时加仓"
+  },
+  "labelStyleWindow": {
+    "message": "风格依最近 {0} 天的成交判断"
+  },
   "labelSingleSymbol": {
     "message": "集中押单一币"
   },

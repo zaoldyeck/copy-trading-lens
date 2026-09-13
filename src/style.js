@@ -112,10 +112,17 @@
   // A grid step at or below two maker fees (0.02% each on Binance USD-M base
   // tier) earns nothing per round trip, so smaller "steps" are not grid levels.
   const MIN_GRID_STEP_BPS = 4;
-  // One symbol-and-side book passing all four grid tests is a grid: across
-  // rounds 1 and 2 the textbook-grid traders had 8 passing books and every
-  // one of the other 59 traders had none.
+  // A grid levels must be traded again and again. Rounds 1-3: the grid
+  // traders' passing books re-entered an exited level 27-93 times; books of
+  // non-grid traders that looked evenly spaced re-entered 0-13 times, and two
+  // of them passed with 1-2 re-entries on 5-9 entries — chance, not a grid.
+  const MIN_GRID_REENTRIES = 15;
   const MIN_GRID_BOOKS = 1;
+  // Lot rounding: a fixed-size grid's quantities (or notionals) stay within 5%.
+  const LOT_TOLERANCE = 0.05;
+  // Round-trip distance tolerance: on low-priced symbols one price tick is
+  // ~10 bps, so a ~90 bps step rounds to +/-1 tick (~11%).
+  const ROUND_TRIP_TOLERANCE = 0.15;
   // A martingale add grows the stake; constant-notional ladders sit at x1.00
   // within lot rounding (round 1: 1.00 +/- 0.02).
   const MIN_MULTIPLIER = 1.05;
@@ -127,17 +134,21 @@
   const MIN_MULTIPLIER_EPISODE_SHARE = 0.7;
   const MAX_MULTIPLIER_SPREAD = 1.1;
   // Share of closed positions that added deeper than the trader's own median
-  // take-profit distance. Round 1: averaging traders 0.19-0.43, traders who do
-  // not average 0.00-0.16 (one exception at 0.28).
-  const MIN_DEEP_ADD_SHARE = 0.18;
-  // Among traders who average in, the share of losing closed positions has a
-  // gap at 0.10 across the cache (0.08: 4 traders, 0.10: 1, 0.12: 5).
-  const STOP_LOSS_SHARE = 0.1;
+  // take-profit distance. Rounds 1-3 (90 labelled traders): accuracy is flat
+  // (77 +/- 1) for any cut from 0.08 to 0.19 and falls off above 0.20, because
+  // occasional averagers and discretionary traders overlap completely at
+  // 0.06-0.14; 0.14 sits mid-plateau, and below it the share is shown as a
+  // label instead of a family.
+  const MIN_DEEP_ADD_SHARE = 0.14;
+  // Share of closed positions that ended at a net loss. Rounds 1-3: traders
+  // labelled as averaging without stops reach 0.08 at most, those with stops
+  // start at 0.095 (one exception at 0.04); accuracy is flat from 0.06 to 0.12.
+  const STOP_LOSS_SHARE = 0.09;
   // Positions held under a day on median are short-term; a day or more, swing.
   const SWING_HOLD_HOURS = 24;
 
   const THRESHOLDS = Object.freeze({
-    MIN_CLOSED_EPISODES, MIN_SPAN_DAYS, MIN_GRID_BOOKS, MIN_MULTIPLIER, MIN_MULTIPLIER_EPISODE_SHARE,
+    MIN_CLOSED_EPISODES, MIN_SPAN_DAYS, MIN_GRID_BOOKS, MIN_GRID_REENTRIES, MIN_MULTIPLIER, MIN_MULTIPLIER_EPISODE_SHARE,
     MAX_MULTIPLIER_SPREAD, MIN_DEEP_ADD_SHARE, STOP_LOSS_SHARE, SWING_HOLD_HOURS
   });
 
@@ -209,33 +220,6 @@
     return { kind: best.kind, step: best.step, stepShare: best.stepShare, lotShare, exitShare, reentries };
   }
 
-  // A book's fills split into configurations: a grid trades a fixed lot, so a
-  // change of lot (by more than lot rounding, in quantity and in notional)
-  // starts a new configuration with its own spacing. Exits stay with the
-  // configuration that was running when they filled.
-  const LOT_TOLERANCE = 0.05;
-
-  function configurations(fills) {
-    const segments = [];
-    let current = null;
-    for (const fill of fills) {
-      if (fill.entry) {
-        const sameLot = current
-          && (Math.abs(fill.qty / current.lotQty - 1) <= LOT_TOLERANCE || Math.abs(fill.notional / current.lotNotional - 1) <= LOT_TOLERANCE);
-        if (!sameLot) {
-          current = { lotQty: fill.qty, lotNotional: fill.notional, fills: [] };
-          segments.push(current);
-        }
-      }
-      if (current) current.fills.push(fill);
-    }
-    return segments.map((segment) => ({
-      fills: segment.fills,
-      entries: segment.fills.filter((f) => f.entry),
-      exits: segment.fills.filter((f) => !f.entry)
-    }));
-  }
-
   function books(episodes) {
     const bySide = new Map();
     for (const episode of episodes) {
@@ -249,13 +233,90 @@
     });
   }
 
-  function isGridShape(shape) {
-    return Boolean(shape) && shape.stepShare > 0.5 && shape.lotShare > 0.5 && shape.exitShare > 0.5 && shape.reentries > 0;
+  // Entries grouped by lot: a grid trades a fixed quantity (or a fixed
+  // notional, which drifts in quantity as price moves), and may run more than
+  // one lot on the same book over time.
+  function lotClusters(entries) {
+    const clusters = [];
+    for (const key of ["qty", "notional"]) {
+      let current = null;
+      for (const fill of [...entries].sort((a, b) => a[key] - b[key])) {
+        if (!current || fill[key] > current.base * (1 + LOT_TOLERANCE)) {
+          current = { base: fill[key], fills: [] };
+          clusters.push(current);
+        }
+        current.fills.push(fill);
+      }
+    }
+    return clusters.map((cluster) => cluster.fills).filter((fills) => fills.length >= 4);
   }
 
-  // A book is a grid when one of its configurations passes all four tests.
+  // Fixed lattice: one lot's entries sit on evenly spaced levels, exits close on
+  // those levels, and exited levels are traded again.
+  function latticeGrid(book, lot) {
+    const lotFills = new Set(lot);
+    const shape = gridShape({ fills: book.fills.filter((f) => !f.entry || lotFills.has(f)), entries: lot, exits: book.exits });
+    return Boolean(shape) && shape.stepShare > 0.5 && shape.exitShare > 0.5 && shape.reentries >= MIN_GRID_REENTRIES_CURRENT.value;
+  }
+
+  // Moving lattice: each lot is closed a fixed step away from where it opened
+  // and exited prices are traded again — the same definition on a lattice that
+  // follows price (a grid re-centred as price trends).
+  function roundTripGrid(book) {
+    const long = book.key.endsWith(":LONG");
+    const open = [];
+    const steps = [];
+    for (const fill of book.fills) {
+      if (fill.entry) {
+        open.push(fill);
+        continue;
+      }
+      for (let i = open.length - 1; i >= 0; i -= 1) {
+        if (Math.abs(open[i].qty / fill.qty - 1) > 0.01) continue;
+        const entry = open.splice(i, 1)[0];
+        const move = (fill.price / entry.price - 1) * 10000 * (long ? 1 : -1);
+        if (move > 0) steps.push(move);
+        break;
+      }
+    }
+    if (steps.length < MIN_GRID_REENTRIES_CURRENT.value) return false;
+    const near = (a, b) => Math.abs(a / b - 1) <= ROUND_TRIP_TOLERANCE;
+    let step = null;
+    let stepShare = 0;
+    for (const candidate of steps) {
+      if (candidate < MIN_GRID_STEP_BPS) continue;
+      const share = steps.filter((value) => near(value, candidate)).length / steps.length;
+      if (share > stepShare) {
+        stepShare = share;
+        step = candidate;
+      }
+    }
+    if (!step || stepShare <= 0.5) return false;
+    const bps = (a, b) => Math.abs(a / b - 1) * 10000;
+    const exited = [];
+    let reentries = 0;
+    for (const fill of book.fills) {
+      if (!fill.entry) {
+        exited.push(fill);
+      } else if (exited.some((exit) => Math.abs(exit.qty / fill.qty - 1) <= 0.01 && bps(exit.price, fill.price) <= step * ROUND_TRIP_TOLERANCE)) {
+        reentries += 1;
+      }
+    }
+    return reentries >= MIN_GRID_REENTRIES_CURRENT.value;
+  }
+
+  const MIN_GRID_REENTRIES_CURRENT = { value: MIN_GRID_REENTRIES };
+
   function isGridBook(book) {
-    return configurations(book.fills).some((segment) => isGridShape(gridShape(segment)));
+    return roundTripGrid(book) || lotClusters(book.entries).some((lot) => latticeGrid(book, lot));
+  }
+
+  // A book whose positions mostly multiply their adds is a martingale's book:
+  // its fixed take-profit and re-entries resemble a grid's round trips, but the
+  // sizing is the martingale formula, not a fixed lot.
+  function isMartingaleBook(bookEpisodes) {
+    const added = bookEpisodes.filter((episode) => episode.entries.length > 1);
+    return added.length > 0 && added.filter((episode) => multiplierRuns(episode).length).length / added.length > 0.5;
   }
 
   // Operator definition: each add against the position is a fixed multiple of
@@ -304,15 +365,18 @@
 
   function classify(orders, overrides = {}) {
     const {
-      MIN_CLOSED_EPISODES, MIN_SPAN_DAYS, MIN_GRID_BOOKS, MIN_MULTIPLIER_EPISODE_SHARE,
+      MIN_CLOSED_EPISODES, MIN_SPAN_DAYS, MIN_GRID_BOOKS, MIN_GRID_REENTRIES, MIN_MULTIPLIER_EPISODE_SHARE,
       MAX_MULTIPLIER_SPREAD, MIN_DEEP_ADD_SHARE, STOP_LOSS_SHARE, SWING_HOLD_HOURS
     } = { ...THRESHOLDS, ...overrides };
-    const { episodes } = buildEpisodes(orders);
+    MIN_GRID_REENTRIES_CURRENT.value = MIN_GRID_REENTRIES;
+    const { episodes, orphanExits } = buildEpisodes(orders);
     const closed = episodes.filter((episode) => episode.closed);
     const times = (orders || []).map((order) => toNumber(order.orderTime)).filter(Boolean);
     const spanDays = times.length ? (Math.max(...times) - Math.min(...times)) / DAY_MS : 0;
-    const evidence = { episodes: episodes.length, closedEpisodes: closed.length, spanDays };
-    if (closed.length < MIN_CLOSED_EPISODES || spanDays < MIN_SPAN_DAYS) {
+    const evidence = { episodes: episodes.length, closedEpisodes: closed.length, orphanExits, spanDays };
+    // More exits of positions opened before the history than positions seen
+    // whole: most of the trading visible in the window cannot be read.
+    if (closed.length < MIN_CLOSED_EPISODES || spanDays < MIN_SPAN_DAYS || orphanExits > closed.length) {
       return { family: "insufficient", secondary: [], evidence };
     }
 
@@ -341,7 +405,13 @@
     const multipliers = withMultiplier.flatMap((row) => row.runs.flat());
     const martingale = multiplierShare >= MIN_MULTIPLIER_EPISODE_SHARE && multiplierSpread !== null && multiplierSpread <= MAX_MULTIPLIER_SPREAD;
 
-    const gridBooks = books(episodes).filter(isGridBook).length;
+    const episodesByBook = new Map();
+    for (const episode of episodes) {
+      const key = `${episode.symbol}:${episode.direction}`;
+      if (!episodesByBook.has(key)) episodesByBook.set(key, []);
+      episodesByBook.get(key).push(episode);
+    }
+    const gridBooks = books(episodes).filter((book) => !isMartingaleBook(episodesByBook.get(book.key)) && isGridBook(book)).length;
     const grid = gridBooks >= MIN_GRID_BOOKS;
 
     const holdHours = median(closed.map((episode) => (episode.end - episode.start) / HOUR_MS));
@@ -379,7 +449,7 @@
     runsOf,
     gridShape,
     books,
-    configurations,
+    lotClusters,
     isGridBook,
     multiplierRuns,
     classify,

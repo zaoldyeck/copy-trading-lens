@@ -49,6 +49,8 @@ console.log("=== RUNNING UNIT TESTS FOR ANALYSIS RULES ===");
   assert.ok(result.strategy.labels.includes(zhTwMessages.labelNeverRealisedLoss.message), `labels: ${result.strategy.labels}`);
   assert.equal(result.orders.openOrders, 48, "entries come from the shared position replay");
   assert.equal(result.orders.closeOrders, 12);
+  assert.ok(result.strategy.labels.some((label) => /^風格依最近 \d+ 天的成交判斷$/.test(label)), `labels: ${result.strategy.labels}`);
+  assert.ok(!result.strategy.labels.some((label) => label.includes("平均停利幅度")), "an averaging family does not repeat the averaging share");
   console.log("PASS: strategy renders the fill-based style");
 }
 
