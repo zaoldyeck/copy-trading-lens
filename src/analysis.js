@@ -1009,6 +1009,47 @@
     };
   }
 
+  // What the analysis would be missing if it ran now. A history that errored, or that the
+  // exchange stopped serving before its reported total (the order-history depth cap), is a
+  // gap; so is a core endpoint that never answered. A trader simply absent from the ranking
+  // list is not a gap — that lookup answered.
+  function binanceDataGaps(raw) {
+    const status = raw.historyStatus || {};
+    const endpoints = raw.endpointResults || {};
+    const gaps = [];
+    for (const [key, label] of [["positionHistory", "histPosition"], ["orderHistory", "histOrder"], ["transferHistory", "histTransfer"]]) {
+      const item = status[key];
+      if (!item || item.error || !item.complete) gaps.push(t(label));
+    }
+    if (endpoints.detail && !endpoints.detail.ok) gaps.push(t("gapDetail"));
+    if (endpoints.livePositions && !endpoints.livePositions.ok) gaps.push(t("gapLivePositions"));
+    if (Object.entries(endpoints).some(([key, result]) => key.startsWith("performance:") && !result.ok)) gaps.push(t("gapPerformance"));
+    return gaps;
+  }
+
+  function okxDataGaps(raw) {
+    const endpoints = raw.endpointResults || {};
+    return [["positionHistory", "histPosition"], ["livePositions", "gapLivePositions"], ["candidate", "gapDetail"]]
+      .filter(([key]) => endpoints[key] && !endpoints[key].ok)
+      .map(([, label]) => t(label));
+  }
+
+  // With gaps, no pattern test can be trusted: an unread order history makes every
+  // martingale and grid check read zero, which is indistinguishable from a clean trader.
+  function incompleteAnalysis(gaps) {
+    return {
+      strategy: { family: t("familyIncompleteData"), labels: [] },
+      verdict: {
+        level: "incomplete",
+        title: t("verdictIncomplete"),
+        positives: [],
+        cautions: gaps.map((label) => t("gapItem", [label])),
+        evidence: [],
+        alerts: []
+      }
+    };
+  }
+
   function analyzeBinance(raw) {
     const pageMetrics = parseVisibleMetrics(raw.visibleText || "");
     const meta = extractBinanceMeta(raw, pageMetrics);
@@ -1021,8 +1062,10 @@
     const losses = roundPositions.filter((position) => binancePositionPnl(position) < 0);
     const transfers = analyzeTransfers(raw.transferHistory || [], losses, meta.marginBalance);
     const live = analyzeLivePositions(raw.livePositions || [], orders, meta.marginBalance);
-    const strategy = inferStrategy(summary, orders);
-    const verdict = buildVerdict(meta, summary, orders, transfers, live);
+    const gaps = binanceDataGaps(raw);
+    const { strategy, verdict } = gaps.length
+      ? incompleteAnalysis(gaps)
+      : { strategy: inferStrategy(summary, orders), verdict: buildVerdict(meta, summary, orders, transfers, live) };
     return {
       platform: "Binance",
       generatedAt: new Date().toISOString(),
@@ -1136,8 +1179,10 @@
     const liveMargin = (raw.livePositions || []).reduce((sum, row) => sum + Math.abs(num(row.margin, 0)), 0);
     meta.marginBalance = liveMargin || meta.aum || 0;
     const live = analyzeLivePositions(raw.livePositions || [], orders, meta.marginBalance);
-    const strategy = inferStrategy(summary, orders);
-    const verdict = buildVerdict(meta, summary, orders, transfers, live);
+    const gaps = okxDataGaps(raw);
+    const { strategy, verdict } = gaps.length
+      ? incompleteAnalysis(gaps)
+      : { strategy: inferStrategy(summary, orders), verdict: buildVerdict(meta, summary, orders, transfers, live) };
     return {
       platform: "OKX",
       generatedAt: new Date().toISOString(),
@@ -1160,6 +1205,7 @@
   global.CopyTradingLensAnalysis = {
     analyzeBinance,
     analyzeOkx,
+    binanceDataGaps,
     inferStrategy,
     buildVerdict,
     formatPct,

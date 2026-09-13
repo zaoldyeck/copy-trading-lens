@@ -207,6 +207,7 @@
   }
 
   function verdictClass(level) {
+    if (level === "incomplete") return "is-incomplete";
     if (level === "avoid") return "is-avoid";
     if (level === "risky") return "is-risky";
     if (level === "preferred") return "is-preferred";

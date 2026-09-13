@@ -778,5 +778,23 @@
   },
   "posQtySourceUnknown": {
     "message": "币安公布的历史最大持仓 {0} 小于已平仓量 {1}（他反复平仓又建仓），推不出剩余数量"
+  },
+  "verdictIncomplete": {
+    "message": "数据不完整，暂不评估"
+  },
+  "gapItem": {
+    "message": "{0} 没有完整获取，这项风险无法判断，因此不给跟单建议。"
+  },
+  "gapDetail": {
+    "message": "带单员基本资料"
+  },
+  "gapLivePositions": {
+    "message": "当前持仓"
+  },
+  "gapPerformance": {
+    "message": "绩效区间"
+  },
+  "familyIncompleteData": {
+    "message": "数据不完整，暂时无法判断策略类型"
   }
 }

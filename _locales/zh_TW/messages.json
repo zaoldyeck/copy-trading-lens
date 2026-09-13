@@ -778,5 +778,23 @@
   },
   "posQtySourceUnknown": {
     "message": "幣安公布的歷史最大持倉 {0} 小於已平倉量 {1}（他反覆平倉又建倉），推不出剩餘數量"
+  },
+  "verdictIncomplete": {
+    "message": "資料不完整，暫不評估"
+  },
+  "gapItem": {
+    "message": "{0} 沒有完整取得，這項風險無法判斷，因此不給跟單建議。"
+  },
+  "gapDetail": {
+    "message": "帶單員基本資料"
+  },
+  "gapLivePositions": {
+    "message": "目前持倉"
+  },
+  "gapPerformance": {
+    "message": "績效區間"
+  },
+  "familyIncompleteData": {
+    "message": "資料不完整，暫時無法判斷策略型態"
   }
 }

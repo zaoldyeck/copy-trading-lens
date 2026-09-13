@@ -7,7 +7,7 @@
   "scripts": {
     "icons": "node scripts/generate-icons.mjs",
     "validate": "node scripts/validate-extension.mjs",
-    "test": "node scripts/test-analysis-rules.mjs && node scripts/test-provider-pagination.mjs && node scripts/test-pagination-drift.mjs && node scripts/test-pagination-identical-rows.mjs && node scripts/test-positions.mjs && node scripts/test-positions-panel-anchor.mjs",
+    "test": "node scripts/test-analysis-rules.mjs && node scripts/test-provider-pagination.mjs && node scripts/test-pagination-drift.mjs && node scripts/test-pagination-identical-rows.mjs && node scripts/test-data-completeness.mjs && node scripts/test-positions.mjs && node scripts/test-positions-panel-anchor.mjs",
     "package": "npm run icons && npm run validate && npm run test && node scripts/package-extension.mjs"
   },
   "keywords": [

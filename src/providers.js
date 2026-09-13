@@ -31,24 +31,83 @@
     const csrf = csrfTokenFromCookie();
     if (csrf && !headers.csrftoken) headers.csrftoken = csrf;
 
-    const response = await fetch(url, {
-      credentials: "include",
-      cache: "no-store",
-      ...options,
-      headers
-    });
+    let response;
+    try {
+      response = await fetch(url, {
+        credentials: "include",
+        cache: "no-store",
+        ...options,
+        headers
+      });
+    } catch (error) {
+      // fetch() only rejects when no HTTP response arrived at all (network, CORS, abort).
+      throw fetchFailure(`Network failure for ${url}: ${error instanceof Error ? error.message : String(error)}`, { retriable: true });
+    }
     const text = await response.text();
     let json = null;
     try {
       json = text ? JSON.parse(text) : null;
     } catch (error) {
-      throw new Error(`Non-JSON response from ${url}: HTTP ${response.status}`);
+      throw fetchFailure(`Non-JSON response from ${url}: HTTP ${response.status}`, {
+        status: response.status,
+        retriable: isRetriableHttpStatus(response.status)
+      });
     }
     if (!response.ok) {
-      const code = json?.code || json?.msg || response.status;
-      throw new Error(`HTTP ${response.status} from ${url}: ${code}`);
+      const code = json?.code ?? null;
+      throw fetchFailure(`HTTP ${response.status} from ${url}: ${code ?? json?.msg ?? ""}`, {
+        status: response.status,
+        code,
+        retriable: isRetriableHttpStatus(response.status) || RETRIABLE_BINANCE_CODES.has(String(code))
+      });
     }
     return json;
+  }
+
+  // Binance application codes that mean "ask again later", both seen on the copy-trade
+  // endpoints: 11012005 系統目前忙碌中 (system busy) and 90801003 請求次數過多 (too many
+  // requests; 2026-09-13 it failed order-history for two traders in one session, and the
+  // analysis then read "no orders" as "no martingale" and still recommended copying).
+  const RETRIABLE_BINANCE_CODES = new Set(["11012005", "90801003"]);
+
+  // 408 timeout, 418/429 rate-limit bans, and any 5xx are the server's refusals to answer
+  // now, not answers.
+  function isRetriableHttpStatus(status) {
+    return status === 408 || status === 418 || status === 429 || status >= 500;
+  }
+
+  function fetchFailure(message, { status = null, code = null, retriable = false } = {}) {
+    const error = new Error(message);
+    error.status = status;
+    error.code = code;
+    error.retriable = retriable;
+    return error;
+  }
+
+  function isRetriable(error) {
+    return Boolean(error && error.retriable);
+  }
+
+  // Every read keeps asking until the exchange actually answers. An analysis built on a
+  // history abandoned mid-read reports missing risk as absent risk, so a refusal the server
+  // tells us is temporary is never allowed to end a read; only a real answer (data, or a
+  // non-retriable error) does.
+  async function untilAnswered(fn) {
+    let lastRetryError = "";
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        return { value: await fn(), retries: attempt - 1, lastRetryError };
+      } catch (error) {
+        if (!isRetriable(error)) throw error;
+        lastRetryError = error.message;
+        await sleep(retryDelayMs(attempt));
+      }
+    }
+  }
+
+  function requireBinanceOk(path, response) {
+    if (response?.code && response.code !== "000000") throw binanceCodeError(path, response);
+    return response;
   }
 
   async function safeFetch(label, fn) {
@@ -61,14 +120,16 @@
   }
 
   async function postBinance(path, payload) {
-    return fetchJson(`${BINANCE_BASE}${path}`, {
+    const { value } = await untilAnswered(async () => requireBinanceOk(path, await fetchJson(`${BINANCE_BASE}${path}`, {
       method: "POST",
       body: JSON.stringify(payload)
-    });
+    })));
+    return value;
   }
 
   async function getBinance(path) {
-    return fetchJson(`${BINANCE_BASE}${path}`, { method: "GET" });
+    const { value } = await untilAnswered(async () => requireBinanceOk(path, await fetchJson(`${BINANCE_BASE}${path}`, { method: "GET" })));
+    return value;
   }
 
   function binanceDataList(response) {
@@ -79,21 +140,10 @@
   function binanceCodeError(path, response) {
     const code = response?.code || "UNKNOWN";
     const message = response?.message || response?.msg || "Unknown Binance response";
-    return `Binance ${path} returned code ${code}: ${message}`;
-  }
-
-  function isRetriableBinanceError(message) {
-    const text = String(message || "").toLowerCase();
-    return text.includes("11012005")
-      || text.includes("系統目前忙碌")
-      || text.includes("system is busy")
-      || text.includes("failed to fetch")
-      || text.includes("network")
-      || text.includes("timeout")
-      || text.includes("http 408")
-      || text.includes("http 418")
-      || text.includes("http 429")
-      || text.includes("http 5");
+    return fetchFailure(`Binance ${path} returned code ${code}: ${message}`, {
+      code: String(code),
+      retriable: RETRIABLE_BINANCE_CODES.has(String(code))
+    });
   }
 
   function retryDelayMs(attempt) {
@@ -102,30 +152,12 @@
   }
 
   async function fetchBinancePagedPage(path, portfolioId, pageNumber, pageSize) {
-    let lastError = "";
-    for (let attempt = 1; ; attempt += 1) {
-      try {
-        const response = await postBinance(path, {
-          portfolioId,
-          pageNumber,
-          pageSize
-        });
-        if (!response?.code || response.code === "000000") {
-          return {
-            response,
-            retries: attempt - 1,
-            lastRetryError: lastError
-          };
-        }
-        lastError = binanceCodeError(path, response);
-      } catch (fetchError) {
-        lastError = fetchError instanceof Error ? fetchError.message : String(fetchError);
-      }
-      if (!isRetriableBinanceError(lastError)) {
-        throw new Error(lastError);
-      }
-      await sleep(retryDelayMs(attempt));
-    }
+    const { value, retries, lastRetryError } = await untilAnswered(async () => requireBinanceOk(path,
+      await fetchJson(`${BINANCE_BASE}${path}`, {
+        method: "POST",
+        body: JSON.stringify({ portfolioId, pageNumber, pageSize })
+      })));
+    return { response: value, retries, lastRetryError };
   }
 
   // Binance's paged history endpoints report a `total` count but silently hard-cap
@@ -278,9 +310,6 @@
       userAsset: 0,
       ...extraParams
     });
-    if (response?.code && response.code !== "000000") {
-      throw new Error(`Binance list returned code ${response.code}`);
-    }
     return {
       total: Number(response?.data?.total ?? 0),
       rows: asArray(response?.data?.list)
@@ -438,7 +467,7 @@
     let source = "";
     if (wanted.length > PREMIUM_INDEX_ALL_WEIGHT) {
       const all = await safeFetch("mark:all", () =>
-        fetchJson(`${BINANCE_BASE}/fapi/v1/premiumIndex`, { method: "GET" })
+        untilAnswered(() => fetchJson(`${BINANCE_BASE}/fapi/v1/premiumIndex`, { method: "GET" })).then((answer) => answer.value)
       );
       source = "premiumIndex:all";
       if (all.ok) {
@@ -453,7 +482,7 @@
       source = "premiumIndex:perSymbol";
       const results = await Promise.all(wanted.map((symbol) =>
         safeFetch(`mark:${symbol}`, () =>
-          fetchJson(`${BINANCE_BASE}/fapi/v1/premiumIndex?symbol=${encodeURIComponent(symbol)}`, { method: "GET" })
+          untilAnswered(() => fetchJson(`${BINANCE_BASE}/fapi/v1/premiumIndex?symbol=${encodeURIComponent(symbol)}`, { method: "GET" })).then((answer) => answer.value)
         )
       ));
       results.forEach((result, index) => {
@@ -466,8 +495,24 @@
     return { marks, missing, fetchedAtMs: Date.now(), source };
   }
 
+  // OKX v5: code "0" is success; 50011 is its rate-limit refusal (docs: Error Code → REST API).
+  // Any other non-zero code is an answer that carries no data and must surface as a failure,
+  // not as an empty history.
+  const RETRIABLE_OKX_CODES = new Set(["50011"]);
+
+  function requireOkxOk(pathWithQuery, response) {
+    const code = response?.code;
+    if (code === undefined || code === null || String(code) === "0") return response;
+    throw fetchFailure(`OKX ${pathWithQuery} returned code ${code}: ${response?.msg || ""}`, {
+      code: String(code),
+      retriable: RETRIABLE_OKX_CODES.has(String(code))
+    });
+  }
+
   async function okxGet(pathWithQuery) {
-    return fetchJson(`${OKX_BASE}${pathWithQuery}`, { method: "GET" });
+    const { value } = await untilAnswered(async () =>
+      requireOkxOk(pathWithQuery, await fetchJson(`${OKX_BASE}${pathWithQuery}`, { method: "GET" })));
+    return value;
   }
 
   async function findOkxCandidate(uniqueName) {

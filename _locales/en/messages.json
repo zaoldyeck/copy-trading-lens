@@ -778,5 +778,23 @@
   },
   "posQtySourceUnknown": {
     "message": "Binance's published peak size {0} is below its closed volume {1} (repeated closing and re-entering), so no remainder can be derived"
+  },
+  "verdictIncomplete": {
+    "message": "Incomplete data — not evaluated"
+  },
+  "gapItem": {
+    "message": "{0} could not be fully retrieved, so this risk cannot be judged and no copy recommendation is given."
+  },
+  "gapDetail": {
+    "message": "Lead trader profile"
+  },
+  "gapLivePositions": {
+    "message": "Open positions"
+  },
+  "gapPerformance": {
+    "message": "Performance windows"
+  },
+  "familyIncompleteData": {
+    "message": "Incomplete data — strategy type cannot be judged"
   }
 }

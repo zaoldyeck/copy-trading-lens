@@ -778,5 +778,23 @@
   },
   "posQtySourceUnknown": {
     "message": "Binance 公表の最大建玉 {0} が決済済み数量 {1} を下回るため（決済と再建玉の繰り返し）、残量を導出できません"
+  },
+  "verdictIncomplete": {
+    "message": "データ不完全のため評価保留"
+  },
+  "gapItem": {
+    "message": "{0} を完全に取得できなかったため、このリスクは判断できず、コピーの推奨は出しません。"
+  },
+  "gapDetail": {
+    "message": "リーダー基本情報"
+  },
+  "gapLivePositions": {
+    "message": "現在のポジション"
+  },
+  "gapPerformance": {
+    "message": "成績期間"
+  },
+  "familyIncompleteData": {
+    "message": "データ不完全のため戦略タイプを判断できません"
   }
 }
