@@ -193,4 +193,50 @@ console.log("=== RUNNING UNIT TESTS FOR ANALYSIS RULES ===");
   console.log("PASS: unknown portfolio start disables the filter instead of dropping data");
 }
 
+// 8. A partially closed position is not a closed position (Binance's own
+//    definition: "If the order is partially closed, it doesn't count as a
+//    closed position"). Its row carries closed: null, an updateTime at the
+//    latest partial close, and realized-so-far pnl. Counting it as a closed
+//    trade put still-open positions into win rate, payoff and sample size.
+{
+  const start = Date.UTC(2026, 5, 26, 2, 30);
+  const hour = 3600 * 1000;
+  const day = 24 * hour;
+  const closedWin = (symbol, openedDay) => ({ symbol, side: "Long", opened: start + openedDay * day, closed: start + openedDay * day + 6 * hour, updateTime: start + openedDay * day + 6 * hour, status: "All Closed", closingPnl: "500", maxOpenInterest: 5, closedVolume: 5, avgCost: 100, avgClosePrice: 110, leverage: "5" });
+  const raw = {
+    id: "partial-close",
+    detail: { startTime: start, nickname: "partially closed rows", marginBalance: "100000" },
+    positionHistory: [
+      closedWin("SKHYNIXUSDT", 1),
+      closedWin("MUUSDT", 3),
+      // Still open, realized a profit on a partial close.
+      { symbol: "CLUSDT", side: "Long", opened: start + 2 * day, closed: null, updateTime: start + 20 * day, status: "Partially Closed", closingPnl: "9000", maxOpenInterest: 50, closedVolume: 20, avgCost: 70, avgClosePrice: 80, leverage: "5" },
+      // Still open, realized a loss on a partial close 400 hours in.
+      { symbol: "BTCUSDT", side: "Short", opened: start + 4 * day, closed: null, updateTime: start + 4 * day + 400 * hour, status: "Partially Closed", closingPnl: "-300", maxOpenInterest: 1, closedVolume: 0.2, avgCost: 60000, avgClosePrice: 63000, leverage: "5" }
+    ],
+    orderHistory: [],
+    transferHistory: [],
+    livePositions: [],
+    performanceWindows: {},
+    historyStatus: {}
+  };
+  // The raw fixture leaves the fetch status empty, which withholds the verdict,
+  // so the verdict rules are applied to the computed statistics directly.
+  const verdictOf = (result) => analysis.buildVerdict(result.meta, result.summary, result.orders, result.transfers, result.live);
+  const result = analysis.analyzeBinance(raw);
+  const { summary } = result;
+  const verdict = verdictOf(result);
+  assert.equal(summary.closedTrades, 2, "only the two fully closed positions are closed trades");
+  assert.equal(summary.openPositionsExcluded, 2, "the partially closed rows are reported, not silently dropped");
+  assert.equal(summary.winRate, 1, "win rate is read from closed positions only");
+  assert.equal(summary.lossCount, 0, "a partial close at a loss is not a losing trade");
+  assert.ok(Math.abs(summary.maxLossHoldHours - 400) < 1e-6, `a still-open position underwater until its partial close still counts as a held loss (got ${summary.maxLossHoldHours})`);
+  assert.ok(verdict.cautions.includes(zhTwMessages.cautionThinClosedTrades.message.replace("{0}", "2")), "the thin sample caution uses the closed count");
+
+  const noneClosed = analysis.analyzeBinance({ ...raw, positionHistory: raw.positionHistory.slice(2) });
+  assert.equal(noneClosed.summary.closedTrades, 0);
+  assert.ok(verdictOf(noneClosed).cautions.includes(zhTwMessages.cautionNoClosedTrades.message), "no closed position must still be called out");
+  console.log("PASS: partially closed positions stay out of closed-trade statistics");
+}
+
 console.log("\nALL ANALYSIS UNIT TESTS PASSED SUCCESSFULLY!");

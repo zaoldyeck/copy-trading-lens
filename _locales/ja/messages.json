@@ -171,7 +171,7 @@
     "message": "コピー PnL/AUM"
   },
   "metricWinRate": {
-    "message": "勝率"
+    "message": "決済済みポジションの勝率"
   },
   "metricPayoffRatio": {
     "message": "損益比"
@@ -214,6 +214,9 @@
   },
   "closedTrades": {
     "message": "{0} 件の決済済み取引"
+  },
+  "closedTradesOpenExcluded": {
+    "message": "決済済み {0} 件（一部決済で未完了の {1} 件は除外）"
   },
   "longestHold": {
     "message": "最長 {0}"
@@ -343,6 +346,9 @@
   },
   "cautionThinClosedTrades": {
     "message": "決済済み取引は {0} 件のみです。1 件の取引で結論が大きく歪む可能性があります。"
+  },
+  "cautionNoClosedTrades": {
+    "message": "完全に決済されたポジションがまだなく、勝率と損益比は判断できません。"
   },
   "cautionHighMdd": {
     "message": "表示/API 上の MDD は約 {0} です。新規コピー側がすぐ大きなドローダウンを受ける可能性があります。"

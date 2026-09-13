@@ -260,7 +260,13 @@
           metricCard(t("metricAllPeriodPnl"), fmt.formatMoney(meta.pnl), t("hintCurrentCapitalFormula")),
           metricCard(t("metricTradingDays"), meta.days ? t("daysValue", [meta.days.toFixed(0)]) : "N/A"),
           metricCard(t("metricCopierPnlAum"), meta.aum ? `${(meta.copierPnl / meta.aum * 100).toFixed(1)}%` : "N/A"),
-          metricCard(t("metricWinRate"), fmt.formatPct(summary.winRate * 100), t("closedTrades", [summary.closedTrades])),
+          metricCard(
+            t("metricWinRate"),
+            fmt.formatPct(summary.winRate * 100),
+            summary.openPositionsExcluded
+              ? t("closedTradesOpenExcluded", [summary.closedTrades, summary.openPositionsExcluded])
+              : t("closedTrades", [summary.closedTrades])
+          ),
           metricCard(t("metricPayoffRatio"), summary.payoffRatio === null ? "N/A" : summary.payoffRatio.toFixed(2)),
           metricCard(t("metricLossHold"), fmt.formatHours(summary.avgLossHoldHours), t("longestHold", [fmt.formatHours(summary.maxLossHoldHours)])),
           metricCard(t("metricAdverseAdd"), fmt.formatPct(orders.adverseAddRate * 100), `${orders.adverseAdds}/${orders.openOrders}`),

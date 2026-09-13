@@ -171,7 +171,7 @@
     "message": "Copier PnL/AUM"
   },
   "metricWinRate": {
-    "message": "Win rate"
+    "message": "Win rate (closed positions)"
   },
   "metricPayoffRatio": {
     "message": "Payoff ratio"
@@ -214,6 +214,9 @@
   },
   "closedTrades": {
     "message": "{0} closed trades"
+  },
+  "closedTradesOpenExcluded": {
+    "message": "{0} closed; {1} partially closed still open, not counted"
   },
   "longestHold": {
     "message": "Longest {0}"
@@ -343,6 +346,9 @@
   },
   "cautionThinClosedTrades": {
     "message": "Only {0} closed trades are available; one trade can heavily distort the conclusion."
+  },
+  "cautionNoClosedTrades": {
+    "message": "No position has closed yet, so win rate and payoff cannot be read."
   },
   "cautionHighMdd": {
     "message": "Visible/API MDD is about {0}; a new copier could immediately suffer a large drawdown."

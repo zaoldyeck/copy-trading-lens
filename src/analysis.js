@@ -311,7 +311,7 @@
       currentEquityFromEvents,
       firstEventTime: firstAt || null,
       lastEventTime: lastEventTime || null,
-      closedTrades: positions.length,
+      positionRows: positions.length,
       curvePoints: curve.length,
       cashFlowCount: cashFlows.length,
       complete,
@@ -394,8 +394,17 @@
     return num(firstDefined(position.opened, position.openTime, position.createTime), 0);
   }
 
+  // Binance leaves `closed` null while a position is still open (status
+  // "Partially Closed"); its updateTime is the latest partial close, not a
+  // close. 0 means the position is still open.
   function positionClosedAt(position) {
-    return num(firstDefined(position.closed, position.closeTime, position.updateTime), 0);
+    return num(position.closed, 0);
+  }
+
+  // Last moment the position is known to have been held: its close, or for a
+  // still-open row the latest partial close.
+  function positionHeldUntil(position) {
+    return positionClosedAt(position) || num(position.updateTime, 0);
   }
 
   // roundStartMs clamps the holding clock to this lead portfolio's own start.
@@ -405,7 +414,7 @@
   // portfolio's entire lifetime (the tell that the caliber is wrong).
   function binanceHoldHours(position, roundStartMs = 0) {
     const rawOpened = positionOpenedAt(position);
-    const closed = positionClosedAt(position);
+    const closed = positionHeldUntil(position);
     const opened = roundStartMs && rawOpened && rawOpened < roundStartMs ? roundStartMs : rawOpened;
     if (!opened || !closed || closed < opened) return 0;
     return (closed - opened) / HOUR_MS;
@@ -617,8 +626,8 @@
     const preRound = [];
     for (const position of all) {
       const closed = positionClosedAt(position);
-      // closed === 0 marks a row that is still open (Binance reports 0 for
-      // partially-closed positions), which is current-round by definition.
+      // closed === 0 marks a row that is still open, which is current-round by
+      // definition.
       if (closed > 0 && closed < roundStartMs) preRound.push(position);
       else inRound.push(position);
     }
@@ -628,7 +637,11 @@
   function summarizeClosedPositions(positions, exchange, options = {}) {
     const roundStartMs = num(options.roundStartMs, 0);
     const { inRound, preRound } = splitPositionsByRound(positions, roundStartMs);
-    const closed = inRound;
+    // Binance's own definition: a partially closed position is not a closed
+    // position. Its realized-so-far pnl says nothing about how it ends, so it
+    // stays out of the closed sample, win rate and payoff until it closes.
+    const stillOpen = exchange === "Binance" ? inRound.filter((row) => !positionClosedAt(row)) : [];
+    const closed = exchange === "Binance" ? inRound.filter((row) => positionClosedAt(row) > 0) : inRound;
     let holdClampedToRoundStart = 0;
     const getPnl = exchange === "OKX"
       ? (row) => num(row.pnl, 0)
@@ -641,7 +654,7 @@
       }
       : (row) => {
         const rawOpened = positionOpenedAt(row);
-        if (roundStartMs && rawOpened && rawOpened < roundStartMs && positionClosedAt(row) >= roundStartMs) {
+        if (roundStartMs && rawOpened && rawOpened < roundStartMs && positionHeldUntil(row) >= roundStartMs) {
           holdClampedToRoundStart += 1;
         }
         return binanceHoldHours(row, roundStartMs);
@@ -669,6 +682,15 @@
       }
     }
 
+    // A still-open position that already realized a loss on a partial close was
+    // held underwater at least until that close: it counts toward how long
+    // losses are held, not toward win rate.
+    for (const row of stillOpen) {
+      if (getPnl(row) >= 0) continue;
+      const hold = getHold(row);
+      if (hold) lossHolds.push(hold);
+    }
+
     const dominantSymbol = [...symbols.entries()].sort((a, b) => b[1] - a[1])[0];
     const avgWin = safeDivide(wins.reduce((sum, value) => sum + value, 0), wins.length, 0);
     const avgLoss = safeDivide(losses.reduce((sum, value) => sum + value, 0), losses.length, 0);
@@ -679,6 +701,7 @@
       // were dropped for predating this portfolio, and how many holding
       // clocks were clipped at the start date.
       preRoundPositionsExcluded: preRound.length,
+      openPositionsExcluded: stillOpen.length,
       holdClampedToRoundStart,
       roundStartMs: roundStartMs || null,
       winCount: wins.length,
@@ -842,7 +865,8 @@
     if (meta.days > 0 && meta.days < 30) cautions.push(t("cautionTooFewDays", [meta.days.toFixed(1)]));
     if (!Number.isFinite(meta.roi)) cautions.push(t("cautionNoAllPeriodRoi"));
     if (Number.isFinite(meta.roi) && !meta.allPeriodPerformance?.reliable) cautions.push(t("cautionReconstructedNeedsCompleteness"));
-    if (summary.closedTrades > 0 && summary.closedTrades < 30) cautions.push(t("cautionThinClosedTrades", [summary.closedTrades]));
+    if (summary.closedTrades === 0) cautions.push(t("cautionNoClosedTrades"));
+    else if (summary.closedTrades < 30) cautions.push(t("cautionThinClosedTrades", [summary.closedTrades]));
     if (meta.mdd >= 30) cautions.push(t("cautionHighMdd", [formatPct(meta.mdd)]));
     if (extremeDeadLoss || severeDeadLoss) {
       cautions.push(t("cautionSevereDeadLoss", [formatHours(summary.maxLossHoldHours)]));
@@ -972,6 +996,8 @@
     const orders = analyzeBinanceOrders(raw.orderHistory || []);
     // Same caliber for the rescue-deposit test: a deposit is only "capital
     // injected while bleeding" if the losing position belongs to this round.
+    // A still-open row counts here: a partial close at a loss proves the position
+    // was bleeding while it was open, and that window is what the test reads.
     const losses = roundPositions.filter((position) => binancePositionPnl(position) < 0);
     const transfers = analyzeTransfers(raw.transferHistory || [], losses, meta.marginBalance);
     const live = analyzeLivePositions(raw.livePositions || [], orders, meta.marginBalance);

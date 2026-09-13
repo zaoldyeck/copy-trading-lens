@@ -171,7 +171,7 @@
     "message": "跟单 PnL/AUM"
   },
   "metricWinRate": {
-    "message": "胜率"
+    "message": "已平仓胜率"
   },
   "metricPayoffRatio": {
     "message": "盈亏比"
@@ -214,6 +214,9 @@
   },
   "closedTrades": {
     "message": "{0} 笔已平仓"
+  },
+  "closedTradesOpenExcluded": {
+    "message": "{0} 笔已平仓；{1} 笔部分平仓尚未平完，不计入"
   },
   "longestHold": {
     "message": "最长 {0}"
@@ -343,6 +346,9 @@
   },
   "cautionThinClosedTrades": {
     "message": "已平仓样本只有 {0} 笔，单笔交易会严重影响结论。"
+  },
+  "cautionNoClosedTrades": {
+    "message": "还没有任何仓位完全平仓，胜率与盈亏比都还无从判读。"
   },
   "cautionHighMdd": {
     "message": "页面/排行可见 MDD 约 {0}，新跟单者可能一开始就承受大回撤。"
