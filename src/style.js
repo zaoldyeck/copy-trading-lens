@@ -113,9 +113,10 @@
   // Measured on 256 cached traders (2026-09-14): each record was cut at 14 days
   // before its last fill, the older part classified as the reference, and cuts
   // of 1-14 days from that instant scored against it. With the number of closed
-  // positions held equal, cuts under 7 days agree with the reference as often
-  // as 7-14 day cuts (5-10 positions 60% vs 59%, 40-80 66% vs 66%, 80+ 78% vs
-  // 79%). Scanned 5-80 in steps of 1, short cuts holding at least C positions
+  // positions held equal, cuts under 7 days and 7-14 day cuts agree with the
+  // reference within 6 points and in no consistent direction (5-10 positions
+  // 60% vs 59%, 10-20 57% vs 62%, 20-40 63% vs 57%, 40-80 66% vs 66%, 80+ 78%
+  // vs 79%). Scanned 5-80 in steps of 1, short cuts holding at least C positions
   // stay level with the 7-14 day cuts (within a point or above) for C = 13-20
   // on both the 148 never-labelled traders (59-62% vs 60%) and the
   // hand-labelled ones scored against their labels (64-69% vs 65%); below 13
@@ -123,8 +124,10 @@
   const MIN_CLOSED_IN_SHORT_WINDOW = 16;
   // ...but not below two days. Same cuts, 16+ closed positions, by length on
   // the never-labelled traders: 0-1 day 50%, 1-2 days 47% (27 traders), then
-  // 2-3 61%, 3-4 58%, 4-7 59-60% against the 7-14 day cuts' 60%. Under two
-  // days a burst of sliced orders reads as a style it is not.
+  // 2-3 61%, 3-4 58%, 4-7 59-60% against the 7-14 day cuts' 60%. Thin: the 8
+  // hand-labelled traders under two days went the other way (83-100%). Kept
+  // as the conservative side, matching a labelled execution bot whose 0.8 days
+  // of sliced market clips read as a style it is not.
   const MIN_SHORT_WINDOW_DAYS = 2;
   // Fewer orders than this in the window is too little to read a style from.
   // On 180 labelled traders accuracy rises from 147 to 150-151 for any
