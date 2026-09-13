@@ -182,6 +182,7 @@
   async function fetchBinancePagedDetailed(path, portfolioId, onProgress) {
     const rows = [];
     let total = null;
+    let totalAtPreviousPage = null;
     let pages = 0;
     let retryCount = 0;
     let lastRetryError = "";
@@ -218,7 +219,16 @@
       prematureRetries = 0;
 
       pages = pageNumber;
-      const overlap = overlapLength(rows.slice(-PAGE_SIZE), pageRows);
+      // A page can only re-serve rows the list gained since the previous page, and at
+      // most that many. Without this bound, genuinely identical fills (a scalper's
+      // split orders share second, price and size) that straddle a page boundary on
+      // an idle account are trimmed as drift. Measured 2026-09-13: 5 of 5,374 real
+      // fills dropped from a copy portfolio whose summary never moved during the read.
+      const growth = Number.isFinite(total) && Number.isFinite(totalAtPreviousPage)
+        ? Math.max(total - totalAtPreviousPage, 0)
+        : 0;
+      totalAtPreviousPage = total;
+      const overlap = Math.min(overlapLength(rows.slice(-PAGE_SIZE), pageRows), growth);
       // Reported after each page rather than at the end: these histories take
       // tens of seconds to walk, and a reader staring at a blank positions tab
       // has no way to tell "still reading" from "broken".
