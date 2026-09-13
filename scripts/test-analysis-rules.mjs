@@ -215,4 +215,48 @@ console.log("=== RUNNING UNIT TESTS FOR ANALYSIS RULES ===");
   console.log("PASS: unknown portfolio start disables the filter instead of dropping data");
 }
 
+// 8. Grid means layered RESTING orders. Reproduces two real portfolios as
+//    analysed on 2026-09-13, with every field the classifier read at the time
+//    (including the retired isEquidistantLadder flag, which was true for both).
+//    - 5159399805711344897 was labelled Grid. 99% of its entries
+//      are MARKET clips fired seconds apart with hand-picked sizes (8.888,
+//      58.888), losers held up to 464h: many "layers" a few bps apart that are
+//      one decision sliced up, not a lattice.
+//    - 5194131644237409792 was taken for a grid: every
+//      entry a resting LIMIT order, each closed a few dozen bps later.
+{
+  const grid = "網格";
+  const slicer = analysis.inferStrategy(
+    { closedTrades: 85, winRate: 0.7647, payoffRatio: 1.0482, expectancy: 6329.9, avgWinHoldHours: 31.54, avgLossHoldHours: 132.61, maxLossHoldHours: 464.38, tpMedianBps: 162.32, dominantSymbolShare: 0.2353 },
+    { openOrders: 587, closeOrders: 171, adverseAdds: 270, adverseAddRate: 0.46, maxLayers: 31, initialOrderMedian: 93229.6, addOrderMedian: 51976.2, addSizeExpansion: false, medianOrderIntervalSec: 107.85, orderBurstRate60s: 0.428, adverseStepMedianBps: 19.67, adverseStepCv: 1.80, isEquidistantLadder: true, restingEntryShare: 0.0119, dominantSymbolShare: 0.2718 }
+  );
+  assert.ok(!slicer.labels.includes(grid), `market-clip slicer must not be Grid, got: ${slicer.family}`);
+  console.log("PASS: market-order clip slicing is not a grid");
+
+  const ladder = analysis.inferStrategy(
+    { closedTrades: 167, winRate: 1, payoffRatio: null, expectancy: 257.86, avgWinHoldHours: 3.67, avgLossHoldHours: 0, maxLossHoldHours: 0, tpMedianBps: 37.72, dominantSymbolShare: 0.3593 },
+    { openOrders: 235, closeOrders: 172, adverseAdds: 69, adverseAddRate: 0.2936, maxLayers: 12, initialOrderMedian: 58737.2, addOrderMedian: 24495.2, addSizeExpansion: false, medianOrderIntervalSec: 900.99, orderBurstRate60s: 0.209, adverseStepMedianBps: 82.54, adverseStepCv: 0.83, isEquidistantLadder: true, restingEntryShare: 1, dominantSymbolShare: 0.3661 }
+  );
+  assert.ok(ladder.labels.includes(grid), `resting-order ladder must stay Grid, got: ${ladder.family}`);
+  console.log("PASS: resting-order ladder stays a grid");
+
+  // The share is read off the order type the exchange reports; a feed without
+  // order types must yield "unknown", never "all resting" or "none resting".
+  const ordersOf = (orderHistory) => analysis.analyzeBinance({
+    id: "resting-share", detail: {}, positionHistory: [], orderHistory, transferHistory: [], livePositions: [], performanceWindows: {}, historyStatus: {}
+  }).orders;
+  const orders = ordersOf([
+    { symbol: "ETHUSDT", side: "BUY", positionSide: "LONG", type: "LIMIT", executedQty: 1, avgPrice: 100, totalPnl: 0, orderTime: 1 },
+    { symbol: "ETHUSDT", side: "BUY", positionSide: "LONG", type: "LIMIT", executedQty: 1, avgPrice: 99, totalPnl: 0, orderTime: 2 },
+    { symbol: "ETHUSDT", side: "BUY", positionSide: "LONG", type: "MARKET", executedQty: 1, avgPrice: 98, totalPnl: 0, orderTime: 3 },
+    { symbol: "ETHUSDT", side: "SELL", positionSide: "LONG", type: "MARKET", executedQty: 3, avgPrice: 101, totalPnl: 6, orderTime: 4 }
+  ]);
+  assert.ok(Math.abs(orders.restingEntryShare - 2 / 3) < 1e-9, `closing orders must not enter the entry share, got ${orders.restingEntryShare}`);
+  const untyped = ordersOf([
+    { symbol: "ETHUSDT", side: "BUY", positionSide: "LONG", executedQty: 1, avgPrice: 100, totalPnl: 0, orderTime: 1 }
+  ]);
+  assert.equal(untyped.restingEntryShare, null, "no order type in the feed means the share is unknown");
+  console.log("PASS: resting entry share counts entries only and reports unknown when untyped");
+}
+
 console.log("\nALL ANALYSIS UNIT TESTS PASSED SUCCESSFULLY!");

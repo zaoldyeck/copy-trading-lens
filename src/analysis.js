@@ -37,14 +37,6 @@
     return cleaned[idx];
   }
 
-  function standardDeviation(values) {
-    const cleaned = values.filter((value) => Number.isFinite(value));
-    if (cleaned.length < 2) return 0;
-    const mean = cleaned.reduce((sum, value) => sum + value, 0) / cleaned.length;
-    const variance = cleaned.reduce((sum, value) => sum + ((value - mean) ** 2), 0) / cleaned.length;
-    return Math.sqrt(variance);
-  }
-
   function firstDefined(...values) {
     for (const value of values) {
       if (value !== undefined && value !== null && value !== "") return value;
@@ -434,11 +426,12 @@
     let openOrders = 0;
     let closeOrders = 0;
     let adverseAdds = 0;
+    let typedOpens = 0;
+    let restingOpens = 0;
     let maxLayers = 0;
     const initialNotionals = [];
     const addNotionals = [];
     const adverseStepBps = [];
-    const ladderEpisodes = [];
     const symbols = new Map();
     const leverages = new Map();
 
@@ -455,7 +448,7 @@
       const notional = Math.abs(num(firstDefined(order.cumQuote, order.quoteQty, order.notional), qty * price));
       const pnl = num(firstDefined(order.totalPnl, order.realizedProfit), 0);
       const key = `${symbol}:${positionSide}`;
-      const state = tracker.get(key) || { qty: 0, lastPrice: 0, layers: 0, episodeSteps: [] };
+      const state = tracker.get(key) || { qty: 0, lastPrice: 0, layers: 0 };
 
       const isOpen = (positionSide === "LONG" && side === "BUY")
         || (positionSide === "SHORT" && side === "SELL")
@@ -466,6 +459,11 @@
 
       if (isOpen) {
         openOrders += 1;
+        const orderType = String(order.type || "").toUpperCase();
+        if (orderType) {
+          typedOpens += 1;
+          if (orderType === "LIMIT") restingOpens += 1;
+        }
         if (state.qty <= 1e-8) {
           initialNotionals.push(notional);
           state.layers = 1;
@@ -480,9 +478,7 @@
               const step = isLong
                 ? (state.lastPrice / price - 1) * 10000
                 : (price / state.lastPrice - 1) * 10000;
-              const stepAbs = Math.abs(step);
-              adverseStepBps.push(stepAbs);
-              state.episodeSteps.push(stepAbs);
+              adverseStepBps.push(Math.abs(step));
             }
           }
         }
@@ -493,28 +489,13 @@
         closeOrders += 1;
         state.qty = Math.max(0, state.qty - qty);
         if (state.qty <= 1e-8) {
-          if (state.episodeSteps.length >= 2) {
-            ladderEpisodes.push(state.episodeSteps);
-          }
           state.qty = 0;
           state.layers = 0;
           state.lastPrice = 0;
-          state.episodeSteps = [];
         }
       }
       tracker.set(key, state);
     }
-
-    const stepCount = adverseStepBps.length;
-    const stepMean = stepCount ? adverseStepBps.reduce((s, v) => s + v, 0) / stepCount : 0;
-    const stepStdDev = standardDeviation(adverseStepBps);
-    const stepCv = stepMean > 0 ? stepStdDev / stepMean : Infinity;
-    const consistentEpisodes = ladderEpisodes.filter((steps) => {
-      const m = steps.reduce((s, v) => s + v, 0) / steps.length;
-      const sd = standardDeviation(steps);
-      return m > 0 && (sd / m) <= 0.35;
-    }).length;
-    const isEquidistantLadder = (stepCount >= 3 && stepCv <= 0.35) || consistentEpisodes >= 2;
 
     const initialOrderMedian = median(initialNotionals);
     const addOrderMedian = median(addNotionals);
@@ -542,6 +523,9 @@
       closeOrders,
       adverseAdds,
       adverseAddRate: safeDivide(adverseAdds, openOrders, 0),
+      // Share of entries that rested on the book (LIMIT) rather than taking
+      // liquidity. null when the feed carries no order type.
+      restingEntryShare: typedOpens ? restingOpens / typedOpens : null,
       maxLayers,
       initialOrderMedian,
       addOrderMedian,
@@ -549,10 +533,6 @@
       medianOrderIntervalSec,
       orderBurstRate60s,
       adverseStepMedianBps: median(adverseStepBps),
-      adverseStepMeanBps: stepMean,
-      adverseStepStdDevBps: stepStdDev,
-      adverseStepCv: stepCv,
-      isEquidistantLadder,
       dominantSymbol: dominantSymbol ? dominantSymbol[0] : "",
       dominantSymbolShare: dominantSymbol ? safeDivide(dominantSymbol[1], sorted.length, 0) : 0,
       dominantLeverage: dominantLeverage ? dominantLeverage[0] : "",
@@ -775,8 +755,15 @@
     const strongPayoff = summary.payoffRatio !== null && summary.payoffRatio >= 1.5;
     const addSizeExpansion = orders.addSizeExpansion ?? (orders.initialOrderMedian > 0 && orders.addOrderMedian > orders.initialOrderMedian * 1.2);
     const layeredAdds = orders.maxLayers >= 3 || adverseRate >= 0.2;
-    const equidistantLadder = Boolean(orders.isEquidistantLadder);
-    const tightGridSteps = (orders.adverseStepMedianBps > 0 && orders.adverseStepMedianBps <= 120) || equidistantLadder;
+    const tightGridSteps = orders.adverseStepMedianBps > 0 && orders.adverseStepMedianBps <= 120;
+    // A grid is a lattice of resting orders, so most of its entries must have
+    // rested on the book. Without this, a trader who fires one decision as a
+    // burst of market clips seconds apart reads as "many layers a few bps
+    // apart" — the exact statistics the step/layer/frequency gates look for.
+    // Measured over 205 classifiable cached traders:
+    // the Grid population is flat for any cut between 0.11 and 0.65; 0.5 is
+    // "most entries rested", inside that band.
+    const restingEntries = (orders.restingEntryShare ?? 0) > 0.5;
     const roundTrips = orders.openOrders > 0 && safeDivide(orders.closeOrders, orders.openOrders, 0) >= 0.25;
     const shortHolds = summary.avgWinHoldHours > 0 && summary.avgWinHoldHours < 3;
     const tinyTakeProfit = summary.tpMedianBps > 0 && summary.tpMedianBps <= 35;
@@ -811,7 +798,7 @@
         labels.push(t("labelMartingale"), t("labelAdverseAdd"));
         if (longLossHold) labels.push(t("labelLongLossHold"));
       }
-    } else if (layeredAdds && tightGridSteps && (highFrequency || equidistantLadder) && roundTrips) {
+    } else if (restingEntries && layeredAdds && tightGridSteps && highFrequency && roundTrips) {
       family = t("familyGrid");
       labels.push(t("labelGrid"), t("labelDca"), t("labelLeftSide"));
     } else if (adverseRate >= 0.35 && strongPayoff && summary.avgLossHoldHours < 1) {
@@ -1157,10 +1144,7 @@
       addOrderMedian: 0,
       addSizeExpansion: false,
       adverseStepMedianBps: 0,
-      adverseStepMeanBps: 0,
-      adverseStepStdDevBps: 0,
-      adverseStepCv: Infinity,
-      isEquidistantLadder: false,
+      restingEntryShare: null,
       dominantSymbol: summary.dominantSymbol,
       dominantSymbolShare: summary.dominantSymbolShare,
       dominantLeverage: String(firstDefined(raw.candidate?.lever, "")),
