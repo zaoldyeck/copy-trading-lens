@@ -521,7 +521,7 @@
     return (type.includes("DEPOSIT") || type.includes("INVEST")) && !type.includes("FEE");
   }
 
-  function analyzeTransfers(transfers, losses, marginBalance) {
+  function analyzeTransfers(transfers, losses) {
     const deposits = transfers.filter(isCapitalInflowTransfer);
     const lossIntervals = losses
       .map((position) => ({
@@ -556,9 +556,6 @@
       maxDeposit,
       lossPeriodDepositCount: lossPeriodDeposits.length,
       lossPeriodDepositTotal: lossPeriodAmount,
-      maxDepositToMargin: safeDivide(maxDeposit, marginBalance, 0),
-      lossPeriodDepositToMargin: safeDivide(lossPeriodAmount, marginBalance, 0),
-      totalDepositToMargin: safeDivide(depositAmounts.reduce((sum, value) => sum + value, 0), marginBalance, 0),
       rescueTimeline
     };
   }
@@ -999,7 +996,7 @@
     // A still-open row counts here: a partial close at a loss proves the position
     // was bleeding while it was open, and that window is what the test reads.
     const losses = roundPositions.filter((position) => binancePositionPnl(position) < 0);
-    const transfers = analyzeTransfers(raw.transferHistory || [], losses, meta.marginBalance);
+    const transfers = analyzeTransfers(raw.transferHistory || [], losses);
     const live = analyzeLivePositions(raw.livePositions || [], orders, meta.marginBalance);
     const gaps = binanceDataGaps(raw);
     const { strategy, verdict } = gaps.length
@@ -1109,10 +1106,7 @@
       depositTotal: 0,
       maxDeposit: 0,
       lossPeriodDepositCount: 0,
-      lossPeriodDepositTotal: 0,
-      maxDepositToMargin: 0,
-      lossPeriodDepositToMargin: 0,
-      totalDepositToMargin: 0
+      lossPeriodDepositTotal: 0
     };
     const liveMargin = (raw.livePositions || []).reduce((sum, row) => sum + Math.abs(num(row.margin, 0)), 0);
     meta.marginBalance = liveMargin || meta.aum || 0;
