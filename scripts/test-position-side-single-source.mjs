@@ -4,7 +4,7 @@
 // style.js rebuilt one trader's 48 positions as 4 (2026-09-13), and
 // analysis.js guessed "totalPnl == 0 means opening".
 //
-// This test fails when any shipped or tooling file outside positions.js reads
+// This test fails when any shipped file outside positions.js reads
 // `.positionSide`, unless that exact line is allowlisted below with the reason
 // it is not interpreting an order fill.
 import assert from "node:assert/strict";

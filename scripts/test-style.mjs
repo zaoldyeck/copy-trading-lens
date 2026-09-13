@@ -174,7 +174,7 @@ test("an evenly spaced book traded again only a few times is not a grid", () => 
 });
 
 test("one small grid book beside a larger scalping book is a secondary grid, not the family", () => {
-  // A maker scalper ran a ~5 USDT-lot moving grid on one symbol, while the
+  // A maker scalper ran a ~5 USDT-lot moving grid on one symbol while its
   // capital went through short scalps elsewhere.
   const orders = movingGridOrders({ lot: 1 });
   let t = START;

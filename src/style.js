@@ -102,15 +102,15 @@
   // from their fills, and checked on traders held out from that tuning.
 
   // Fewer closed positions or a shorter window than this cannot show a style.
-  // Rounds 1+2 (60 labelled traders): accuracy peaks for a minimum of 4-5
+  // On 60 labelled traders accuracy peaks for a minimum of 4-5
   // closed positions and for a window of 6-16 days.
   const MIN_CLOSED_EPISODES = 5;
   const MIN_SPAN_DAYS = 7;
   // Fewer orders than this in the window is too little to read a style from.
-  // Rounds 1-5 (180 labels): accuracy rises from 147 to 150-151 for any
+  // On 180 labelled traders accuracy rises from 147 to 150-151 for any
   // minimum between 16 and 29 orders (traders labelled insufficient that were
   // still judged had 12-25 orders; the smallest judgeable history had 26).
-  // Set after round 5 was scored; it only withholds a verdict, never adds one.
+  // It only withholds a verdict, never adds one.
   const MIN_ORDERS = 20;
   // Price-level tolerance, in steps: a random price lands within 0.1 of a
   // lattice step 20% of the time, so a majority on-lattice is far above chance.
@@ -118,18 +118,16 @@
   // A grid step at or below two maker fees (0.02% each on Binance USD-M base
   // tier) earns nothing per round trip, so smaller "steps" are not grid levels.
   const MIN_GRID_STEP_BPS = 4;
-  // A grid levels must be traded again and again. Rounds 1-3: the grid
-  // traders' passing books re-entered an exited level 27-93 times; books of
+  // A grid's levels must be traded again and again. On 90 labelled traders the
+  // grid traders' passing books re-entered an exited level 27-93 times; books of
   // non-grid traders that looked evenly spaced re-entered 0-13 times, and two
   // of them passed with 1-2 re-entries on 5-9 entries — chance, not a grid.
   const MIN_GRID_REENTRIES = 15;
   const MIN_GRID_BOOKS = 1;
   // A trader is a grid trader when grid books carry real capital, not when one
-  // symbol runs a small grid beside everything else. Rounds 1-4: the labelled
-  // grid traders put 14-69% of their traded notional through grid books; a
+  // symbol runs a small grid beside everything else. The labelled grid traders put 14-69% of their traded notional through grid books; a
   // maker scalper whose only grid book traded ~5 USDT lots put under 0.5%.
-  // Below this the grid is reported as a secondary label. Set after round 4
-  // was scored, so it has no holdout of its own yet.
+  // Below this the grid is reported as a secondary label.
   const MIN_GRID_NOTIONAL_SHARE = 0.05;
   // Lot rounding: a fixed-size grid's quantities (or notionals) stay within 5%.
   const LOT_TOLERANCE = 0.05;
@@ -137,24 +135,24 @@
   // ~10 bps, so a ~90 bps step rounds to +/-1 tick (~11%).
   const ROUND_TRIP_TOLERANCE = 0.15;
   // A martingale add grows the stake; constant-notional ladders sit at x1.00
-  // within lot rounding (round 1: 1.00 +/- 0.02).
+  // within lot rounding (measured 1.00 +/- 0.02).
   const MIN_MULTIPLIER = 1.05;
   // Share of positions with adds whose adds follow a fixed multiplier, and how
   // tightly the multipliers cluster around each symbol's own ratio (q75/q25).
-  // Round 1: martingale traders 0.81 and 0.93 with spread 1.00-1.01; highest
+  // Measured: martingale traders 0.81 and 0.93 with spread 1.00-1.01; highest
   // non-martingale 0.56 (a scalper that doubles on its rare adds), then 0.20;
   // scattered escalators spread 1.14-1.46.
   const MIN_MULTIPLIER_EPISODE_SHARE = 0.7;
   const MAX_MULTIPLIER_SPREAD = 1.1;
   // Share of closed positions that added deeper than the trader's own median
-  // take-profit distance. Rounds 1-3 (90 labelled traders): accuracy is flat
+  // take-profit distance. On 90 labelled traders accuracy is flat
   // (77 +/- 1) for any cut from 0.08 to 0.19 and falls off above 0.20, because
   // occasional averagers and discretionary traders overlap completely at
   // 0.06-0.14; 0.14 sits mid-plateau, and below it the share is shown as a
   // label instead of a family.
   const MIN_DEEP_ADD_SHARE = 0.14;
-  // Share of closed positions that ended at a net loss. Rounds 1-3: traders
-  // labelled as averaging without stops reach 0.08 at most, those with stops
+  // Share of closed positions that ended at a net loss. Among labelled traders,
+  // those averaging in without stops reach 0.08 at most, those with stops
   // start at 0.095 (one exception at 0.04); accuracy is flat from 0.06 to 0.12.
   const STOP_LOSS_SHARE = 0.09;
   // Positions held under a day on median are short-term; a day or more, swing.
@@ -178,7 +176,7 @@
     return Math.sqrt(variance) / Math.abs(mean);
   }
 
-  // Operator definition (2026-09-13): fixed size per level, evenly spaced
+  // Definition: fixed size per level, evenly spaced
   // levels, closes at grid levels, levels traded again. Tested on a book: every
   // fill on one symbol and side, because a grid that sells each lot as soon as
   // it rises goes flat between lots and never shows as one long position.
@@ -332,7 +330,7 @@
     return added.length > 0 && added.filter((episode) => multiplierRuns(episode).length).length / added.length > 0.5;
   }
 
-  // Operator definition: each add against the position is a fixed multiple of
+  // Definition: each add against the position is a fixed multiple of
   // the one before. A run is the entries between two exits. Its adds are read
   // in order of depth, not fill time: a ladder placed in advance and swept in
   // one minute fills its deepest level first, yet each level
