@@ -77,6 +77,13 @@
     return side === "LONG" || side === "SHORT" ? `${symbol}|${side}` : `${symbol}|NET`;
   }
 
+  // replayFills(key, fills, { allowFlip: false }) on a one-way key asks for
+  // hedge semantics: the book whose opening direction is openSign.
+  function hedgeKeyOf(key, openSign) {
+    if (!isOneWayBucket(key)) return key;
+    return `${symbolOfKey(key)}|${openSign > 0 ? "LONG" : "SHORT"}`;
+  }
+
   function isOneWayBucket(key) {
     return key.endsWith("|NET");
   }
@@ -129,6 +136,88 @@
   }
 
   /**
+   * What one fill does to one book — the single rule every consumer that turns
+   * order history into positions must go through (style classification,
+   * behaviour stats, open-position reconstruction).
+   *
+   * One-way (BUY/SELL on a "|NET" book): a fill that grows the net opens, one
+   * that shrinks it closes, and one larger than the position closes it and
+   * opens the remainder on the other side — Binance's own one-way semantics.
+   * Hedge ("|LONG"/"|SHORT" book): the book fixes the opening direction, so a
+   * close larger than the book never flips; the excess is volume whose opening
+   * fills are outside the history we hold.
+   *
+   * @param {string} key      bucketKeyOf(symbol, positionSide)
+   * @param {bigint} signedQty book size before the fill, scaled 1e8, sign = side
+   * @param {bigint} delta    signedFillDelta(fill, key)
+   * @returns {{opening: boolean, reduce: bigint, flipped: bigint, unmatched: bigint, next: bigint}}
+   */
+  function stepBook(key, signedQty, delta) {
+    const oneWay = isOneWayBucket(key);
+    const opening = oneWay
+      ? (signedQty === 0n || (delta > 0n) === (signedQty > 0n))
+      : (delta > 0n) === !key.endsWith("|SHORT");
+    if (opening) return { opening: true, reduce: 0n, flipped: 0n, unmatched: 0n, next: signedQty + delta };
+    const prior = absBig(signedQty);
+    const size = absBig(delta);
+    const reduce = size < prior ? size : prior;
+    if (oneWay) {
+      const next = signedQty + delta;
+      const flipped = next !== 0n && (next > 0n) !== (signedQty > 0n) ? absBig(next) : 0n;
+      return { opening: false, reduce, flipped, unmatched: 0n, next };
+    }
+    return {
+      opening: false,
+      reduce,
+      flipped: 0n,
+      unmatched: size - reduce,
+      next: signedQty + (signedQty > 0n ? -reduce : reduce)
+    };
+  }
+
+  /**
+   * Every position a book held, flat to flat, with each fill marked as an
+   * entry or an exit. A flipping fill is split: its closing part ends one
+   * position and its remainder opens the next.
+   *
+   * @returns {{positions: {side: string, closed: boolean, fills: object[]}[], unmatchedFills: number}}
+   */
+  function replayPositions(key, fills) {
+    const positions = [];
+    let current = null;
+    let signedQty = 0n;
+    let unmatchedFills = 0;
+    const ordered = [...fills].sort((a, b) => num(a.orderTime, num(a.orderUpdateTime, 0)) - num(b.orderTime, num(b.orderUpdateTime, 0)));
+    for (const fill of ordered) {
+      const delta = signedFillDelta(fill, key);
+      if (delta === 0n) continue;
+      const step = stepBook(key, signedQty, delta);
+      if (step.opening) {
+        if (!current) {
+          current = { side: step.next > 0n ? "LONG" : "SHORT", closed: false, fills: [] };
+          positions.push(current);
+        }
+        current.fills.push({ order: fill, entry: true, qty: fromScaledQty(absBig(delta)) });
+      } else if (step.reduce === 0n) {
+        unmatchedFills += 1;
+      } else {
+        current.fills.push({ order: fill, entry: false, qty: fromScaledQty(step.reduce) });
+        if (step.unmatched > 0n) unmatchedFills += 1;
+        if (step.next === 0n || step.flipped > 0n) {
+          current.closed = true;
+          current = null;
+        }
+        if (step.flipped > 0n) {
+          current = { side: step.next > 0n ? "LONG" : "SHORT", closed: false, fills: [{ order: fill, entry: true, qty: fromScaledQty(step.flipped), flipRemainder: true }] };
+          positions.push(current);
+        }
+      }
+      signedQty = step.next;
+    }
+    return { positions, unmatchedFills };
+  }
+
+  /**
    * Replay one bucket's fills into a live position.
    *
    * Cost basis follows Binance's own entry-price semantics: adds raise the
@@ -168,11 +257,9 @@
       if (delta === 0n) continue;
       const price = num(fill.avgPrice, 0);
       const time = num(fill.orderUpdateTime, num(fill.orderTime, 0));
-      const opening = allowFlip
-        ? (signedQty === 0n || (delta > 0n) === (signedQty > 0n))
-        : (delta > 0n) === (openSign > 0);
+      const step = stepBook(allowFlip ? key : hedgeKeyOf(key, openSign), signedQty, delta);
 
-      if (opening) {
+      if (step.opening) {
         if (signedQty === 0n) {
           openedAt = time;
           costBasis = 0;
@@ -182,21 +269,18 @@
           addCount += 1;
         }
         costBasis += fromScaledQty(absBig(delta)) * price;
-        signedQty += delta;
+        signedQty = step.next;
         events.push({ time, kind: "open", qty: fromScaledQty(absBig(delta)), price, pnl: 0, orderType: fill.type });
       } else {
-        const priorQty = absBig(signedQty);
-        let reduce = absBig(delta) < priorQty ? absBig(delta) : priorQty;
-        if (!allowFlip && absBig(delta) > priorQty) {
-          unmatchedCloseQty += absBig(delta) - priorQty;
-          reduce = priorQty;
-        }
+        unmatchedCloseQty += step.unmatched;
+        const reduce = step.reduce;
         if (reduce === 0n) {
           // Nothing of ours to close: this fill belongs to size we never saw
           // opened. Recorded as unmatched above, not as a trade on this book.
           lastFillAt = time;
           continue;
         }
+        const priorQty = absBig(signedQty);
         const avgEntry = priorQty > 0n ? costBasis / fromScaledQty(priorQty) : 0;
         costBasis -= avgEntry * fromScaledQty(reduce);
         closedQty += reduce;
@@ -205,12 +289,10 @@
         const fillPnl = num(fill.totalPnl, (price - avgEntry) * fromScaledQty(reduce) * direction);
         realizedFromExchange += num(fill.totalPnl, 0);
         events.push({ time, kind: "close", qty: fromScaledQty(reduce), price, pnl: fillPnl, orderType: fill.type });
-        signedQty = allowFlip
-          ? signedQty + delta
-          : signedQty + (direction > 0 ? -reduce : reduce);
-        if (signedQty !== 0n && (signedQty > 0n) !== (direction > 0)) {
+        signedQty = step.next;
+        if (step.flipped > 0n) {
           // Flipped through zero: the leftover is a brand-new position.
-          costBasis = fromScaledQty(absBig(signedQty)) * price;
+          costBasis = fromScaledQty(step.flipped) * price;
           openedAt = time;
           peakQty = 0n;
           closedQty = 0n;
@@ -740,6 +822,8 @@
     reconcileAgainstPositionRow,
     enrichWithMarks,
     summarizePortfolio,
+    stepBook,
+    replayPositions,
     // exported for tests
     replayFills,
     bucketKeyOf

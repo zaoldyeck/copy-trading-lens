@@ -36,10 +36,10 @@
       ],
       "js": [
         "src/i18n.js",
-        "src/style.js",
-        "src/analysis.js",
         "src/providers.js",
         "src/positions.js",
+        "src/style.js",
+        "src/analysis.js",
         "src/positions-panel.js",
         "src/content.js"
       ],

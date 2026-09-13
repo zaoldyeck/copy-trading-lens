@@ -251,77 +251,38 @@
   "familyInsufficient": {
     "message": "Not enough trade history to judge copy risk"
   },
-  "familyNoMajorPattern": {
-    "message": "No obvious high-risk trading pattern detected"
-  },
   "familyMartingale": {
-    "message": "Martingale: increases size while losing, so consecutive wrong-way moves can expand drawdown quickly"
+    "message": "Martingale: each add against the position is a fixed multiple of the last, so a run of wrong-way moves grows the loss geometrically"
   },
   "familyGrid": {
-    "message": "Grid / range trading: layered orders harvest chop, but one-way trends can build floating loss"
+    "message": "Grid: fixed-size orders on evenly spaced levels, each closed a level away; a one-way trend keeps adding inventory"
   },
-  "familyDcaLeft": {
-    "message": "DCA / left-side trading: averages into weakness, so early entries can inherit drawdown"
+  "familyDcaNoStop": {
+    "message": "Averaging in without stops: adds while losing and almost never takes a loss, so one sustained move can wipe out many small wins"
   },
-  "familyRightTrend": {
-    "message": "Right-side / trend following: enters after confirmation and usually depends on cleaner stops"
+  "familyDcaWithStop": {
+    "message": "Averaging in with stops: adds while losing but does realise losing positions"
   },
-  "familyScalping": {
-    "message": "Scalping: short-duration small profits, so copier latency and fees matter"
-  },
-  "familyMarketMaking": {
-    "message": "Market-making / high-frequency making tendency: many short trades where copy slippage can erase edge"
+  "familyShortTerm": {
+    "message": "Short-term trading: most positions are held under a day, so copier latency and fees weigh more"
   },
   "familySwing": {
     "message": "Swing trading: longer holds, so copiers may inherit open-position volatility"
-  },
-  "familyMeanReversionStop": {
-    "message": "Left-side rebound trading with fast stops: execution quality matters"
-  },
-  "labelMartingale": {
-    "message": "Martingale"
-  },
-  "labelGrid": {
-    "message": "Grid"
-  },
-  "labelDca": {
-    "message": "DCA"
-  },
-  "labelLeftSide": {
-    "message": "Left-side trading"
-  },
-  "labelRightSide": {
-    "message": "Right-side trading"
-  },
-  "labelScalping": {
-    "message": "Scalping"
-  },
-  "labelMarketMaking": {
-    "message": "Market-making tendency"
-  },
-  "labelAdverseAdd": {
-    "message": "Adds while losing"
-  },
-  "labelLongLossHold": {
-    "message": "Holds losing trades"
-  },
-  "labelFastLossClose": {
-    "message": "Cuts losses quickly"
-  },
-  "labelHighFreq": {
-    "message": "High trading frequency"
-  },
-  "labelLayeredAdds": {
-    "message": "Batch adds"
-  },
-  "labelLongHold": {
-    "message": "Longer holds"
   },
   "labelPoorPayoff": {
     "message": "Weak payoff ratio"
   },
   "labelHighWinTailRisk": {
     "message": "High win rate may hide tail risk"
+  },
+  "labelSomeMartingale": {
+    "message": "Martingale adds on some positions"
+  },
+  "labelSomeGrid": {
+    "message": "Grid on some positions"
+  },
+  "labelNeverRealisedLoss": {
+    "message": "Never closed a position at a loss"
   },
   "labelSingleSymbol": {
     "message": "Concentrated in one coin"
@@ -452,12 +413,6 @@
   "performanceQualityUnavailable": {
     "message": "unavailable"
   },
-  "familyControlledMartingale": {
-    "message": "Controlled Martingale: Multiplies size but enforces strict same-day fast cut-loss"
-  },
-  "labelControlledMartingale": {
-    "message": "Controlled Fast-Cut Martingale"
-  },
   "cautionSevereDeadLoss": {
     "message": "Max loss hold was {0}, showing severe stubborn holding habits."
   },
@@ -484,12 +439,6 @@
   },
   "alertSevereDeadLoss": {
     "message": "🚨 Dead Loss Held for {0}"
-  },
-  "familySlicedScalping": {
-    "message": "High-Frequency Sliced Scalping: Sub-second split limit orders capturing micro-spreads"
-  },
-  "labelSlicedScalping": {
-    "message": "Sliced Order Scalping"
   },
   "evidenceZeroLossMartingaleBomb": {
     "message": "Never closes losing trades (100% win-rate illusion) with deep adverse laddering, posing extreme liquidation risk."

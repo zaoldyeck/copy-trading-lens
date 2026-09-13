@@ -59,12 +59,12 @@ global.fetch = async (url, options) => {
   throw new Error(`Unexpected URL in test stub: ${url}`);
 };
 
-// eslint-disable-next-line no-eval
-eval(read("src/i18n.js"));
-// eslint-disable-next-line no-eval
-eval(read("src/providers.js"));
-// eslint-disable-next-line no-eval
-eval(read("src/analysis.js"));
+// Same scripts, same order, as manifest.json: analysis.js reads styles decided
+// by style.js, which rebuilds positions through positions.js.
+for (const file of ["src/i18n.js", "src/providers.js", "src/positions.js", "src/style.js", "src/analysis.js"]) {
+  // eslint-disable-next-line no-eval
+  eval(read(file));
+}
 
 // 1. Refusals are retried until answered — on paged history, the detail call and the live call.
 const raw = await global.CopyTradingLensProviders.fetchLeadData({ platform: "Binance", id: "000000000000000000" });

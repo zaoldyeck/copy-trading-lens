@@ -251,77 +251,38 @@
   "familyInsufficient": {
     "message": "取引履歴が不足しており、コピーリスクを判断できません"
   },
-  "familyNoMajorPattern": {
-    "message": "明確な高リスク取引パターンは検出されていません"
-  },
   "familyMartingale": {
-    "message": "マーチンゲール：損失時にサイズを増やすため、連続逆行でドローダウンが急拡大しやすい"
+    "message": "マーチンゲール：逆行時の追加が毎回直前の一定倍数のため、連続して逆行すると損失が倍々に膨らむ"
   },
   "familyGrid": {
-    "message": "グリッド / レンジ取引：分割注文でレンジを取るが、一方向相場では含み損が積み上がりやすい"
+    "message": "グリッド：等間隔の価格に同じサイズの注文を置き、各注文を隣の水準で決済する。一方向相場では在庫が積み上がる"
   },
-  "familyDcaLeft": {
-    "message": "DCA / 左側取引：下落や逆行中に平均化するため、早すぎる参加はドローダウンを引き継ぎやすい"
+  "familyDcaNoStop": {
+    "message": "損切りなしのナンピン：含み損で買い増し、ほぼ損切りしないため、一度の大きな一方向相場で多くの小さな利益を失いうる"
   },
-  "familyRightTrend": {
-    "message": "右側取引 / トレンドフォロー：方向確認後に入るため、通常は損切りの明確さが重要"
+  "familyDcaWithStop": {
+    "message": "損切りありのナンピン：含み損で買い増すが、損失ポジションの決済も行う"
   },
-  "familyScalping": {
-    "message": "スキャルピング：短時間の小幅利益が中心で、コピー遅延と手数料が結果に影響します"
-  },
-  "familyMarketMaking": {
-    "message": "マーケットメイク / 高頻度メイク傾向：短期取引が多く、コピー時のスリッページで優位性が消えやすい"
+  "familyShortTerm": {
+    "message": "短期取引：多くのポジションを1日未満で保有するため、コピー遅延と手数料の影響が大きい"
   },
   "familySwing": {
     "message": "スイング取引：保有時間が長めで、コピー側が既存ポジションの変動を引き継ぐ可能性があります"
-  },
-  "familyMeanReversionStop": {
-    "message": "左側の反発狙いだが損切りは速い：執行品質が重要です"
-  },
-  "labelMartingale": {
-    "message": "マーチンゲール"
-  },
-  "labelGrid": {
-    "message": "グリッド"
-  },
-  "labelDca": {
-    "message": "DCA"
-  },
-  "labelLeftSide": {
-    "message": "左側取引"
-  },
-  "labelRightSide": {
-    "message": "右側取引"
-  },
-  "labelScalping": {
-    "message": "スキャルピング"
-  },
-  "labelMarketMaking": {
-    "message": "マーケットメイク傾向"
-  },
-  "labelAdverseAdd": {
-    "message": "損失中に追加"
-  },
-  "labelLongLossHold": {
-    "message": "損失取引を長く保有"
-  },
-  "labelFastLossClose": {
-    "message": "損失を素早く切る"
-  },
-  "labelHighFreq": {
-    "message": "取引頻度が高い"
-  },
-  "labelLayeredAdds": {
-    "message": "分割追加"
-  },
-  "labelLongHold": {
-    "message": "保有時間が長い"
   },
   "labelPoorPayoff": {
     "message": "損益比が弱い"
   },
   "labelHighWinTailRisk": {
     "message": "高勝率はテールリスクを隠す場合があります"
+  },
+  "labelSomeMartingale": {
+    "message": "一部ポジションでマーチンゲール"
+  },
+  "labelSomeGrid": {
+    "message": "一部ポジションでグリッド"
+  },
+  "labelNeverRealisedLoss": {
+    "message": "損失での決済なし"
   },
   "labelSingleSymbol": {
     "message": "単一銘柄に集中"
@@ -452,12 +413,6 @@
   "performanceQualityUnavailable": {
     "message": "利用不可"
   },
-  "familyControlledMartingale": {
-    "message": "制御型ナンピンマーチン：倍増加えるが当日中に厳格に損切り"
-  },
-  "labelControlledMartingale": {
-    "message": "高速損切り型マーチン"
-  },
   "cautionSevereDeadLoss": {
     "message": "最大含み損保有時間が {0} であり、深刻な塩漬け傾向が見られます。"
   },
@@ -484,12 +439,6 @@
   },
   "alertSevereDeadLoss": {
     "message": "🚨 過去最長塩漬け {0}"
-  },
-  "familySlicedScalping": {
-    "message": "高頻度スプリットスキャルピング：秒単位の分割注文で極小利幅を獲得"
-  },
-  "labelSlicedScalping": {
-    "message": "分割注文スキャルピング"
   },
   "evidenceZeroLossMartingaleBomb": {
     "message": "損失確定を全く行わない（勝率100%の見せかけ）かつ過度なナンピンであり、壊滅的なロスカットリスクを抱えています。"

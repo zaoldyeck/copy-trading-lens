@@ -251,77 +251,38 @@
   "familyInsufficient": {
     "message": "交易记录不足，暂时无法判断跟单风险"
   },
-  "familyNoMajorPattern": {
-    "message": "未侦测到明显高风险交易模式"
-  },
   "familyMartingale": {
-    "message": "马丁格尔：亏损时加大仓位，连续错边会快速放大回撤"
+    "message": "马丁格尔：逆势加仓每笔是上一笔的固定倍数，连续错边时亏损按倍数放大"
   },
   "familyGrid": {
-    "message": "网格 / 区间交易：分层挂单吃震荡，单边行情容易累积浮亏"
+    "message": "网格：固定份量挂在等距价位，每格各自在相邻一格平仓；单边行情会一路累积持仓"
   },
-  "familyDcaLeft": {
-    "message": "DCA / 左侧交易：逆势分批摊平，进场太早会承接回撤"
+  "familyDcaNoStop": {
+    "message": "逆势摊平不止损：亏损时加仓、几乎从不认赔，一次持续的单边行情可能吃掉许多小赚"
   },
-  "familyRightTrend": {
-    "message": "右侧交易 / 趋势跟随：等方向确认后进场，通常更重视止损"
+  "familyDcaWithStop": {
+    "message": "逆势摊平会止损：亏损时加仓，但也会认赔出场"
   },
-  "familyScalping": {
-    "message": "剥头皮：短线高频小利，跟单延迟与手续费会影响结果"
-  },
-  "familyMarketMaking": {
-    "message": "做市 / 高频做市倾向：大量短线成交，跟单滑价可能吃掉优势"
+  "familyShortTerm": {
+    "message": "短线交易：多数仓位持有不到一天，跟单延迟与手续费影响较大"
   },
   "familySwing": {
     "message": "波段交易：持仓时间较长，跟单者可能承接既有波动"
-  },
-  "familyMeanReversionStop": {
-    "message": "左侧抢反弹但止损快：跟单滑价与速度很重要"
-  },
-  "labelMartingale": {
-    "message": "马丁格尔"
-  },
-  "labelGrid": {
-    "message": "网格"
-  },
-  "labelDca": {
-    "message": "DCA"
-  },
-  "labelLeftSide": {
-    "message": "左侧交易"
-  },
-  "labelRightSide": {
-    "message": "右侧交易"
-  },
-  "labelScalping": {
-    "message": "剥头皮"
-  },
-  "labelMarketMaking": {
-    "message": "做市倾向"
-  },
-  "labelAdverseAdd": {
-    "message": "亏损时加仓"
-  },
-  "labelLongLossHold": {
-    "message": "亏损单持仓偏久"
-  },
-  "labelFastLossClose": {
-    "message": "亏损单结束快"
-  },
-  "labelHighFreq": {
-    "message": "交易频率高"
-  },
-  "labelLayeredAdds": {
-    "message": "分批加仓"
-  },
-  "labelLongHold": {
-    "message": "持仓时间较长"
   },
   "labelPoorPayoff": {
     "message": "盈亏比偏弱"
   },
   "labelHighWinTailRisk": {
     "message": "高胜率可能藏尾部风险"
+  },
+  "labelSomeMartingale": {
+    "message": "部分仓位倍投加仓"
+  },
+  "labelSomeGrid": {
+    "message": "部分仓位为网格"
+  },
+  "labelNeverRealisedLoss": {
+    "message": "从未认赔平仓"
   },
   "labelSingleSymbol": {
     "message": "集中押单一币"
@@ -452,12 +413,6 @@
   "performanceQualityUnavailable": {
     "message": "不可重建"
   },
-  "familyControlledMartingale": {
-    "message": "受控马丁：倍投加码但严格当日快速止损"
-  },
-  "labelControlledMartingale": {
-    "message": "受控快速止损马丁"
-  },
   "cautionSevereDeadLoss": {
     "message": "历史亏损单最长持仓 {0}，有严重死扛不认赔记录。"
   },
@@ -484,12 +439,6 @@
   },
   "alertSevereDeadLoss": {
     "message": "🚨 历史死扛亏损 {0}"
-  },
-  "familySlicedScalping": {
-    "message": "高频分片拆单剥头皮：秒级拆单分批成交，极短线吃价差"
-  },
-  "labelSlicedScalping": {
-    "message": "分片拆单剥头皮"
   },
   "evidenceZeroLossMartingaleBomb": {
     "message": "从不平仓认赔（100% 胜率假象）且单边逆势加仓过深，具备极高穿仓尾部风险。"

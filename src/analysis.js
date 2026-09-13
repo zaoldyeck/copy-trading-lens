@@ -422,12 +422,9 @@
 
   function analyzeBinanceOrders(orders) {
     const sorted = [...orders].sort((a, b) => num(a.orderTime, 0) - num(b.orderTime, 0));
-    const tracker = new Map();
     let openOrders = 0;
     let closeOrders = 0;
     let adverseAdds = 0;
-    let typedOpens = 0;
-    let restingOpens = 0;
     let maxLayers = 0;
     const initialNotionals = [];
     const addNotionals = [];
@@ -440,61 +437,28 @@
       if (symbol) symbols.set(symbol, (symbols.get(symbol) || 0) + 1);
       const leverage = String(firstDefined(order.leverage, order.leverageLevel, ""));
       if (leverage) leverages.set(leverage, (leverages.get(leverage) || 0) + 1);
+    }
 
-      const positionSide = String(firstDefined(order.positionSide, "BOTH")).toUpperCase();
-      const side = String(order.side || "").toUpperCase();
-      const qty = Math.abs(num(firstDefined(order.executedQty, order.origQty, order.quantity), 0));
-      const price = num(firstDefined(order.avgPrice, order.price), 0);
-      const notional = Math.abs(num(firstDefined(order.cumQuote, order.quoteQty, order.notional), qty * price));
-      const pnl = num(firstDefined(order.totalPnl, order.realizedProfit), 0);
-      const key = `${symbol}:${positionSide}`;
-      const state = tracker.get(key) || { qty: 0, lastPrice: 0, layers: 0 };
-
-      const isOpen = (positionSide === "LONG" && side === "BUY")
-        || (positionSide === "SHORT" && side === "SELL")
-        || (positionSide === "BOTH" && Math.abs(pnl) <= 1e-8 && side);
-
-      const isLong = positionSide === "LONG" || (positionSide === "BOTH" && side === "BUY");
-      const isShort = positionSide === "SHORT" || (positionSide === "BOTH" && side === "SELL");
-
-      if (isOpen) {
-        openOrders += 1;
-        const orderType = String(order.type || "").toUpperCase();
-        if (orderType) {
-          typedOpens += 1;
-          if (orderType === "LIMIT") restingOpens += 1;
+    // Which fills open, add to, close or flip a position comes from the one
+    // shared replay (src/positions.js via src/style.js), never from guessing
+    // here: one-way accounts flip through zero and a breakeven close has zero pnl.
+    for (const episode of global.CopyTradingLensStyle.buildEpisodes(sorted).episodes) {
+      const long = episode.direction === "LONG";
+      openOrders += episode.entries.length;
+      closeOrders += episode.exits.length;
+      maxLayers = Math.max(maxLayers, episode.entries.length);
+      episode.entries.forEach((fill, index) => {
+        if (index === 0) {
+          initialNotionals.push(fill.notional);
+          return;
         }
-        if (state.qty <= 1e-8) {
-          initialNotionals.push(notional);
-          state.layers = 1;
-        } else {
-          addNotionals.push(notional);
-          state.layers += 1;
-          const adverse = (isLong && price < state.lastPrice)
-            || (isShort && price > state.lastPrice);
-          if (adverse) {
-            adverseAdds += 1;
-            if (state.lastPrice > 0 && price > 0) {
-              const step = isLong
-                ? (state.lastPrice / price - 1) * 10000
-                : (price / state.lastPrice - 1) * 10000;
-              adverseStepBps.push(Math.abs(step));
-            }
-          }
+        addNotionals.push(fill.notional);
+        const previous = episode.entries[index - 1].price;
+        if (long ? fill.price < previous : fill.price > previous) {
+          adverseAdds += 1;
+          adverseStepBps.push(Math.abs(long ? (previous / fill.price - 1) * 10000 : (fill.price / previous - 1) * 10000));
         }
-        state.qty += qty;
-        if (price > 0) state.lastPrice = price;
-        maxLayers = Math.max(maxLayers, state.layers);
-      } else {
-        closeOrders += 1;
-        state.qty = Math.max(0, state.qty - qty);
-        if (state.qty <= 1e-8) {
-          state.qty = 0;
-          state.layers = 0;
-          state.lastPrice = 0;
-        }
-      }
-      tracker.set(key, state);
+      });
     }
 
     const initialOrderMedian = median(initialNotionals);
@@ -523,9 +487,6 @@
       closeOrders,
       adverseAdds,
       adverseAddRate: safeDivide(adverseAdds, openOrders, 0),
-      // Share of entries that rested on the book (LIMIT) rather than taking
-      // liquidity. null when the feed carries no order type.
-      restingEntryShare: typedOpens ? restingOpens / typedOpens : null,
       maxLayers,
       initialOrderMedian,
       addOrderMedian,
@@ -730,6 +691,7 @@
       avgWinHoldHours: safeDivide(winHolds.reduce((sum, value) => sum + value, 0), winHolds.length, 0),
       avgLossHoldHours: safeDivide(lossHolds.reduce((sum, value) => sum + value, 0), lossHolds.length, 0),
       maxLossHoldHours: lossHolds.length ? Math.max(...lossHolds) : 0,
+      medianHoldHours: median([...winHolds, ...lossHolds]),
       medianWinHoldHours: median(winHolds),
       medianLossHoldHours: median(lossHolds),
       lossHoldRatio: safeDivide(
@@ -744,87 +706,37 @@
     };
   }
 
-  function inferStrategy(summary, orders) {
-    const labels = [];
-    let family = summary.closedTrades >= 30 ? t("familyNoMajorPattern") : t("familyInsufficient");
-    const adverseRate = orders.adverseAddRate || 0;
-    const highFrequency = orders.openOrders >= 200 || (summary.closedTrades >= 100 && summary.avgWinHoldHours < 3);
-    const veryHighFrequency = orders.openOrders >= 500 || (summary.closedTrades >= 300 && summary.avgWinHoldHours > 0 && summary.avgWinHoldHours < 1);
-    const longLossHold = summary.avgLossHoldHours > Math.max(12, summary.avgWinHoldHours * 1.5);
-    const poorPayoff = summary.payoffRatio !== null && summary.payoffRatio < 0.5;
-    const strongPayoff = summary.payoffRatio !== null && summary.payoffRatio >= 1.5;
-    const addSizeExpansion = orders.addSizeExpansion ?? (orders.initialOrderMedian > 0 && orders.addOrderMedian > orders.initialOrderMedian * 1.2);
-    const layeredAdds = orders.maxLayers >= 3 || adverseRate >= 0.2;
-    const tightGridSteps = orders.adverseStepMedianBps > 0 && orders.adverseStepMedianBps <= 120;
-    // A grid is a lattice of resting orders, so most of its entries must have
-    // rested on the book. Without this, a trader who fires one decision as a
-    // burst of market clips seconds apart reads as "many layers a few bps
-    // apart" — the exact statistics the step/layer/frequency gates look for.
-    // Measured over 205 classifiable cached traders:
-    // the Grid population is flat for any cut between 0.11 and 0.65; 0.5 is
-    // "most entries rested", inside that band.
-    const restingEntries = (orders.restingEntryShare ?? 0) > 0.5;
-    const roundTrips = orders.openOrders > 0 && safeDivide(orders.closeOrders, orders.openOrders, 0) >= 0.25;
-    const shortHolds = summary.avgWinHoldHours > 0 && summary.avgWinHoldHours < 3;
-    const tinyTakeProfit = summary.tpMedianBps > 0 && summary.tpMedianBps <= 35;
-    const cleanTrendLike = summary.closedTrades >= 30
-      && adverseRate < 0.1
-      && strongPayoff
-      && summary.avgLossHoldHours > 0
-      && summary.avgLossHoldHours < summary.avgWinHoldHours;
+  const STYLE_FAMILY_KEYS = {
+    insufficient: "familyInsufficient",
+    martingale: "familyMartingale",
+    grid: "familyGrid",
+    dcaNoStop: "familyDcaNoStop",
+    dcaWithStop: "familyDcaWithStop",
+    shortTerm: "familyShortTerm",
+    swing: "familySwing"
+  };
+  const STYLE_SECONDARY_KEYS = {
+    martingale: "labelSomeMartingale",
+    grid: "labelSomeGrid",
+    neverRealisedLoss: "labelNeverRealisedLoss"
+  };
 
-    // Micro-scalping with sliced order bursts (sub-minute clips)
-    const isSlicedScalpBurst = (
-      (orders.orderBurstRate60s >= 0.40 || orders.medianOrderIntervalSec <= 30 || summary.avgWinHoldHours < 0.5)
-      && summary.maxLossHoldHours <= 24
-      && summary.avgLossHoldHours <= 4
-    );
-
-    // Martingale is strictly defined by ESCALATING SIZE on adverse moves — doubling
-    // down (addSizeExpansion). Without expanding adds, multi-layer accumulation is DCA.
-    if (adverseRate >= 0.35 && orders.maxLayers >= 3 && addSizeExpansion) {
-      const isControlledFastExit = summary.avgLossHoldHours > 0
-        && summary.avgLossHoldHours < 3
-        && summary.maxLossHoldHours < 12
-        && (summary.payoffRatio >= 0.8 || summary.expectancy > 0);
-      if (isSlicedScalpBurst) {
-        family = t("familySlicedScalping");
-        labels.push(t("labelSlicedScalping"), t("labelScalping"), t("labelFastLossClose"));
-      } else if (isControlledFastExit) {
-        family = t("familyControlledMartingale");
-        labels.push(t("labelControlledMartingale"), t("labelFastLossClose"));
-      } else {
-        family = t("familyMartingale");
-        labels.push(t("labelMartingale"), t("labelAdverseAdd"));
-        if (longLossHold) labels.push(t("labelLongLossHold"));
-      }
-    } else if (restingEntries && layeredAdds && tightGridSteps && highFrequency && roundTrips) {
-      family = t("familyGrid");
-      labels.push(t("labelGrid"), t("labelDca"), t("labelLeftSide"));
-    } else if (adverseRate >= 0.35 && strongPayoff && summary.avgLossHoldHours < 1) {
-      family = t("familyMeanReversionStop");
-      labels.push(t("labelDca"), t("labelLeftSide"), t("labelFastLossClose"));
-    } else if (adverseRate >= 0.2 || (adverseRate >= 0.35 && orders.maxLayers >= 3)) {
-      family = t("familyDcaLeft");
-      labels.push(t("labelDca"), t("labelLeftSide"), t("labelLayeredAdds"));
-    } else if (veryHighFrequency && shortHolds && tinyTakeProfit && adverseRate < 0.1) {
-      family = t("familyMarketMaking");
-      labels.push(t("labelMarketMaking"), t("labelHighFreq"));
-    } else if (highFrequency && adverseRate < 0.1) {
-      family = t("familyScalping");
-      labels.push(t("labelScalping"), t("labelHighFreq"));
-    } else if (cleanTrendLike) {
-      family = t("familyRightTrend");
-      labels.push(t("labelRightSide"), t("labelFastLossClose"));
-    } else if (summary.closedTrades >= 30 && summary.avgWinHoldHours > 24) {
-      family = t("familySwing");
-      labels.push(t("labelLongHold"));
-    }
-
-    if (poorPayoff) labels.push(t("labelPoorPayoff"));
+  // The style itself is decided from the fills in src/style.js; this only
+  // renders it and adds the descriptive facts read off closed position rows.
+  function inferStrategy(summary, style) {
+    const labels = (style.secondary || []).map((key) => t(STYLE_SECONDARY_KEYS[key]));
+    if (summary.payoffRatio !== null && summary.payoffRatio < 0.5) labels.push(t("labelPoorPayoff"));
     if (summary.winRate >= 0.95) labels.push(t("labelHighWinTailRisk"));
     if (summary.dominantSymbolShare >= 0.5) labels.push(t("labelSingleSymbol"));
-    return { family, labels: [...new Set(labels)] };
+    return { family: t(STYLE_FAMILY_KEYS[style.family]), style: style.family, labels: [...new Set(labels)] };
+  }
+
+  // OKX serves closed positions but no fills, so the mechanism (grid,
+  // martingale, averaging in) cannot be seen — only how long positions are held.
+  function styleFromPositionRows(summary) {
+    const { MIN_CLOSED_EPISODES, SWING_HOLD_HOURS } = global.CopyTradingLensStyle.THRESHOLDS;
+    if (summary.closedTrades < MIN_CLOSED_EPISODES) return { family: "insufficient", secondary: [] };
+    return { family: summary.medianHoldHours < SWING_HOLD_HOURS ? "shortTerm" : "swing", secondary: [] };
   }
 
   function buildVerdict(meta, summary, orders, transfers, live) {
@@ -1052,7 +964,10 @@
     const gaps = binanceDataGaps(raw);
     const { strategy, verdict } = gaps.length
       ? incompleteAnalysis(gaps)
-      : { strategy: inferStrategy(summary, orders), verdict: buildVerdict(meta, summary, orders, transfers, live) };
+      : {
+        strategy: inferStrategy(summary, global.CopyTradingLensStyle.classify(raw.orderHistory || [])),
+        verdict: buildVerdict(meta, summary, orders, transfers, live)
+      };
     return {
       platform: "Binance",
       generatedAt: new Date().toISOString(),
@@ -1144,7 +1059,6 @@
       addOrderMedian: 0,
       addSizeExpansion: false,
       adverseStepMedianBps: 0,
-      restingEntryShare: null,
       dominantSymbol: summary.dominantSymbol,
       dominantSymbolShare: summary.dominantSymbolShare,
       dominantLeverage: String(firstDefined(raw.candidate?.lever, "")),
@@ -1166,7 +1080,7 @@
     const gaps = okxDataGaps(raw);
     const { strategy, verdict } = gaps.length
       ? incompleteAnalysis(gaps)
-      : { strategy: inferStrategy(summary, orders), verdict: buildVerdict(meta, summary, orders, transfers, live) };
+      : { strategy: inferStrategy(summary, styleFromPositionRows(summary)), verdict: buildVerdict(meta, summary, orders, transfers, live) };
     return {
       platform: "OKX",
       generatedAt: new Date().toISOString(),

@@ -251,77 +251,38 @@
   "familyInsufficient": {
     "message": "交易紀錄不足，暫時無法判斷跟單風險"
   },
-  "familyNoMajorPattern": {
-    "message": "未偵測到明顯高風險交易模式"
-  },
   "familyMartingale": {
-    "message": "馬丁格爾：虧損時加大倉位，連續錯邊會快速放大回撤"
+    "message": "馬丁格爾：逆勢加碼每筆是上一筆的固定倍數，連續錯邊時虧損以倍數放大"
   },
   "familyGrid": {
-    "message": "網格 / 區間交易：分層掛單吃震盪，單邊行情容易累積浮虧"
+    "message": "網格：固定份量掛在等距價位，每格各自在相鄰一格平倉；單邊行情會一路累積持倉"
   },
-  "familyDcaLeft": {
-    "message": "DCA / 左側交易：逆勢分批攤平，進場太早會承接回撤"
+  "familyDcaNoStop": {
+    "message": "逆勢攤平不停損：虧損時加碼、幾乎從不認賠，一次持續的單邊行情可能吃掉許多小賺"
   },
-  "familyRightTrend": {
-    "message": "右側交易 / 趨勢跟隨：等方向確認後進場，通常更重視停損"
+  "familyDcaWithStop": {
+    "message": "逆勢攤平會停損：虧損時加碼，但也會認賠出場"
   },
-  "familyScalping": {
-    "message": "剝頭皮：短線高頻小利，跟單延遲與手續費會影響結果"
-  },
-  "familyMarketMaking": {
-    "message": "做市 / 高頻做市傾向：大量短線成交，跟單滑價可能吃掉優勢"
+  "familyShortTerm": {
+    "message": "短線交易：多數倉位持有不到一天，跟單延遲與手續費影響較大"
   },
   "familySwing": {
     "message": "波段交易：持倉時間較長，跟單者可能承接既有波動"
-  },
-  "familyMeanReversionStop": {
-    "message": "左側搶反彈但停損快：跟單滑價與速度很重要"
-  },
-  "labelMartingale": {
-    "message": "馬丁格爾"
-  },
-  "labelGrid": {
-    "message": "網格"
-  },
-  "labelDca": {
-    "message": "DCA"
-  },
-  "labelLeftSide": {
-    "message": "左側交易"
-  },
-  "labelRightSide": {
-    "message": "右側交易"
-  },
-  "labelScalping": {
-    "message": "剝頭皮"
-  },
-  "labelMarketMaking": {
-    "message": "做市傾向"
-  },
-  "labelAdverseAdd": {
-    "message": "虧損時加倉"
-  },
-  "labelLongLossHold": {
-    "message": "虧損單持倉偏久"
-  },
-  "labelFastLossClose": {
-    "message": "虧損單結束快"
-  },
-  "labelHighFreq": {
-    "message": "交易頻率高"
-  },
-  "labelLayeredAdds": {
-    "message": "分批加倉"
-  },
-  "labelLongHold": {
-    "message": "持倉時間較長"
   },
   "labelPoorPayoff": {
     "message": "盈虧比偏弱"
   },
   "labelHighWinTailRisk": {
     "message": "高勝率可能藏尾部風險"
+  },
+  "labelSomeMartingale": {
+    "message": "部分倉位倍投加碼"
+  },
+  "labelSomeGrid": {
+    "message": "部分倉位為網格"
+  },
+  "labelNeverRealisedLoss": {
+    "message": "從未認賠平倉"
   },
   "labelSingleSymbol": {
     "message": "集中押單一幣"
@@ -452,12 +413,6 @@
   "performanceQualityUnavailable": {
     "message": "不可重建"
   },
-  "familyControlledMartingale": {
-    "message": "受控馬丁：倍投加碼但嚴格當日快速止損"
-  },
-  "labelControlledMartingale": {
-    "message": "受控快速止損馬丁"
-  },
   "cautionSevereDeadLoss": {
     "message": "歷史虧損單最長持倉 {0}，有嚴重死扛不認賠記錄。"
   },
@@ -484,12 +439,6 @@
   },
   "alertSevereDeadLoss": {
     "message": "🚨 歷史死扛虧損 {0}"
-  },
-  "familySlicedScalping": {
-    "message": "高頻分片拆單剝頭皮：秒級拆單分批成交，極短線吃價差"
-  },
-  "labelSlicedScalping": {
-    "message": "分片拆單剝頭皮"
   },
   "evidenceZeroLossMartingaleBomb": {
     "message": "從不平倉認賠（100% 勝率假象）且單邊逆勢加倉過深，具備極高穿倉尾部風險。"

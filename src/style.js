@@ -21,62 +21,43 @@
     return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
   }
 
-  // Hedge-mode rows carry LONG/SHORT, so an order opens when it buys a long or
-  // sells a short. One-way (BOTH) rows carry no side: the position's side is
-  // the sign of the running net quantity, and an order opens when it grows it.
+  // Which fills open, close or flip a position is decided in exactly one place,
+  // CopyTradingLensPositions.replayPositions (src/positions.js), shared with the
+  // open-position reconstruction. Never re-derive it here: one-way ("BOTH")
+  // accounts flip through zero, and every hand-rolled copy of that rule so far
+  // has dropped the flip.
   function buildEpisodes(orders) {
-    const sorted = [...(orders || [])].sort((a, b) => toNumber(a.orderTime) - toNumber(b.orderTime));
-    const open = new Map();
+    const Positions = global.CopyTradingLensPositions;
+    const byBook = new Map();
+    for (const order of orders || []) {
+      const key = Positions.bucketKeyOf(String(order.symbol || ""), order.positionSide);
+      if (!byBook.has(key)) byBook.set(key, []);
+      byBook.get(key).push(order);
+    }
     const episodes = [];
     let orphanExits = 0;
-    for (const order of sorted) {
-      const qty = Math.abs(toNumber(order.executedQty));
-      const price = toNumber(order.avgPrice);
-      if (!qty || !price) continue;
-      const positionSide = String(order.positionSide || "BOTH").toUpperCase();
-      const buy = String(order.side || "").toUpperCase() === "BUY";
-      const key = `${order.symbol}:${positionSide}`;
-      let episode = open.get(key);
-      let opening;
-      let direction;
-      if (positionSide === "LONG" || positionSide === "SHORT") {
-        direction = positionSide;
-        opening = (positionSide === "LONG") === buy;
-      } else if (!episode || Math.abs(episode.net) < 1e-12) {
-        direction = buy ? "LONG" : "SHORT";
-        opening = true;
-      } else {
-        direction = episode.direction;
-        opening = (direction === "LONG") === buy;
-      }
-      const fill = {
-        t: toNumber(order.orderTime),
-        qty,
-        price,
-        notional: qty * price,
-        type: String(order.type || "").toUpperCase(),
-        pnl: toNumber(order.totalPnl)
-      };
-      if (opening) {
-        if (!episode) {
-          episode = { symbol: String(order.symbol || ""), direction, fills: [], net: 0, peak: 0 };
-          open.set(key, episode);
-        }
-        episode.fills.push({ ...fill, entry: true });
-        episode.net += qty;
-        episode.peak = Math.max(episode.peak, episode.net);
-      } else if (!episode) {
-        orphanExits += 1;
-      } else {
-        episode.fills.push({ ...fill, entry: false });
-        episode.net -= qty;
-        if (episode.net <= episode.peak * 1e-6) {
-          episodes.push(finishEpisode(episode, true));
-          open.delete(key);
-        }
+    for (const [key, bookOrders] of byBook) {
+      const symbol = key.slice(0, key.lastIndexOf("|"));
+      const { positions, unmatchedFills } = Positions.replayPositions(key, bookOrders);
+      orphanExits += unmatchedFills;
+      for (const position of positions) {
+        const fills = position.fills.map(({ order, entry, qty }) => {
+          const price = toNumber(order.avgPrice);
+          return {
+            t: toNumber(order.orderTime),
+            qty,
+            price,
+            notional: qty * price,
+            type: String(order.type || "").toUpperCase(),
+            // realised pnl belongs to the closing part of a flipping fill
+            pnl: entry ? 0 : toNumber(order.totalPnl),
+            entry
+          };
+        });
+        if (!fills.some((fill) => fill.entry)) continue;
+        episodes.push(finishEpisode({ symbol, direction: position.side, fills }, position.closed));
       }
     }
-    for (const episode of open.values()) episodes.push(finishEpisode(episode, false));
     return { episodes: episodes.sort((a, b) => a.start - b.start), orphanExits };
   }
 
@@ -121,9 +102,9 @@
   // from their fills, and checked on traders held out from that tuning.
 
   // Fewer closed positions or a shorter window than this cannot show a style.
-  // Round 1: every trader labelled "insufficient" had <= 4 closed episodes or a
-  // 5-day window; the smallest judgeable trader had 10 episodes / 18 days.
-  const MIN_CLOSED_EPISODES = 8;
+  // Rounds 1+2 (60 labelled traders): accuracy peaks for a minimum of 4-5
+  // closed positions and for a window of 6-16 days.
+  const MIN_CLOSED_EPISODES = 5;
   const MIN_SPAN_DAYS = 7;
   // Price-level tolerance, in steps: a random price lands within 0.1 of a
   // lattice step 20% of the time, so a majority on-lattice is far above chance.
@@ -131,9 +112,10 @@
   // A grid step at or below two maker fees (0.02% each on Binance USD-M base
   // tier) earns nothing per round trip, so smaller "steps" are not grid levels.
   const MIN_GRID_STEP_BPS = 4;
-  // Two grid-shaped positions: round 1 had 11 for the grid trader and 0 for
-  // all 28 others, so any count from 1 to 11 classifies round 1 identically.
-  const MIN_GRID_EPISODES = 2;
+  // One symbol-and-side book passing all four grid tests is a grid: across
+  // rounds 1 and 2 the textbook-grid traders had 8 passing books and every
+  // one of the other 59 traders had none.
+  const MIN_GRID_BOOKS = 1;
   // A martingale add grows the stake; constant-notional ladders sit at x1.00
   // within lot rounding (round 1: 1.00 +/- 0.02).
   const MIN_MULTIPLIER = 1.05;
@@ -155,7 +137,7 @@
   const SWING_HOLD_HOURS = 24;
 
   const THRESHOLDS = Object.freeze({
-    MIN_CLOSED_EPISODES, MIN_SPAN_DAYS, MIN_GRID_EPISODES, MIN_MULTIPLIER, MIN_MULTIPLIER_EPISODE_SHARE,
+    MIN_CLOSED_EPISODES, MIN_SPAN_DAYS, MIN_GRID_BOOKS, MIN_MULTIPLIER, MIN_MULTIPLIER_EPISODE_SHARE,
     MAX_MULTIPLIER_SPREAD, MIN_DEEP_ADD_SHARE, STOP_LOSS_SHARE, SWING_HOLD_HOURS
   });
 
@@ -173,27 +155,33 @@
   }
 
   // Operator definition (2026-09-13): fixed size per level, evenly spaced
-  // levels, closes at grid levels, levels traded again. Tested on one position.
-  function gridShape(episode) {
-    const levels = [...new Set(episode.entries.map((fill) => Number(fill.price.toPrecision(9))))].sort((a, b) => a - b);
+  // levels, closes at grid levels, levels traded again. Tested on a book: every
+  // fill on one symbol and side, because a grid that sells each lot as soon as
+  // it rises goes flat between lots and never shows as one long position.
+  // "Evenly spaced" is either a fixed price difference (arithmetic grid) or a
+  // fixed percentage (geometric grid, which spreads wider as price rises).
+  function gridShape(book) {
+    const levels = [...new Set(book.entries.map((fill) => Number(fill.price.toPrecision(9))))].sort((a, b) => a - b);
     if (levels.length < 4) return null;
     const mid = levels[Math.floor(levels.length / 2)];
-    const bps = (a, b) => (Math.abs(a - b) / mid) * 10000;
-    const gaps = levels.slice(1).map((level, i) => bps(level, levels[i]));
-    const near = (a, b) => Math.abs(a / b - 1) <= LATTICE_TOLERANCE;
-    let step = null;
-    let stepShare = 0;
-    for (const candidate of gaps) {
-      if (candidate < MIN_GRID_STEP_BPS) continue;
-      const share = gaps.filter((gap) => near(gap, candidate)).length / gaps.length;
-      if (share > stepShare || (share === stepShare && candidate > step)) {
-        stepShare = share;
-        step = candidate;
+    const spacings = {
+      arithmetic: (a, b) => (Math.abs(b - a) / mid) * 10000,
+      geometric: (a, b) => Math.abs(Math.log(b / a)) * 10000
+    };
+    let best = null;
+    for (const [kind, spacing] of Object.entries(spacings)) {
+      const gaps = levels.slice(1).map((level, i) => spacing(levels[i], level));
+      for (const candidate of gaps) {
+        if (candidate < MIN_GRID_STEP_BPS) continue;
+        const share = gaps.filter((gap) => Math.abs(gap / candidate - 1) <= LATTICE_TOLERANCE).length / gaps.length;
+        if (!best || share > best.stepShare || (share === best.stepShare && candidate > best.step)) {
+          best = { kind, spacing, step: candidate, stepShare: share };
+        }
       }
     }
-    if (!step) return null;
+    if (!best) return null;
     const onLattice = (price) => {
-      const steps = bps(price, levels[0]) / step;
+      const steps = best.spacing(levels[0], price) / best.step;
       return Math.abs(steps - Math.round(steps)) <= LATTICE_TOLERANCE;
     };
     const modalShare = (values) => {
@@ -204,12 +192,12 @@
       }
       return Math.max(...clusters.map((c) => c.count)) / values.length;
     };
-    const lotShare = Math.max(modalShare(episode.entries.map((f) => f.qty)), modalShare(episode.entries.map((f) => f.notional)));
-    const exitShare = episode.exits.length ? episode.exits.filter((f) => onLattice(f.price)).length / episode.exits.length : 0;
+    const lotShare = Math.max(modalShare(book.entries.map((f) => f.qty)), modalShare(book.entries.map((f) => f.notional)));
+    const exitShare = book.exits.length ? book.exits.filter((f) => onLattice(f.price)).length / book.exits.length : 0;
     const exitsBefore = new Map();
     let exitsSoFar = 0;
     let reentries = 0;
-    for (const fill of episode.fills) {
+    for (const fill of book.fills) {
       if (!fill.entry) {
         exitsSoFar += 1;
         continue;
@@ -218,12 +206,56 @@
       if (exitsBefore.has(level) && exitsBefore.get(level) < exitsSoFar) reentries += 1;
       exitsBefore.set(level, exitsSoFar);
     }
-    return { step, stepShare, lotShare, exitShare, reentries };
+    return { kind: best.kind, step: best.step, stepShare: best.stepShare, lotShare, exitShare, reentries };
   }
 
-  function isGridEpisode(episode) {
-    const shape = gridShape(episode);
+  // A book's fills split into configurations: a grid trades a fixed lot, so a
+  // change of lot (by more than lot rounding, in quantity and in notional)
+  // starts a new configuration with its own spacing. Exits stay with the
+  // configuration that was running when they filled.
+  const LOT_TOLERANCE = 0.05;
+
+  function configurations(fills) {
+    const segments = [];
+    let current = null;
+    for (const fill of fills) {
+      if (fill.entry) {
+        const sameLot = current
+          && (Math.abs(fill.qty / current.lotQty - 1) <= LOT_TOLERANCE || Math.abs(fill.notional / current.lotNotional - 1) <= LOT_TOLERANCE);
+        if (!sameLot) {
+          current = { lotQty: fill.qty, lotNotional: fill.notional, fills: [] };
+          segments.push(current);
+        }
+      }
+      if (current) current.fills.push(fill);
+    }
+    return segments.map((segment) => ({
+      fills: segment.fills,
+      entries: segment.fills.filter((f) => f.entry),
+      exits: segment.fills.filter((f) => !f.entry)
+    }));
+  }
+
+  function books(episodes) {
+    const bySide = new Map();
+    for (const episode of episodes) {
+      const key = `${episode.symbol}:${episode.direction}`;
+      if (!bySide.has(key)) bySide.set(key, []);
+      bySide.get(key).push(...episode.fills);
+    }
+    return [...bySide.entries()].map(([key, fills]) => {
+      fills.sort((a, b) => a.t - b.t);
+      return { key, fills, entries: fills.filter((f) => f.entry), exits: fills.filter((f) => !f.entry) };
+    });
+  }
+
+  function isGridShape(shape) {
     return Boolean(shape) && shape.stepShare > 0.5 && shape.lotShare > 0.5 && shape.exitShare > 0.5 && shape.reentries > 0;
+  }
+
+  // A book is a grid when one of its configurations passes all four tests.
+  function isGridBook(book) {
+    return configurations(book.fills).some((segment) => isGridShape(gridShape(segment)));
   }
 
   // Operator definition: each add against the position is a fixed multiple of
@@ -257,16 +289,22 @@
     return found;
   }
 
+  // How far price moved in the position's favour from its average entry to
+  // its average exit. Measured from the average, not the first entry: an
+  // averaging trader routinely takes profit below the first entry.
   function takeProfitBps(episode) {
-    const qty = episode.exits.reduce((sum, fill) => sum + fill.qty, 0);
-    if (!qty) return null;
-    const exitPrice = episode.exits.reduce((sum, fill) => sum + fill.price * fill.qty, 0) / qty;
-    return -episode.against(exitPrice);
+    const exitQty = episode.exits.reduce((sum, fill) => sum + fill.qty, 0);
+    const entryQty = episode.entries.reduce((sum, fill) => sum + fill.qty, 0);
+    if (!exitQty || !entryQty) return null;
+    const exitPrice = episode.exits.reduce((sum, fill) => sum + fill.price * fill.qty, 0) / exitQty;
+    const entryPrice = episode.entries.reduce((sum, fill) => sum + fill.price * fill.qty, 0) / entryQty;
+    const move = (exitPrice / entryPrice - 1) * 10000;
+    return episode.direction === "LONG" ? move : -move;
   }
 
   function classify(orders, overrides = {}) {
     const {
-      MIN_CLOSED_EPISODES, MIN_SPAN_DAYS, MIN_GRID_EPISODES, MIN_MULTIPLIER_EPISODE_SHARE,
+      MIN_CLOSED_EPISODES, MIN_SPAN_DAYS, MIN_GRID_BOOKS, MIN_MULTIPLIER_EPISODE_SHARE,
       MAX_MULTIPLIER_SPREAD, MIN_DEEP_ADD_SHARE, STOP_LOSS_SHARE, SWING_HOLD_HOURS
     } = { ...THRESHOLDS, ...overrides };
     const { episodes } = buildEpisodes(orders);
@@ -303,8 +341,8 @@
     const multipliers = withMultiplier.flatMap((row) => row.runs.flat());
     const martingale = multiplierShare >= MIN_MULTIPLIER_EPISODE_SHARE && multiplierSpread !== null && multiplierSpread <= MAX_MULTIPLIER_SPREAD;
 
-    const gridEpisodes = episodes.filter(isGridEpisode).length;
-    const grid = gridEpisodes >= MIN_GRID_EPISODES;
+    const gridBooks = books(episodes).filter(isGridBook).length;
+    const grid = gridBooks >= MIN_GRID_BOOKS;
 
     const holdHours = median(closed.map((episode) => (episode.end - episode.start) / HOUR_MS));
     Object.assign(evidence, {
@@ -314,14 +352,14 @@
       multiplierShare,
       multiplierMedian: median(multipliers),
       multiplierSpread,
-      gridEpisodes,
+      gridBooks,
       holdHours
     });
 
     const secondary = [];
     let family;
     if (martingale && grid) {
-      family = gridEpisodes >= withMultiplier.length ? "grid" : "martingale";
+      family = gridBooks >= bySymbol.size ? "grid" : "martingale";
       secondary.push(family === "grid" ? "martingale" : "grid");
     } else if (martingale) {
       family = "martingale";
@@ -340,7 +378,9 @@
     buildEpisodes,
     runsOf,
     gridShape,
-    isGridEpisode,
+    books,
+    configurations,
+    isGridBook,
     multiplierRuns,
     classify,
     THRESHOLDS,
