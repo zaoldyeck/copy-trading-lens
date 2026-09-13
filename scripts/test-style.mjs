@@ -200,6 +200,42 @@ test("a x1.45 martingale is a martingale", () => {
   assert.equal(Style.classify(martingaleOrders({ multiplier: 1.45, layers: 8 })).family, "martingale");
 });
 
+test("a martingale ladder swept in one minute, deepest level first, is a martingale", () => {
+  // Levels x1.67 placed in advance; the sweep fills them out of depth order.
+  const orders = [];
+  let t = START;
+  for (let e = 0; e < 12; e += 1) {
+    const price = 100;
+    t += 12 * HOUR;
+    orders.push(orderAt(t, "SHIBUSDT", "BUY", "LONG", 1000, price));
+    const levels = [1, 2, 3, 4, 5, 6].map((k) => ({ qty: round(1000 * 1.67 ** (k - 1)), price: round(price * (1 - 0.015 * k)) }));
+    for (const level of [...levels].reverse()) {
+      t += 5 * 1000;
+      orders.push(orderAt(t, "SHIBUSDT", "BUY", "LONG", level.qty, level.price));
+    }
+    const held = 1000 + levels.reduce((sum, level) => sum + level.qty, 0);
+    const cost = 1000 * price + levels.reduce((sum, level) => sum + level.qty * level.price, 0);
+    t += 3 * HOUR;
+    orders.push(orderAt(t, "SHIBUSDT", "SELL", "LONG", round(held), round((cost / held) * 1.005), 5));
+  }
+  assert.equal(Style.classify(orders).family, "martingale");
+});
+
+test("adding bigger as the position wins is not a martingale", () => {
+  const orders = [];
+  let t = START;
+  for (let e = 0; e < 12; e += 1) {
+    const sizes = [1, 1.5, 2.25, 3.4];
+    sizes.forEach((qty, k) => {
+      t += 3 * HOUR;
+      orders.push(orderAt(t, "ETHUSDT", "BUY", "LONG", qty, round(2000 * (1 + 0.01 * k))));
+    });
+    t += 6 * HOUR;
+    orders.push(orderAt(t, "ETHUSDT", "SELL", "LONG", round(sizes.reduce((a, b) => a + b, 0)), 2100, 300));
+  }
+  assert.notEqual(Style.classify(orders).family, "martingale");
+});
+
 test("a linear ramp (constant step in size) is not a martingale", () => {
   const result = Style.classify(martingaleOrders({ linear: true, layers: 7 }));
   assert.notEqual(result.family, "martingale");

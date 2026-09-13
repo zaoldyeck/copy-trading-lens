@@ -327,30 +327,43 @@
   }
 
   // Operator definition: each add against the position is a fixed multiple of
-  // the one before. A run is the entries between two exits. With three or more
-  // entries the stake must grow by a constant ratio rather than a constant
-  // amount — a linear ramp (29, 36, 42, 49 ...) is not a martingale.
+  // the one before. A run is the entries between two exits. Its adds are read
+  // in order of depth, not fill time: a ladder placed in advance and swept in
+  // one minute fills its deepest level first, yet each level
+  // is still the previous one times the multiplier. Adds at or above the run's
+  // opening price are not martingale layers and are left out. With three or
+  // more layers the stake must grow by a constant ratio rather than a constant
+  // amount — a linear ramp (29, 36, 42, 49 ...) is not a martingale. A base
+  // order the same size as the first layer is the usual bot setup, so on runs
+  // of five or more entries the first ratio alone may sit below the multiplier.
   function multiplierRuns(episode) {
-    const long = episode.direction === "LONG";
     const found = [];
     for (const run of runsOf(episode.fills)) {
       if (run.length < 2) continue;
+      const opening = run[0];
+      const layers = [opening, ...run.slice(1)
+        .filter((fill) => episode.against(fill.price) > episode.against(opening.price))
+        .sort((a, b) => episode.against(a.price) - episode.against(b.price))];
+      if (layers.length < 2) continue;
       const ratios = [];
       const steps = [];
       let valid = true;
-      for (let i = 1; i < run.length; i += 1) {
-        const previous = run[i - 1];
-        const current = run[i];
-        const against = long ? current.price < previous.price : current.price > previous.price;
+      for (let i = 1; i < layers.length; i += 1) {
+        const previous = layers[i - 1];
+        const current = layers[i];
+        const deeper = episode.against(current.price) > episode.against(previous.price);
         const ratio = current.notional / previous.notional;
-        if (!against || ratio < MIN_MULTIPLIER) {
+        const baseOrder = i === 1 && layers.length >= 5;
+        if (!deeper || (ratio < MIN_MULTIPLIER && !baseOrder)) {
           valid = false;
           break;
         }
-        ratios.push(ratio);
-        steps.push(current.notional - previous.notional);
+        if (ratio >= MIN_MULTIPLIER) {
+          ratios.push(ratio);
+          steps.push(current.notional - previous.notional);
+        }
       }
-      if (!valid) continue;
+      if (!valid || !ratios.length) continue;
       if (ratios.length >= 2 && coefficientOfVariation(ratios.map(Math.log)) >= coefficientOfVariation(steps)) continue;
       found.push(ratios);
     }
@@ -441,7 +454,10 @@
     const secondary = [];
     let family;
     if (martingale && grid) {
-      family = gridBooks >= bySymbol.size ? "grid" : "martingale";
+      // Both formulas at once: the family is the one carrying more capital.
+      const martingaleNotional = notionalOf(closed.filter((episode) => episode.entries.length > 1 && multiplierRuns(episode).length));
+      const gridNotional = gridNotionalShare * totalNotional;
+      family = gridNotional >= martingaleNotional ? "grid" : "martingale";
       secondary.push(family === "grid" ? "martingale" : "grid");
     } else if (martingale) {
       family = "martingale";
