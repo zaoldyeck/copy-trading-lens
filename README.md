@@ -38,13 +38,13 @@ Copy Trading Lens checks the data currently available to your browser session:
 
 The panel uses familiar trading-style labels to make the risk easier to read:
 
-- **Martingale**: increases size while losing; consecutive wrong-way moves can expand drawdown quickly.
-- **Grid / range trading**: layered orders harvest chop, but one-way trends can build floating loss.
-- **DCA / left-side trading**: averages into weakness, so early copiers can inherit drawdown.
-- **Right-side / trend following**: enters after confirmation and usually depends on cleaner stops.
-- **Scalping**: short-duration small profits where copier latency, minimum size, fees, and slippage matter.
-- **Market-making tendency**: many short trades where copy execution can erase the edge.
-- **Swing trading**: longer holds where copiers may inherit open-position volatility.
+- **Martingale**: each add against the position is a fixed multiple of the previous add (e.g. ×1.45, ×2); a run of wrong-way moves grows the loss geometrically.
+- **Grid**: fixed-size orders on evenly spaced price levels, each closed at a neighbouring level and traded again; a one-way trend keeps adding inventory.
+- **Averaging in without stops**: adds while losing and almost never closes a position at a loss; one sustained move can wipe out many small wins.
+- **Averaging in with stops**: adds while losing, but does close losing positions.
+- **Short-term trading**: most positions are held under a day, so copier latency and fees weigh more.
+- **Swing trading**: longer holds, so copiers may inherit open-position volatility.
+- **Not enough history**: too few closed positions, or too short a window, to judge a style.
 
 ## Install Before Chrome Web Store Release
 
