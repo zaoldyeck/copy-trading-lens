@@ -9,11 +9,9 @@ chrome-store-publishing-guide*.md
 
 .codex/
 
-# Maintainer-only research kept outside the published extension: trader
-# analysis CLI and probes, their reports and hand-labelled data, and the
-# spec-workflow working files. Not needed to install, build, or test the
-# extension.
+# Maintainer-only research kept outside the published extension: the trader
+# analysis CLI and probes, and their reports and hand-labelled data. Not
+# needed to install, build, or test the extension.
 reports/
 tools/
-openspec/
 scripts/test-similarity.mjs
