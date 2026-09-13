@@ -44,7 +44,7 @@ The panel uses familiar trading-style labels to make the risk easier to read:
 - **Averaging in with stops**: adds while losing, but does close losing positions.
 - **Short-term trading**: most positions are held under a day, so copier latency and fees weigh more.
 - **Swing trading**: longer holds, so copiers may inherit open-position volatility.
-- **Not enough history**: too few closed positions, or too short a window, to judge a style.
+- **Not enough recent records**: the exchange publishes only recent trade history (on Binance about 60 days, at most about 6,000 orders), and too few positions in that period can be followed from open to close to judge a style. This does not mean the lead trader lacks experience — a trader who holds positions for weeks can land here too — and the other risk data is still shown.
 
 ## Install Before Chrome Web Store Release
 

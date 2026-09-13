@@ -249,7 +249,7 @@
     "message": "This analysis only uses data available to the current browser session and computes locally. It is not investment advice and does not guarantee profit or safety."
   },
   "familyInsufficient": {
-    "message": "Not enough trade history to judge copy risk"
+    "message": "Too few complete positions in recent records to read a trading style"
   },
   "familyMartingale": {
     "message": "Martingale: each add against the position is a fixed multiple of the last, so a run of wrong-way moves grows the loss geometrically"

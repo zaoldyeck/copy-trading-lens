@@ -274,15 +274,29 @@ test("too few closed positions is insufficient, not a style", () => {
   assert.equal(Style.classify(averagingOrders({ episodes: 3 })).family, "insufficient");
 });
 
-test("more exits of unseen positions than positions seen whole is insufficient", () => {
+test("a position opened before the history and scaled out in many fills is one unseen position", () => {
+  // A long-held position whose opening fell before the served window, closed
+  // in seven clips: seven exits, one position.
   const orders = averagingOrders({ episodes: 6 });
-  let t = START - 30 * 24 * HOUR;
+  let t = START + 10 * 24 * HOUR;
   for (let k = 0; k < 7; k += 1) {
     t += HOUR;
-    orders.push(orderAt(t + 40 * 24 * HOUR, "ETHUSDT", "SELL", "LONG", 1, 2000, 10));
+    orders.push(orderAt(t, "ETHUSDT", "SELL", "LONG", 1, 2000, 10));
   }
   const result = Style.classify(orders);
-  assert.equal(result.evidence.orphanExits, 7);
+  assert.equal(result.evidence.cutOffPositions, 1);
+  assert.equal(result.family, "dcaNoStop", "the style is read from the six positions seen whole");
+});
+
+test("more positions opened before the history than positions seen whole is insufficient", () => {
+  const orders = averagingOrders({ episodes: 6 });
+  let t = START + 10 * 24 * HOUR;
+  for (const symbol of ["ETHUSDT", "BTCUSDT", "XRPUSDT", "BNBUSDT", "ADAUSDT", "DOGEUSDT", "LINKUSDT"]) {
+    t += HOUR;
+    orders.push(orderAt(t, symbol, "SELL", "LONG", 1, 2000, 10));
+  }
+  const result = Style.classify(orders);
+  assert.equal(result.evidence.cutOffPositions, 7);
   assert.equal(result.family, "insufficient");
 });
 
@@ -294,8 +308,8 @@ test("a one-way fill larger than the position closes it and opens the rest on th
     orderAt(3, "HYPEUSDT", "SELL", "BOTH", 15.81, 61.919, -3.10327999),
     orderAt(4, "HYPEUSDT", "BUY", "BOTH", 8.44, 60.989)
   ];
-  const { episodes, orphanExits } = Style.buildEpisodes(orders);
-  assert.equal(orphanExits, 0);
+  const { episodes, cutOffPositions } = Style.buildEpisodes(orders);
+  assert.equal(cutOffPositions, 0);
   assert.deepEqual(JSON.parse(JSON.stringify(episodes.map((e) => [e.direction, e.closed, e.entries.map((f) => f.qty), e.exits.map((f) => f.qty)]))), [
     ["LONG", true, [2.64, 4.73], [7.37]],
     ["SHORT", true, [8.44], [8.44]]
@@ -309,10 +323,10 @@ test("a hedge-mode close larger than its book never flips", () => {
     orderAt(1, "ETHUSDT", "BUY", "LONG", 1, 2000),
     orderAt(2, "ETHUSDT", "SELL", "LONG", 3, 2100, 100)
   ];
-  const { episodes, orphanExits } = Style.buildEpisodes(orders);
+  const { episodes, cutOffPositions } = Style.buildEpisodes(orders);
   assert.equal(episodes.length, 1);
   assert.equal(episodes[0].direction, "LONG");
-  assert.equal(orphanExits, 1, "the excess is volume opened before the history we hold");
+  assert.equal(cutOffPositions, 1, "the excess is volume opened before the history we hold");
 });
 
 console.log(`${passed}/${passed} passed`);

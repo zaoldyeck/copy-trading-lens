@@ -35,11 +35,11 @@
       byBook.get(key).push(order);
     }
     const episodes = [];
-    let orphanExits = 0;
+    let cutOffPositions = 0;
     for (const [key, bookOrders] of byBook) {
       const symbol = key.slice(0, key.lastIndexOf("|"));
       const { positions, unmatchedFills } = Positions.replayPositions(key, bookOrders);
-      orphanExits += unmatchedFills;
+      if (unmatchedFills > 0) cutOffPositions += 1;
       for (const position of positions) {
         const fills = position.fills.map(({ order, entry, qty }) => {
           const price = toNumber(order.avgPrice);
@@ -58,7 +58,7 @@
         episodes.push(finishEpisode({ symbol, direction: position.side, fills }, position.closed));
       }
     }
-    return { episodes: episodes.sort((a, b) => a.start - b.start), orphanExits };
+    return { episodes: episodes.sort((a, b) => a.start - b.start), cutOffPositions };
   }
 
   function finishEpisode(episode, closed) {
@@ -393,14 +393,17 @@
       MAX_MULTIPLIER_SPREAD, MIN_DEEP_ADD_SHARE, STOP_LOSS_SHARE, SWING_HOLD_HOURS
     } = { ...THRESHOLDS, ...overrides };
     MIN_GRID_REENTRIES_CURRENT.value = MIN_GRID_REENTRIES;
-    const { episodes, orphanExits } = buildEpisodes(orders);
+    const { episodes, cutOffPositions } = buildEpisodes(orders);
     const closed = episodes.filter((episode) => episode.closed);
     const times = (orders || []).map((order) => toNumber(order.orderTime)).filter(Boolean);
     const spanDays = times.length ? (Math.max(...times) - Math.min(...times)) / DAY_MS : 0;
-    const evidence = { episodes: episodes.length, closedEpisodes: closed.length, orphanExits, spanDays };
-    // More exits of positions opened before the history than positions seen
-    // whole: most of the trading visible in the window cannot be read.
-    if ((orders || []).length < MIN_ORDERS || closed.length < MIN_CLOSED_EPISODES || spanDays < MIN_SPAN_DAYS || orphanExits > closed.length) {
+    const evidence = { episodes: episodes.length, closedEpisodes: closed.length, cutOffPositions, spanDays };
+    // More positions opened before the history than positions seen whole: most
+    // of the trading visible in the window cannot be read. Both sides count
+    // positions. A book holds at most one position when the history starts,
+    // however many fills later close it, so a long-held position scaled out in
+    // ten clips is one unseen position, not ten.
+    if ((orders || []).length < MIN_ORDERS || closed.length < MIN_CLOSED_EPISODES || spanDays < MIN_SPAN_DAYS || cutOffPositions > closed.length) {
       return { family: "insufficient", secondary: [], evidence };
     }
 
