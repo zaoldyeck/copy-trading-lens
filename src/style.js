@@ -106,6 +106,12 @@
   // closed positions and for a window of 6-16 days.
   const MIN_CLOSED_EPISODES = 5;
   const MIN_SPAN_DAYS = 7;
+  // Fewer orders than this in the window is too little to read a style from.
+  // Rounds 1-5 (180 labels): accuracy rises from 147 to 150-151 for any
+  // minimum between 16 and 29 orders (traders labelled insufficient that were
+  // still judged had 12-25 orders; the smallest judgeable history had 26).
+  // Set after round 5 was scored; it only withholds a verdict, never adds one.
+  const MIN_ORDERS = 20;
   // Price-level tolerance, in steps: a random price lands within 0.1 of a
   // lattice step 20% of the time, so a majority on-lattice is far above chance.
   const LATTICE_TOLERANCE = 0.1;
@@ -155,7 +161,7 @@
   const SWING_HOLD_HOURS = 24;
 
   const THRESHOLDS = Object.freeze({
-    MIN_CLOSED_EPISODES, MIN_SPAN_DAYS, MIN_GRID_BOOKS, MIN_GRID_NOTIONAL_SHARE, MIN_GRID_REENTRIES, MIN_MULTIPLIER, MIN_MULTIPLIER_EPISODE_SHARE,
+    MIN_CLOSED_EPISODES, MIN_SPAN_DAYS, MIN_ORDERS, MIN_GRID_BOOKS, MIN_GRID_NOTIONAL_SHARE, MIN_GRID_REENTRIES, MIN_MULTIPLIER, MIN_MULTIPLIER_EPISODE_SHARE,
     MAX_MULTIPLIER_SPREAD, MIN_DEEP_ADD_SHARE, STOP_LOSS_SHARE, SWING_HOLD_HOURS
   });
 
@@ -385,7 +391,7 @@
 
   function classify(orders, overrides = {}) {
     const {
-      MIN_CLOSED_EPISODES, MIN_SPAN_DAYS, MIN_GRID_BOOKS, MIN_GRID_NOTIONAL_SHARE, MIN_GRID_REENTRIES, MIN_MULTIPLIER_EPISODE_SHARE,
+      MIN_CLOSED_EPISODES, MIN_SPAN_DAYS, MIN_ORDERS, MIN_GRID_BOOKS, MIN_GRID_NOTIONAL_SHARE, MIN_GRID_REENTRIES, MIN_MULTIPLIER_EPISODE_SHARE,
       MAX_MULTIPLIER_SPREAD, MIN_DEEP_ADD_SHARE, STOP_LOSS_SHARE, SWING_HOLD_HOURS
     } = { ...THRESHOLDS, ...overrides };
     MIN_GRID_REENTRIES_CURRENT.value = MIN_GRID_REENTRIES;
@@ -396,7 +402,7 @@
     const evidence = { episodes: episodes.length, closedEpisodes: closed.length, orphanExits, spanDays };
     // More exits of positions opened before the history than positions seen
     // whole: most of the trading visible in the window cannot be read.
-    if (closed.length < MIN_CLOSED_EPISODES || spanDays < MIN_SPAN_DAYS || orphanExits > closed.length) {
+    if ((orders || []).length < MIN_ORDERS || closed.length < MIN_CLOSED_EPISODES || spanDays < MIN_SPAN_DAYS || orphanExits > closed.length) {
       return { family: "insufficient", secondary: [], evidence };
     }
 

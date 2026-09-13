@@ -255,6 +255,21 @@ test("one decision sliced into market clips is neither a grid nor a martingale",
   assert.equal(result.family, "swing");
 });
 
+test("too few orders is insufficient even with enough closed positions", () => {
+  // Real case: 12-14 orders over two months, too few to read a style from.
+  const orders = [];
+  let t = START;
+  for (let e = 0; e < 7; e += 1) {
+    t += 3 * 24 * HOUR;
+    orders.push(orderAt(t, "BTCUSDT", "BUY", "LONG", 0.01, 60000));
+    orders.push(orderAt(t + 20 * HOUR, "BTCUSDT", "SELL", "LONG", 0.01, 60600, 6));
+  }
+  const result = Style.classify(orders);
+  assert.equal(result.evidence.closedEpisodes, 7, "enough closed positions");
+  assert.ok(result.evidence.spanDays >= 7, "a long enough window");
+  assert.equal(result.family, "insufficient", "14 orders are too few to read a style from");
+});
+
 test("too few closed positions is insufficient, not a style", () => {
   assert.equal(Style.classify(averagingOrders({ episodes: 3 })).family, "insufficient");
 });
