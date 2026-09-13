@@ -397,14 +397,22 @@
     const closed = episodes.filter((episode) => episode.closed);
     const times = (orders || []).map((order) => toNumber(order.orderTime)).filter(Boolean);
     const spanDays = times.length ? (Math.max(...times) - Math.min(...times)) / DAY_MS : 0;
-    const evidence = { episodes: episodes.length, closedEpisodes: closed.length, cutOffPositions, spanDays };
+    const orderCount = (orders || []).length;
+    const evidence = { orders: orderCount, episodes: episodes.length, closedEpisodes: closed.length, cutOffPositions, spanDays };
+    // Every gate that fails is named, so a withheld style says what is missing.
     // More positions opened before the history than positions seen whole: most
     // of the trading visible in the window cannot be read. Both sides count
     // positions. A book holds at most one position when the history starts,
     // however many fills later close it, so a long-held position scaled out in
     // ten clips is one unseen position, not ten.
-    if ((orders || []).length < MIN_ORDERS || closed.length < MIN_CLOSED_EPISODES || spanDays < MIN_SPAN_DAYS || cutOffPositions > closed.length) {
-      return { family: "insufficient", secondary: [], evidence };
+    const insufficient = [
+      orderCount < MIN_ORDERS && "fewOrders",
+      closed.length < MIN_CLOSED_EPISODES && "fewClosedPositions",
+      spanDays < MIN_SPAN_DAYS && "shortWindow",
+      cutOffPositions > closed.length && "mostlyCutOff"
+    ].filter(Boolean);
+    if (insufficient.length) {
+      return { family: "insufficient", secondary: [], insufficient, evidence };
     }
 
     const losingShare = closed.filter((episode) => episode.pnl < 0).length / closed.length;

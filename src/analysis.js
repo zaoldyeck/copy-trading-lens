@@ -54,6 +54,12 @@
     return `${value.toLocaleString(undefined, { maximumFractionDigits: digits })} USDT`;
   }
 
+  // An instant in the reader's own clock and locale.
+  function formatDateTime(ms) {
+    if (!ms) return "N/A";
+    return new Date(ms).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+  }
+
   function formatHours(hours) {
     if (!Number.isFinite(hours) || hours <= 0) return "0h";
     if (hours >= 24) return `${(hours / 24).toFixed(1)}d`;
@@ -556,6 +562,7 @@
       maxDeposit,
       lossPeriodDepositCount: lossPeriodDeposits.length,
       lossPeriodDepositTotal: lossPeriodAmount,
+      lastLossPeriodDepositAt: lossPeriodDeposits.reduce((latest, item) => Math.max(latest, num(firstDefined(item.time, item.ts, item.cTime), 0)), 0) || null,
       rescueTimeline
     };
   }
@@ -740,12 +747,24 @@
     grid: "labelSomeGrid",
     neverRealisedLoss: "labelNeverRealisedLoss"
   };
+  // Which style gate failed, with the trader's number beside the bar it missed.
+  const STYLE_INSUFFICIENT_LABELS = {
+    fewOrders: (evidence, bars) => t("styleNeedOrders", [evidence.orders, bars.MIN_ORDERS]),
+    fewClosedPositions: (evidence, bars) => t("styleNeedClosedPositions", [evidence.closedEpisodes, bars.MIN_CLOSED_EPISODES]),
+    // Rounded down: 6.96 days shown as "7.0, at least 7" would contradict itself.
+    shortWindow: (evidence, bars) => t("styleNeedWindow", [(Math.floor(evidence.spanDays * 10) / 10).toFixed(1), bars.MIN_SPAN_DAYS]),
+    mostlyCutOff: (evidence) => t("styleMostlyCutOff", [evidence.cutOffPositions, evidence.closedEpisodes])
+  };
 
   // The style itself is decided from the fills in src/style.js; this only
   // renders it and adds the descriptive facts read off closed position rows.
   function inferStrategy(summary, style) {
-    const labels = (style.secondary || []).map((key) => t(STYLE_SECONDARY_KEYS[key]));
     const evidence = style.evidence || {};
+    const bars = global.CopyTradingLensStyle.THRESHOLDS;
+    const labels = [
+      ...(style.insufficient || []).map((key) => STYLE_INSUFFICIENT_LABELS[key](evidence, bars)),
+      ...(style.secondary || []).map((key) => t(STYLE_SECONDARY_KEYS[key]))
+    ];
     // Averaging in is a family only when it is a habit; below that it is still a
     // fact worth showing. Measured on 89 hand-labelled traders, occasional
     // averagers and discretionary traders overlap completely between 6% and 14%,
@@ -1106,7 +1125,8 @@
       depositTotal: 0,
       maxDeposit: 0,
       lossPeriodDepositCount: 0,
-      lossPeriodDepositTotal: 0
+      lossPeriodDepositTotal: 0,
+      lastLossPeriodDepositAt: null
     };
     const liveMargin = (raw.livePositions || []).reduce((sum, row) => sum + Math.abs(num(row.margin, 0)), 0);
     meta.marginBalance = liveMargin || meta.aum || 0;
@@ -1143,6 +1163,7 @@
     formatPct,
     formatMoney,
     formatHours,
+    formatDateTime,
     num,
     int
   };

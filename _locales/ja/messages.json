@@ -198,7 +198,7 @@
     "message": "{0} 回"
   },
   "lossPeriodDepositHint": {
-    "message": "合計 {0}"
+    "message": "合計 {0}、直近 {1}"
   },
   "lossPeriodDepositNone": {
     "message": "なし"
@@ -258,7 +258,19 @@
     "message": "この分析は現在のブラウザーセッションで取得できるデータだけを使ってローカル計算します。投資助言ではなく、利益や安全性を保証しません。"
   },
   "familyInsufficient": {
-    "message": "直近の記録で建てから決済まで追えるポジションが少なく、取引スタイルを判断できません"
+    "message": "直近の記録だけではまだ取引スタイルを判断できません"
+  },
+  "styleNeedOrders": {
+    "message": "記録内の約定は {0} 件のみ、最低 {1} 件必要"
+  },
+  "styleNeedClosedPositions": {
+    "message": "記録内で建てから決済まで追えるポジションは {0} 件のみ、最低 {1} 件必要"
+  },
+  "styleNeedWindow": {
+    "message": "約定記録は {0} 日分のみ、最低 {1} 日必要"
+  },
+  "styleMostlyCutOff": {
+    "message": "記録開始前に建てたポジションが {0} 件あり、全体を追える {1} 件より多い"
   },
   "familyMartingale": {
     "message": "マーチンゲール：逆行時の追加が毎回直前の一定倍数のため、連続して逆行すると損失が倍々に膨らむ"

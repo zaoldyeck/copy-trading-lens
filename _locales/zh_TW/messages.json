@@ -198,7 +198,7 @@
     "message": "{0} 次"
   },
   "lossPeriodDepositHint": {
-    "message": "合計 {0}"
+    "message": "合計 {0}，最近一次 {1}"
   },
   "lossPeriodDepositNone": {
     "message": "無"
@@ -258,7 +258,19 @@
     "message": "此分析只使用目前瀏覽器可取得資料並在本機計算，不是投資建議，也不保證收益或安全。"
   },
   "familyInsufficient": {
-    "message": "近期能完整看到開倉到平倉的倉位太少，還無法判斷交易風格"
+    "message": "近期紀錄還不足以判斷交易風格"
+  },
+  "styleNeedOrders": {
+    "message": "紀錄內成交只有 {0} 筆，至少要 {1} 筆"
+  },
+  "styleNeedClosedPositions": {
+    "message": "紀錄內從開倉到平倉完整看得到的倉位只有 {0} 個，至少要 {1} 個"
+  },
+  "styleNeedWindow": {
+    "message": "成交紀錄只涵蓋 {0} 天，至少要 {1} 天"
+  },
+  "styleMostlyCutOff": {
+    "message": "{0} 個倉位在紀錄開始前就已開倉，比完整看得到的 {1} 個還多"
   },
   "familyMartingale": {
     "message": "馬丁格爾：逆勢加碼每筆是上一筆的固定倍數，連續錯邊時虧損以倍數放大"

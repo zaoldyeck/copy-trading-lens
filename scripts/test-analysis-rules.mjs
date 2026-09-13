@@ -239,4 +239,46 @@ console.log("=== RUNNING UNIT TESTS FOR ANALYSIS RULES ===");
   console.log("PASS: partially closed positions stay out of closed-trade statistics");
 }
 
+// 9. A withheld style names the gate it failed, with the trader's number and
+//    the bar. "Too little history" alone was read as a bug on a portfolio with
+//    thousands of fills.
+{
+  const hour = 3600 * 1000;
+  const start = Date.UTC(2026, 6, 1);
+  const orderHistory = [];
+  for (let k = 0; k < 30; k += 1) {
+    orderHistory.push({ symbol: "BTCUSDT", side: "BUY", positionSide: "LONG", executedQty: 0.01, avgPrice: 60000, totalPnl: 0, orderTime: start + k * 2 * hour, type: "LIMIT" });
+    orderHistory.push({ symbol: "BTCUSDT", side: "SELL", positionSide: "LONG", executedQty: 0.01, avgPrice: 60300, totalPnl: 3, orderTime: start + (k * 2 + 1) * hour, type: "LIMIT" });
+  }
+  const style = global.CopyTradingLensStyle.classify(orderHistory);
+  assert.equal(style.family, "insufficient");
+  assert.deepEqual([...style.insufficient], ["shortWindow"], "60 fills and 30 closed positions pass; 59 hours does not");
+  const strategy = analysis.inferStrategy({ payoffRatio: null, winRate: 1, dominantSymbolShare: 1 }, style);
+  assert.equal(strategy.family, zhTwMessages.familyInsufficient.message);
+  assert.ok(strategy.labels.includes("成交紀錄只涵蓋 2.4 天，至少要 7 天"), `labels: ${strategy.labels}`);
+  console.log("PASS: a withheld style says which gate it failed");
+}
+
+// 10. The loss-period deposit card dates the latest rescue deposit, not only
+//     how many there were.
+{
+  const day = 24 * 3600 * 1000;
+  const start = Date.UTC(2026, 7, 1);
+  const losing = { symbol: "ETHUSDT", side: "Long", opened: start, closed: start + 10 * day, closingPnl: "-500", status: "All Closed" };
+  const deposit = (offsetDays) => ({ time: start + offsetDays * day, coin: "USDT", amount: 100, transType: "LEAD_DEPOSIT" });
+  const result = analysis.analyzeBinance({
+    id: "rescue-dates",
+    detail: { startTime: start, marginBalance: "10000" },
+    positionHistory: [losing],
+    orderHistory: [],
+    transferHistory: [deposit(2), deposit(7), deposit(12)],
+    livePositions: [],
+    performanceWindows: {},
+    historyStatus: {}
+  });
+  assert.equal(result.transfers.lossPeriodDepositCount, 2, "the deposit after the loss closed is not a rescue");
+  assert.equal(result.transfers.lastLossPeriodDepositAt, start + 7 * day, "the latest rescue, not the latest deposit");
+  console.log("PASS: the latest loss-period deposit is dated");
+}
+
 console.log("\nALL ANALYSIS UNIT TESTS PASSED SUCCESSFULLY!");

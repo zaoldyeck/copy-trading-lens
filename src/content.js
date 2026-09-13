@@ -286,7 +286,9 @@
           metricCard(
             t("metricLossPeriodDeposit"),
             t("lossPeriodDepositCount", [transfers.lossPeriodDepositCount]),
-            transfers.lossPeriodDepositCount > 0 ? t("lossPeriodDepositHint", [fmt.formatMoney(transfers.lossPeriodDepositTotal)]) : t("lossPeriodDepositNone"),
+            transfers.lossPeriodDepositCount > 0
+              ? t("lossPeriodDepositHint", [fmt.formatMoney(transfers.lossPeriodDepositTotal), fmt.formatDateTime(transfers.lastLossPeriodDepositAt)])
+              : t("lossPeriodDepositNone"),
             transfers.lossPeriodDepositCount > 0 ? "is-danger" : ""
           ),
           metricCard(t("metricRestartCount"), String(meta.closeLeadCount || 0), t("portfolioRestart"))
