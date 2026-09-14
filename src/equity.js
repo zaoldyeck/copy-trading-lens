@@ -188,8 +188,11 @@
       const side = String(row.side || "").toUpperCase() === "SHORT" ? "SHORT" : "LONG";
       const key = `${symbol}|${side}`;
       if (!symbol || paths.has(key) || paths.has(`${symbol}|NET`)) continue;
-      const size = (num(row.maxOpenInterest, 0) - num(row.closedVolume, 0)) * signOf(side);
-      if (!size) continue;
+      // Closed more than its peak means it was re-added after a partial close,
+      // and the size now cannot be read off the row.
+      const held = num(row.maxOpenInterest, 0) - num(row.closedVolume, 0);
+      if (!(held > 0)) continue;
+      const size = held * signOf(side);
       const history = market.symbols?.[symbol];
       if (!history || !history.marks?.length) unpriced.add(symbol);
       const markAt = markReader(history?.marks);
@@ -294,5 +297,37 @@
     return { equityAt, paths, stretchesByBook, feeRate, feeRows: fee.rows, unpriced: [...unpriced] };
   }
 
-  global.CopyTradingLensEquity = { equityCountBack, markReader };
+  // Open positions the exchange updated after the last fill it lists for their
+  // book: fills Binance's order history does not carry. Portfolio
+  // 4395375800392267008 shows partial closes on 2026-08-19/20 with no fill
+  // between 07-31 and 08-21, the same on a re-read on 09-14, and a 30D pnl of
+  // 131K where the fills account for 4K. A row can be stamped seconds after
+  // its fill's clock (5.6s on 5108371059752839168's CLUSDT row); over 437
+  // cached traders the offsets below that are 1ms and 805ms and the next gap
+  // is 236s, so anything later than 5.6s is a missing fill.
+  const ROW_CLOCK_LEAD_MS = 5600;
+
+  function rowsAheadOfFills(orders, positionHistory) {
+    const P = global.CopyTradingLensPositions;
+    const lastFill = new Map();
+    let historyStart = Infinity;
+    for (const order of orders || []) {
+      const time = P.fillTimeOf(order);
+      if (!(time > 0)) continue;
+      historyStart = Math.min(historyStart, time);
+      const key = P.bucketKeyOf(String(order.symbol || ""), order.positionSide);
+      lastFill.set(key, Math.max(lastFill.get(key) || 0, time));
+    }
+    return (positionHistory || []).filter((row) => {
+      if (num(row.closed, 0) > 0) return false;
+      const updated = num(row.updateTime, 0);
+      if (!(updated >= historyStart)) return false;
+      const symbol = String(row.symbol || "");
+      const side = String(row.side || "").toUpperCase() === "SHORT" ? "SHORT" : "LONG";
+      const last = lastFill.get(`${symbol}|NET`) || lastFill.get(`${symbol}|${side}`) || 0;
+      return updated - last > ROW_CLOCK_LEAD_MS;
+    });
+  }
+
+  global.CopyTradingLensEquity = { equityCountBack, markReader, rowsAheadOfFills };
 })(typeof window !== "undefined" ? window : globalThis);

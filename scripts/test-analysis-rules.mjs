@@ -578,6 +578,16 @@ console.log("=== RUNNING UNIT TESTS FOR ANALYSIS RULES ===");
     market: { nowMs: start + 30 * day, symbols: { BNBUSDT: { funding: [], marks: [[start, 500, start + 20 * day, 600], [start + 20 * day, 600, start + 30 * day, 700]] } } }
   });
   assert.ok(Math.abs(untouched.equityAt(start + 20 * day) - 9500) < 1e-9, `untouched position marked: ${untouched.equityAt(start + 20 * day)}`);
+  // 4763954199553903361: an open ETHUSDT long row closed 23.165 against a
+  // 19.573 peak. Its size is unknown, not -3.592.
+  const readded = global.CopyTradingLensEquity.equityCountBack({
+    orders: [],
+    positionHistory: [{ symbol: "ETHUSDT", side: "Long", opened: start - 10 * day, closed: null, maxOpenInterest: 19.573, closedVolume: 23.165, avgCost: 2000 }],
+    flows: [],
+    marginBalance: 10000,
+    market: { nowMs: start + 30 * day, symbols: { ETHUSDT: { funding: [], marks: [[start, 1700, start + 30 * day, 1900]] } } }
+  });
+  assert.equal(readded.paths.size, 0, "a re-added position's size is not guessed");
 
   // Replays 5117780547953263617: a 100 ETHUSDT short opened and closed ten
   // minutes later for -6,246 with no closing fill in the history. Hourly marks
@@ -590,6 +600,16 @@ console.log("=== RUNNING UNIT TESTS FOR ANALYSIS RULES ===");
     market: { nowMs: start + 50 * day, symbols: { ETHUSDT: { funding: [], marks: [[start + 40 * day, 2500, start + 50 * day, 2500]] } } }
   });
   assert.ok(Math.abs(liquidated.equityAt(start + 40 * day) - 7246) < 1e-9, `equity before the liquidation: ${liquidated.equityAt(start + 40 * day)}`);
+
+  // Replays 4395375800392267008: an open row updated after the last fill its
+  // book lists means the order history is missing fills; 5.6s is clock lead.
+  const ahead = (updated) => analysis.analyzeBinance({
+    ...raw,
+    id: "fills-missing",
+    positionHistory: [...raw.positionHistory, { symbol: "CLUSDT", side: "Long", opened: start + 1 * day, closed: null, closingPnl: "0", maxOpenInterest: 40, closedVolume: 10, avgCost: 100, leverage: "50", updateTime: updated }]
+  });
+  assert.ok(ahead(start + 21 * day).verdict.cautions.some((caution) => caution.includes(zhTwMessages.gapFillsMissing.message)), "a row a day past its last fill is a gap");
+  assert.ok(!ahead(start + 20 * day + 5600).verdict.cautions.some((caution) => caution.includes(zhTwMessages.gapFillsMissing.message)), "5.6s of clock lead is not");
 
   // A symbol whose funding and marks could not be read leaves equity missing
   // that symbol's moves, so the analysis says the data is incomplete.

@@ -794,6 +794,9 @@
   "gapMarketHistory": {
     "message": "Funding and mark prices"
   },
+  "gapFillsMissing": {
+    "message": "Fills missing from order history"
+  },
   "gapPerformance": {
     "message": "Performance windows"
   },

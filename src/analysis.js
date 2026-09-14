@@ -1197,6 +1197,9 @@
     // Without a symbol's funding and marks, equity between a fill and now
     // misses that symbol's price moves and funding (src/equity.js).
     if (raw.marketHistory?.failed?.length) gaps.push(t("gapMarketHistory"));
+    // A position updated after its book's last listed fill: fills the order
+    // history does not carry, so equity, sizes and bets cannot be rebuilt.
+    if (global.CopyTradingLensEquity.rowsAheadOfFills(raw.orderHistory, raw.positionHistory).length) gaps.push(t("gapFillsMissing"));
     return gaps;
   }
 

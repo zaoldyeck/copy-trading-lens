@@ -794,6 +794,9 @@
   "gapMarketHistory": {
     "message": "資金調達率とマーク価格"
   },
+  "gapFillsMissing": {
+    "message": "注文履歴に欠けている約定"
+  },
   "gapPerformance": {
     "message": "成績期間"
   },

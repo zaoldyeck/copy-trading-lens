@@ -794,6 +794,9 @@
   "gapMarketHistory": {
     "message": "資金費率與標記價格"
   },
+  "gapFillsMissing": {
+    "message": "成交紀錄有缺漏"
+  },
   "gapPerformance": {
     "message": "績效區間"
   },
