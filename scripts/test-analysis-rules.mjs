@@ -312,6 +312,10 @@ console.log("=== RUNNING UNIT TESTS FOR ANALYSIS RULES ===");
   });
   const closedOnly = run([lossRow(1, 21), lossRow(22, 29), lossRow(34, 35)]);
   assert.equal(closedOnly.summary.maxLossHoldHours, 480);
+  assert.ok(
+    closedOnly.verdict.alerts.some((alert) => alert.includes(analysis.formatDateTime(start + 29 * day))),
+    `the alert carries the end of the latest hold at the bar; alerts: ${closedOnly.verdict.alerts}`
+  );
   const expected = zhTwMessages.alertSevereDeadLoss.message
     .replace("{0}", "20.0d")
     .replace("{1}", analysis.formatDateTime(start + 29 * day));
