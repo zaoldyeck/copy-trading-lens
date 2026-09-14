@@ -727,12 +727,13 @@
       const peakQty = num(row.maxOpenInterest, 0);
       // Still held when the fills begin: its stretch ends at its own close, or
       // is the open one. Reaching the row's peak there dates the peak, and the
-      // fills above have already read it.
+      // fills above have already read it. A row can open seconds before its
+      // own first fill's clock (5.6s on that portfolio's CLUSDT row), so a
+      // position opened by the oldest fetched fill lands here too.
       const closed = positionClosedAt(row);
-      const stretch = (closed === 0 || closed >= historyStart)
-        ? (stretchesByBook.get(`${symbol}|${side}`) || []).find((item) => item.until === closed)
-        : null;
-      if (stretch && stretch.steps.some((step) => step.qty >= peakQty)) continue;
+      const book = stretchesByBook.get(bucketKeyOf(symbol, "BOTH")) || stretchesByBook.get(bucketKeyOf(symbol, side)) || [];
+      const stretch = (closed === 0 || closed >= historyStart) ? book.find((item) => item.until === closed) : null;
+      if (stretch && stretch.steps.some((step) => step.side === side && step.qty >= peakQty)) continue;
       consider({ moment: opened, notional: peakQty * num(row.avgCost, 0), leverageCap: num(row.leverage, 0), symbol, side });
     }
     return biggest;

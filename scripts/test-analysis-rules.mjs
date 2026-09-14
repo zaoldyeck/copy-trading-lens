@@ -496,6 +496,23 @@ console.log("=== RUNNING UNIT TESTS FOR ANALYSIS RULES ===");
   // (3,000 over 10,000 with the withdrawal added back) would have been 0.3x.
   assert.equal(preHistory.biggestBet.at, start + 12 * day);
   assert.ok(Math.abs(preHistory.biggestBet.leverage - 6) < 1e-9, `6x inside the fills, got ${preHistory.biggestBet.leverage}x`);
+
+  // A one-way portfolio whose row opens 5.6s before its own first fill, the
+  // oldest one fetched: the row falls before the history, and its peak is
+  // still found on the one-way ("BOTH") book rather than read at the opening.
+  // 5,000 paid in on day 5 makes the opening-day reading wrong: the row's
+  // peak of 4,000 over the 500 held then is 8x, while the fills held 400 on
+  // 500 that day (0.8x) and 4,000 on 5,500 at the peak (0.73x).
+  const oneWay = analysis.analyzeBinance({
+    ...raw,
+    id: "biggest-bet-one-way",
+    detail: { startTime: start, marginBalance: "6000" },
+    positionHistory: [{ ...raw.positionHistory[0], opened: start + 1 * day - 5600 }],
+    orderHistory: raw.orderHistory.map((order) => ({ ...order, positionSide: "BOTH" })),
+    transferHistory: [{ time: start + 5 * day, coin: "USDT", amount: 5000, from: "Fiat and Spot", to: "Lead Trading Account", transType: "LEAD_DEPOSIT" }]
+  });
+  assert.equal(oneWay.biggestBet.at, start + 1 * day, "read at the fills on a one-way book, not at the row's opening");
+  assert.ok(Math.abs(oneWay.biggestBet.leverage - 0.8) < 1e-9, `one-way: ${oneWay.biggestBet.leverage}x`);
   console.log("PASS: the biggest bet is read at the fill that made it that large, with the pnl realised since");
 }
 
