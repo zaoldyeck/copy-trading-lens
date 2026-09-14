@@ -473,9 +473,6 @@
   "cautionStagnantMomentum": {
     "message": "近期 30 天收益率仅 {0} 且交易频率极低（{1} 单/天），呈现动能枯竭与横盘死鱼特征。"
   },
-  "cautionHighInitialLeverage": {
-    "message": "初始开仓名义杠杆高达 {0}x 且频繁逆势加仓，单边行情极易穿仓爆仓。"
-  },
   "badgeActiveMomentum": {
     "message": "🔥 上升动能强劲"
   },

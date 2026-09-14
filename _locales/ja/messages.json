@@ -473,9 +473,6 @@
   "cautionStagnantMomentum": {
     "message": "直近30日ROIがわずか {0}、取引頻度も極めて低く（{1} 回/日）、モメンタムが停滞しています。"
   },
-  "cautionHighInitialLeverage": {
-    "message": "初回注文の実質レバレッジが {0}倍 に達し、逆張り追加注文を多用しているため、急変動時に破綻リスクがあります。"
-  },
   "badgeActiveMomentum": {
     "message": "🔥 上昇モメンタム良好"
   },

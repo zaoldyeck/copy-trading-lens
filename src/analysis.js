@@ -1036,11 +1036,12 @@
     const enoughHistory = meta.days >= 60 && summary.closedTrades >= 50;
     const cleanOpenRisk = live.openUnrealizedLossToMargin < 0.02 && live.openUnrealizedLoss < 2000;
 
-    // Initial leverage risk
-    const marginBalance = Math.max(1, meta.marginBalance || meta.aum || 0);
-    const initialOrderNotional = orders.initialOrderMedian || 0;
-    const initialLeverage = safeDivide(initialOrderNotional, marginBalance, 0);
-    const highInitialLeverage = initialLeverage >= 10 && adverseRate >= 0.30;
+    // No opening-size gate: the median opening fill over TODAY's balance paired
+    // a past size with a present account, and at 10x it fired on 1 of the 225
+    // backtested traders (tools/research/backtest-risk-rules.mjs, 2026-09-14),
+    // which neither closed nor fell 30%. An opening fill is part of its
+    // position's size, so read against the account at that fill it can never
+    // exceed the biggest bet, which is the backtested gate.
 
     // Dead loss duration thresholds
     const SEVERE_DEAD_LOSS_HOURS = 150;
@@ -1126,7 +1127,6 @@
     }
     if (orders.openOrders >= 300 && summary.avgWin > 0 && summary.avgWin <= 2) cautions.push(t("cautionMicroProfit"));
     if (adverseRate >= 0.35) cautions.push(t("cautionAdverseAdd", [`${(adverseRate * 100).toFixed(0)}%`]));
-    if (highInitialLeverage) cautions.push(t("cautionHighInitialLeverage", [initialLeverage.toFixed(1)]));
     if (isStagnant) cautions.push(t("cautionStagnantMomentum", [Number.isFinite(roi30) ? `${roi30.toFixed(1)}%` : "0%", tradesPerDay.toFixed(2)]));
     if (transfers.lossPeriodDepositCount > 0) cautions.push(t("cautionLossPeriodDeposit", [transfers.lossPeriodDepositCount]));
     if (live.openUnrealizedLossToMargin >= 0.05 || live.openUnrealizedLoss >= 5000) cautions.push(t("cautionFloatingLoss", [formatMoney(live.openUnrealizedLoss), (live.openUnrealizedLossToMargin * 100).toFixed(1)]));
@@ -1175,17 +1175,17 @@
     } else if (isStagnant) {
       level = "watch";
       title = t("verdictWatch");
-    } else if (hasProvenCopierProfit && (meta.mdd >= 40 || adverseRate >= 0.35) && !severeDeadLoss && !highInitialLeverage && !isZeroLossMartingaleBomb && !isStagnant) {
+    } else if (hasProvenCopierProfit && (meta.mdd >= 40 || adverseRate >= 0.35) && !severeDeadLoss && !isZeroLossMartingaleBomb && !isStagnant) {
       level = "followable";
       title = t("verdictAggressiveGrowth");
       evidence.push(t("evidenceAggressiveGrowth"));
-    } else if (severeDeadLoss || highInitialLeverage || isZeroLossMartingaleBomb || cautions.length >= 3 || meta.mdd >= 30 || adverseRate >= 0.35 || poorPayoff) {
+    } else if (severeDeadLoss || isZeroLossMartingaleBomb || cautions.length >= 3 || meta.mdd >= 30 || adverseRate >= 0.35 || poorPayoff) {
       level = "risky";
       title = t("verdictRisky");
-    } else if (enoughHistory && lowMdd && strongPayoff && adverseRate < 0.15 && cleanOpenRisk && !severeDeadLoss && !highInitialLeverage && !isZeroLossMartingaleBomb && !isStagnant) {
+    } else if (enoughHistory && lowMdd && strongPayoff && adverseRate < 0.15 && cleanOpenRisk && !severeDeadLoss && !isZeroLossMartingaleBomb && !isStagnant) {
       level = "preferred";
       title = t("verdictPreferred");
-    } else if (meta.days >= 30 && summary.closedTrades >= 30 && !severeDeadLoss && !highInitialLeverage && !isZeroLossMartingaleBomb && !isStagnant) {
+    } else if (meta.days >= 30 && summary.closedTrades >= 30 && !severeDeadLoss && !isZeroLossMartingaleBomb && !isStagnant) {
       level = "followable";
       title = t("verdictFollowSmall");
     }

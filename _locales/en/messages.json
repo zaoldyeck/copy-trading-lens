@@ -473,9 +473,6 @@
   "cautionStagnantMomentum": {
     "message": "Recent 30D ROI is only {0} with very low trade frequency ({1} trades/day), indicating momentum decay."
   },
-  "cautionHighInitialLeverage": {
-    "message": "Initial order leverage is {0}x with frequent adverse adds, creating severe liquidation risk."
-  },
   "badgeActiveMomentum": {
     "message": "🔥 Active Momentum"
   },

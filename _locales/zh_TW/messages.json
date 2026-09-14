@@ -473,9 +473,6 @@
   "cautionStagnantMomentum": {
     "message": "近期 30 天收益率僅 {0} 且交易頻率極低（{1} 單/天），呈現動能枯竭與橫盤死魚特徵。"
   },
-  "cautionHighInitialLeverage": {
-    "message": "初始開倉名義槓桿高達 {0}x 且頻繁逆勢加倉，單邊行情極易穿倉爆倉。"
-  },
   "badgeActiveMomentum": {
     "message": "🔥 上升動能強勁"
   },

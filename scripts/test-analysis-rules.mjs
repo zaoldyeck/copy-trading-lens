@@ -106,18 +106,20 @@ console.log("=== RUNNING UNIT TESTS FOR ANALYSIS RULES ===");
   console.log("PASS: Stagnant momentum flatline detection");
 }
 
-// 5. Test High Initial Leverage Risk
+// 5. A large opening order is not graded against today's balance. That gate
+//    fired on 1 of 225 backtested traders (2026-09-14) and paired a past size
+//    with a present account; the size is read by the biggest bet instead.
 {
   const meta = { days: 40, mdd: 15, pnl: 500, copierPnl: 5000, aum: 1000, marginBalance: 500 };
   const summary = { closedTrades: 40, winRate: 0.80, payoffRatio: 0.5, expectancy: 10, maxLossHoldHours: 30, avgLossHoldHours: 5, avgWinHoldHours: 10, comparableHoldHours: { win: 10, loss: 5 } };
-  const orders = { adverseAddRate: 0.35, openOrders: 100, initialOrderMedian: 8000 }; // 16x initial leverage!
+  const orders = { adverseAddRate: 0.30, openOrders: 100, initialOrderMedian: 8000 };
   const transfers = { lossPeriodDepositCount: 0 };
   const live = { openUnrealizedLossToMargin: 0, openUnrealizedLoss: 0 };
-  
+
   const verdict = analysis.buildVerdict(meta, summary, orders, transfers, live);
-  assert.equal(verdict.level, "risky", `Expected risky for high initial leverage, got ${verdict.level}`);
-  assert.ok(verdict.cautions.some(c => c.includes("初始開倉名義槓桿高達")), "Expected high initial leverage caution");
-  console.log("PASS: High initial leverage risk detection");
+  assert.ok(!verdict.cautions.some((caution) => caution.includes("初始開倉") || caution.includes("InitialLeverage")), `cautions: ${verdict.cautions}`);
+  assert.equal(zhTwMessages.cautionHighInitialLeverage, undefined);
+  console.log("PASS: no opening-size gate against today's balance");
 }
 
 // 6. Test Active Momentum Status
