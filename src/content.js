@@ -2,7 +2,11 @@
   "use strict";
 
   const ROOT_ID = "copy-trading-lens-root";
-  let currentKey = "";
+  // The analysis of the lead page in view: { key, context, phase: "loading" |
+  // "ready" | "failed", raw, analysis, error }. Collapsing only hides it, so
+  // reopening paints what is already here instead of reading the trader again.
+  let run = null;
+  let runSeq = 0;
   let collapsed = false;
   let root = null;
   let routeTimer = null;
@@ -42,15 +46,29 @@
     root = null;
   }
 
+  function paint() {
+    if (!run) return clearRoot();
+    if (collapsed) return renderLauncher(run.context);
+    if (run.phase === "loading") return renderLoading(run.context);
+    if (run.phase === "failed") return renderError(run.error);
+    return renderAnalysis(run.context, run.raw, run.analysis);
+  }
+
+  function setCollapsed(value) {
+    collapsed = value;
+    paint();
+  }
+
+  function collapseButton() {
+    return h("button", { class: "ctl-icon-btn", title: t("collapseTitle"), onclick: () => setCollapsed(true) }, "−");
+  }
+
   function renderLauncher(context) {
     ensureRoot().replaceChildren(
       h("button", {
         class: "ctl-launcher",
         title: t("launcherTitle"),
-        onclick: () => {
-          collapsed = false;
-          runAnalysis(true);
-        }
+        onclick: () => setCollapsed(false)
       }, [
         h("span", { text: t("launcherLabel") }),
         h("strong", { text: context.platform })
@@ -174,10 +192,7 @@
             h("span", { class: "ctl-eyebrow", text: "Copy Trading Lens" }),
             h("h2", { text: t("analysisInProgress", [context.platform]) })
           ]),
-          h("button", { class: "ctl-icon-btn", title: t("collapseTitle"), onclick: () => {
-            collapsed = true;
-            renderLauncher(context);
-          } }, "−")
+          collapseButton()
         ]),
         h("div", { class: "ctl-loading" }, [
           h("div", { class: "ctl-spinner" }),
@@ -187,7 +202,7 @@
     );
   }
 
-  function renderError(context, error) {
+  function renderError(error) {
     ensureRoot().replaceChildren(
       h("section", { class: "ctl-panel" }, [
         h("header", { class: "ctl-header" }, [
@@ -195,10 +210,7 @@
             h("span", { class: "ctl-eyebrow", text: "Copy Trading Lens" }),
             h("h2", { text: t("analysisFailed") })
           ]),
-          h("button", { class: "ctl-icon-btn", title: t("collapseTitle"), onclick: () => {
-            collapsed = true;
-            renderLauncher(context);
-          } }, "−")
+          collapseButton()
         ]),
         h("p", { class: "ctl-error", text: error instanceof Error ? error.message : String(error) }),
         h("button", { class: "ctl-primary", onclick: () => runAnalysis(true) }, t("retry"))
@@ -242,10 +254,7 @@
           ]),
           h("div", { class: "ctl-actions" }, [
             h("button", { class: "ctl-icon-btn", title: t("refreshTitle"), onclick: () => runAnalysis(true) }, "↻"),
-            h("button", { class: "ctl-icon-btn", title: t("collapseTitle"), onclick: () => {
-              collapsed = true;
-              renderLauncher(context);
-            } }, "−")
+            collapseButton()
           ])
         ]),
         verdict.alerts?.length
@@ -321,34 +330,42 @@
   async function runAnalysis(force = false) {
     const context = window.CopyTradingLensProviders.detectLeadPage();
     if (!context) {
-      currentKey = "";
-      clearRoot();
+      run = null;
+      paint();
       window.CopyTradingLensPositionsPanel?.unmount();
       return;
     }
     const key = `${context.platform}:${context.id}:${location.href}`;
-    if (!force && currentKey === key && root) return;
-    currentKey = key;
+    if (!force && run?.key === key && root) return;
     // The in-page positions panel needs the same payload as the overlay, so the
     // fetch happens even when the overlay is collapsed — a lead trader's full
     // history is paginated over dozens of requests and must be paid for once,
     // not once per consumer.
-    const wasCollapsed = collapsed;
-    if (wasCollapsed) renderLauncher(context);
-    else renderLoading(context);
+    const current = { id: ++runSeq, key, context, phase: "loading" };
+    run = current;
+    // A refresh or a route change starts a newer run while this one is still
+    // reading; whichever answers last, only the newest may land.
+    const superseded = () => run?.id !== current.id;
+    paint();
     window.CopyTradingLensPositionsPanel?.beginLoading(context, () => runAnalysis(true));
     try {
       const raw = await window.CopyTradingLensProviders.fetchLeadData(context, {
-        onProgress: (event) => window.CopyTradingLensPositionsPanel?.setProgress(event)
+        onProgress: (event) => {
+          if (!superseded()) window.CopyTradingLensPositionsPanel?.setProgress(event);
+        }
       });
+      if (superseded()) return;
       const analysis = context.platform === "Binance"
         ? window.CopyTradingLensAnalysis.analyzeBinance(raw)
         : window.CopyTradingLensAnalysis.analyzeOkx(raw);
-      if (!collapsed) renderAnalysis(context, raw, analysis);
+      run = { ...current, phase: "ready", raw, analysis };
+      paint();
       window.CopyTradingLensPositionsPanel?.mount(context, raw);
     } catch (error) {
+      if (superseded()) return;
+      run = { ...current, phase: "failed", error };
+      paint();
       window.CopyTradingLensPositionsPanel?.fail(error);
-      if (!collapsed) renderError(context, error);
     }
   }
 
