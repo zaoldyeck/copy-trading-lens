@@ -26,9 +26,11 @@
   // 2026-09-14, 436 cached traders): Binance's 30D pnl is matched within 5% for
   // 203 of 372 (the count-back this replaced: 64), its 7D pnl for 176 of 420
   // (57), and equity before the first fill equals the opening investment within
-  // 5% for 57 of 99 (7). On portfolio 5108371059752839168 the cumulative pnl
-  // follows its ROI chart to 603 USDT on average over 58 days. The tails left
-  // are not explained yet.
+  // 5% for 57 of 99 (7). Along the ROI chart of the 100 single-investment
+  // portfolios (a point read as its day's close, each window on its own ROI
+  // base), pnl across the fills is within 5% for 74 (22), with a median daily
+  // error of 0.8% of the balance; on 5108371059752839168 that is 603 USDT on
+  // average over 58 days.
   //
   // Prices between fills come from hourly mark-price candles, interpolated
   // inside the hour. Positions with no fill inside the history are not seen,

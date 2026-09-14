@@ -992,10 +992,12 @@
   //                    risky 53%, followable 44%; with it avoid 59%, risky 35%
   // The bar sits where the above-share stops rising on both halves (12-15x).
   // Re-run the same day with the bet read at its peak fill against equity
-  // counted back through price moves, funding and fees (src/equity.js;
-  // reports/backtest-risk-rules-2026-09-14-equity.txt): at or above 12x 82% of
-  // 82 (halves 79% / 85%), flat at 80-85% from 11x to 20x on the whole set;
-  // below 3x 19% of 54 (halves 12% / 25%). Both halves step up at 11x.
+  // counted back through price moves, funding and fees, and traders with fills
+  // missing from order history left out as incomplete (src/equity.js;
+  // reports/backtest-risk-rules-2026-09-14-equity.txt, 218 traders): at or
+  // above 12x 83% of 81 (halves 80% / 85%), 81-87% from 11x to 20x on the
+  // whole set; below 3x 17% of 52 (halves 12% / 22%). Both halves step up at
+  // 11x.
   const BIGGEST_BET_AVOID_LEVERAGE = 12;
 
   function buildVerdict(meta, summary, orders, transfers, live, biggestBet = null) {
