@@ -35,10 +35,10 @@ console.log("=== RUNNING UNIT TESTS FOR ANALYSIS RULES ===");
   for (let episode = 0; episode < 12; episode += 1) {
     for (let add = 0; add < 4; add += 1) {
       time += 3 * hour;
-      orderHistory.push({ symbol: "SOLUSDT", side: "BUY", positionSide: "LONG", executedQty: 10, avgPrice: 80 * (1 - 0.02 * add), totalPnl: 0, orderTime: time, type: "LIMIT" });
+      orderHistory.push({ symbol: "SOLUSDT", side: "BUY", positionSide: "LONG", executedQty: 10, avgPrice: 80 * (1 - 0.02 * add), totalPnl: 0, orderTime: time, orderUpdateTime: time, type: "LIMIT" });
     }
     time += 6 * hour;
-    orderHistory.push({ symbol: "SOLUSDT", side: "SELL", positionSide: "LONG", executedQty: 40, avgPrice: 80 * 1.01, totalPnl: 60, orderTime: time, type: "LIMIT" });
+    orderHistory.push({ symbol: "SOLUSDT", side: "SELL", positionSide: "LONG", executedQty: 40, avgPrice: 80 * 1.01, totalPnl: 60, orderTime: time, orderUpdateTime: time, type: "LIMIT" });
   }
   const result = analysis.analyzeBinance({
     id: "style-render", detail: {}, positionHistory: [], orderHistory, transferHistory: [], livePositions: [], performanceWindows: {},
@@ -247,8 +247,8 @@ console.log("=== RUNNING UNIT TESTS FOR ANALYSIS RULES ===");
   const start = Date.UTC(2026, 6, 1);
   // One round trip every `every` hours: buy, sell an hour later.
   const roundTrips = (count, every) => Array.from({ length: count }, (_, k) => [
-    { symbol: "BTCUSDT", side: "BUY", positionSide: "LONG", executedQty: 0.01, avgPrice: 60000, totalPnl: 0, orderTime: start + k * every * hour, type: "LIMIT" },
-    { symbol: "BTCUSDT", side: "SELL", positionSide: "LONG", executedQty: 0.01, avgPrice: 60300, totalPnl: 3, orderTime: start + (k * every + 1) * hour, type: "LIMIT" }
+    { symbol: "BTCUSDT", side: "BUY", positionSide: "LONG", executedQty: 0.01, avgPrice: 60000, totalPnl: 0, orderTime: start + k * every * hour, orderUpdateTime: start + k * every * hour, type: "LIMIT" },
+    { symbol: "BTCUSDT", side: "SELL", positionSide: "LONG", executedQty: 0.01, avgPrice: 60300, totalPnl: 3, orderTime: start + (k * every + 1) * hour, orderUpdateTime: start + (k * every + 1) * hour, type: "LIMIT" }
   ]).flat();
   const style = global.CopyTradingLensStyle.classify(roundTrips(10, 2));
   assert.equal(style.family, "insufficient");

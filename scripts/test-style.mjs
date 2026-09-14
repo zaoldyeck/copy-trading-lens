@@ -329,4 +329,31 @@ test("a hedge-mode close larger than its book never flips", () => {
   assert.equal(cutOffPositions, 1, "the excess is volume opened before the history we hold");
 });
 
+test("fills replay in the order they filled, not the order they were placed", () => {
+  // Portfolio 5137430378342777089, SOXLUSDT, 2026-08-27 (UTC). The take-profit
+  // buy was placed a second after the first short entry and rested for an hour;
+  // Binance's position-history row closes at its fill, 13:47:25.291. Replayed
+  // on the placement clock it closed the first 382 and the rest looked like
+  // entries after the exit.
+  const at = (hms) => Date.parse(`2026-08-27T${hms}Z`);
+  const placed = (created, filled, side, qty, price, pnl = 0) => ({
+    symbol: "SOXLUSDT", side, positionSide: "SHORT", type: "LIMIT", executedQty: qty, avgPrice: price, totalPnl: pnl,
+    orderTime: at(created), orderUpdateTime: at(filled)
+  });
+  const orders = [
+    placed("12:46:06.618", "12:46:06.618", "SELL", 382, 124.69),
+    placed("12:46:07.480", "13:47:25.291", "BUY", 1910, 120.32, 8434.56),
+    placed("12:46:29.290", "12:46:29.290", "SELL", 382, 124.72),
+    placed("12:46:36.523", "12:46:36.676", "SELL", 382, 124.75),
+    placed("12:46:54.895", "12:46:54.895", "SELL", 382, 124.77),
+    placed("12:47:04.161", "12:47:04.161", "SELL", 382, 124.75)
+  ];
+  const { episodes, cutOffPositions } = Style.buildEpisodes(orders);
+  assert.equal(cutOffPositions, 0);
+  assert.deepEqual(JSON.parse(JSON.stringify(episodes.map((e) => [e.direction, e.closed, e.entries.length, e.exits.map((f) => f.qty)]))), [
+    ["SHORT", true, 5, [1910]]
+  ]);
+  assert.equal(episodes[0].end, at("13:47:25.291"), "the position ends when the take-profit filled");
+});
+
 console.log(`${passed}/${passed} passed`);

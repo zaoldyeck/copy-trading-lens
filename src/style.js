@@ -44,7 +44,7 @@
         const fills = position.fills.map(({ order, entry, qty }) => {
           const price = toNumber(order.avgPrice);
           return {
-            t: toNumber(order.orderTime),
+            t: Positions.fillTimeOf(order),
             qty,
             price,
             notional: qty * price,
@@ -418,7 +418,7 @@
     MIN_GRID_REENTRIES_CURRENT.value = MIN_GRID_REENTRIES;
     const { episodes, cutOffPositions } = buildEpisodes(orders);
     const closed = episodes.filter((episode) => episode.closed);
-    const times = (orders || []).map((order) => toNumber(order.orderTime)).filter(Boolean);
+    const times = (orders || []).map(global.CopyTradingLensPositions.fillTimeOf).filter(Boolean);
     const spanDays = times.length ? (Math.max(...times) - Math.min(...times)) / DAY_MS : 0;
     const orderCount = (orders || []).length;
     const evidence = { orders: orderCount, episodes: episodes.length, closedEpisodes: closed.length, cutOffPositions, spanDays };

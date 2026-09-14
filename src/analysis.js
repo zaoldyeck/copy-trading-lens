@@ -436,7 +436,6 @@
   }
 
   function analyzeBinanceOrders(orders) {
-    const sorted = [...orders].sort((a, b) => num(a.orderTime, 0) - num(b.orderTime, 0));
     let openOrders = 0;
     let closeOrders = 0;
     let adverseAdds = 0;
@@ -445,19 +444,16 @@
     const addNotionals = [];
     const adverseStepBps = [];
     const symbols = new Map();
-    const leverages = new Map();
 
-    for (const order of sorted) {
+    for (const order of orders) {
       const symbol = String(order.symbol || "");
       if (symbol) symbols.set(symbol, (symbols.get(symbol) || 0) + 1);
-      const leverage = String(firstDefined(order.leverage, order.leverageLevel, ""));
-      if (leverage) leverages.set(leverage, (leverages.get(leverage) || 0) + 1);
     }
 
     // Which fills open, add to, close or flip a position comes from the one
     // shared replay (src/positions.js via src/style.js), never from guessing
     // here: one-way accounts flip through zero and a breakeven close has zero pnl.
-    for (const episode of global.CopyTradingLensStyle.buildEpisodes(sorted).episodes) {
+    for (const episode of global.CopyTradingLensStyle.buildEpisodes(orders).episodes) {
       const long = episode.direction === "LONG";
       openOrders += episode.entries.length;
       closeOrders += episode.exits.length;
@@ -480,23 +476,7 @@
     const addOrderMedian = median(addNotionals);
     const addSizeExpansion = initialOrderMedian > 0 && addOrderMedian > initialOrderMedian * 1.2;
 
-    const orderIntervalsSec = [];
-    for (let i = 1; i < sorted.length; i++) {
-      const t0 = Number(firstDefined(sorted[i - 1].orderTime, sorted[i - 1].time, sorted[i - 1].createTime, 0));
-      const t1 = Number(firstDefined(sorted[i].orderTime, sorted[i].time, sorted[i].createTime, 0));
-      if (t0 > 0 && t1 > 0) {
-        orderIntervalsSec.push(Math.abs(t1 - t0) / 1000);
-      }
-    }
-    const medianOrderIntervalSec = orderIntervalsSec.length ? median(orderIntervalsSec) : Infinity;
-    const orderBurstRate60s = safeDivide(
-      orderIntervalsSec.filter((sec) => sec <= 60).length,
-      orderIntervalsSec.length,
-      0
-    );
-
     const dominantSymbol = [...symbols.entries()].sort((a, b) => b[1] - a[1])[0];
-    const dominantLeverage = [...leverages.entries()].sort((a, b) => b[1] - a[1])[0];
     return {
       openOrders,
       closeOrders,
@@ -506,13 +486,9 @@
       initialOrderMedian,
       addOrderMedian,
       addSizeExpansion,
-      medianOrderIntervalSec,
-      orderBurstRate60s,
       adverseStepMedianBps: median(adverseStepBps),
       dominantSymbol: dominantSymbol ? dominantSymbol[0] : "",
-      dominantSymbolShare: dominantSymbol ? safeDivide(dominantSymbol[1], sorted.length, 0) : 0,
-      dominantLeverage: dominantLeverage ? dominantLeverage[0] : "",
-      sampleOrders: sorted.length
+      dominantSymbolShare: dominantSymbol ? safeDivide(dominantSymbol[1], orders.length, 0) : 0
     };
   }
 
@@ -1138,9 +1114,7 @@
       addSizeExpansion: false,
       adverseStepMedianBps: 0,
       dominantSymbol: summary.dominantSymbol,
-      dominantSymbolShare: summary.dominantSymbolShare,
-      dominantLeverage: String(firstDefined(raw.candidate?.lever, "")),
-      sampleOrders: 0
+      dominantSymbolShare: summary.dominantSymbolShare
     };
     const transfers = {
       depositCount: 0,

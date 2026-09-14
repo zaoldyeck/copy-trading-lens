@@ -59,6 +59,19 @@
     return Number.isFinite(parsed) ? parsed : fallback;
   }
 
+  // An order-history row carries two clocks. orderTime is when the order was
+  // PLACED; orderUpdateTime is when it was last updated, which for a filled
+  // order is when it filled. A take-profit limit can rest for hours between the
+  // two: portfolio 5137430378342777089 placed a SOXLUSDT buy at 12:46:07 UTC on
+  // 2026-08-27 that filled at 13:47:25.291, and Binance's position-history row
+  // closes at exactly 13:47:25.291. Positions are built from fills, so every
+  // replay runs on the fill clock. Over 333,138 cached orders (2026-09-15) the
+  // field was always present and never earlier than orderTime; 34% filled more
+  // than a second after they were placed and 9% more than an hour after.
+  function fillTimeOf(order) {
+    return num(order.orderUpdateTime, 0);
+  }
+
   function normalizeSide(side) {
     const text = String(side || "").toUpperCase();
     if (text === "LONG" || text === "SHORT" || text === "BOTH") return text;
@@ -187,7 +200,7 @@
     let current = null;
     let signedQty = 0n;
     let unmatchedFills = 0;
-    const ordered = [...fills].sort((a, b) => num(a.orderTime, num(a.orderUpdateTime, 0)) - num(b.orderTime, num(b.orderUpdateTime, 0)));
+    const ordered = [...fills].sort((a, b) => fillTimeOf(a) - fillTimeOf(b));
     for (const fill of ordered) {
       const delta = signedFillDelta(fill, key);
       if (delta === 0n) continue;
@@ -256,7 +269,7 @@
       const delta = signedFillDelta(fill, key);
       if (delta === 0n) continue;
       const price = num(fill.avgPrice, 0);
-      const time = num(fill.orderUpdateTime, num(fill.orderTime, 0));
+      const time = fillTimeOf(fill);
       const step = stepBook(allowFlip ? key : hedgeKeyOf(key, openSign), signedQty, delta);
 
       if (step.opening) {
@@ -459,7 +472,7 @@
     const buckets = new Map();
     let oldestOrderMs = Number.POSITIVE_INFINITY;
     for (const order of orderHistory) {
-      const time = num(order.orderUpdateTime, num(order.orderTime, 0));
+      const time = fillTimeOf(order);
       if (time > 0 && time < oldestOrderMs) oldestOrderMs = time;
       const key = bucketKeyOf(String(order.symbol), order.positionSide);
       if (!buckets.has(key)) buckets.set(key, []);
@@ -476,11 +489,11 @@
     const seen = new Set();
 
     for (const [key, fills] of buckets) {
-      fills.sort((a, b) => num(a.orderUpdateTime, 0) - num(b.orderUpdateTime, 0));
+      fills.sort((a, b) => fillTimeOf(a) - fillTimeOf(b));
       const symbol = symbolOfKey(key);
       const oneWay = isOneWayBucket(key);
       const anchor = anchors.get(key) || 0;
-      const afterFlat = fills.filter((fill) => num(fill.orderUpdateTime, 0) > anchor);
+      const afterFlat = fills.filter((fill) => fillTimeOf(fill) > anchor);
       if (!afterFlat.length) continue;
       const replayed = replayFills(key, afterFlat, { allowFlip: oneWay });
       if (!replayed) continue;
@@ -824,6 +837,7 @@
     summarizePortfolio,
     stepBook,
     replayPositions,
+    fillTimeOf,
     // exported for tests
     replayFills,
     bucketKeyOf
