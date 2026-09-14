@@ -650,10 +650,13 @@
     const getPnl = exchange === "OKX"
       ? (row) => num(row.pnl, 0)
       : binancePositionPnl;
+    const getClose = exchange === "OKX"
+      ? (row) => num(firstDefined(row.uTime, row.closeTime), 0)
+      : positionClosedAt;
     const getHold = exchange === "OKX"
       ? (row) => {
         const open = num(row.openTime, 0);
-        const close = num(firstDefined(row.uTime, row.closeTime), 0);
+        const close = getClose(row);
         return open && close && close >= open ? (close - open) / HOUR_MS : 0;
       }
       : (row) => {
@@ -667,7 +670,9 @@
     const wins = [];
     const losses = [];
     const winHolds = [];
-    const lossHolds = [];
+    // Each loss hold with the moment it ended: its close, or null while the
+    // position is still open.
+    const lossHoldEvents = [];
     const priceMoves = [];
     const symbols = new Map();
 
@@ -682,7 +687,7 @@
         if (hold) winHolds.push(hold);
       } else if (pnl < 0) {
         losses.push(pnl);
-        if (hold) lossHolds.push(hold);
+        if (hold) lossHoldEvents.push({ hours: hold, endedAt: getClose(row) });
       }
     }
 
@@ -692,8 +697,9 @@
     for (const row of stillOpen) {
       if (getPnl(row) >= 0) continue;
       const hold = getHold(row);
-      if (hold) lossHolds.push(hold);
+      if (hold) lossHoldEvents.push({ hours: hold, endedAt: null });
     }
+    const lossHolds = lossHoldEvents.map((event) => event.hours);
 
     const dominantSymbol = [...symbols.entries()].sort((a, b) => b[1] - a[1])[0];
     const avgWin = safeDivide(wins.reduce((sum, value) => sum + value, 0), wins.length, 0);
@@ -718,6 +724,7 @@
       avgWinHoldHours: safeDivide(winHolds.reduce((sum, value) => sum + value, 0), winHolds.length, 0),
       avgLossHoldHours: safeDivide(lossHolds.reduce((sum, value) => sum + value, 0), lossHolds.length, 0),
       maxLossHoldHours: lossHolds.length ? Math.max(...lossHolds) : 0,
+      lossHoldEvents,
       medianHoldHours: median([...winHolds, ...lossHolds]),
       medianWinHoldHours: median(winHolds),
       medianLossHoldHours: median(lossHolds),
@@ -794,6 +801,18 @@
     return { family: summary.medianHoldHours < SWING_HOLD_HOURS ? "shortTerm" : "swing", secondary: [] };
   }
 
+  // The longest dead loss, and when the latest one at the same bar ended — or
+  // that it has not: a still-open position whose partial close realized a loss
+  // is still being held, and its last partial close is not an end.
+  function severeDeadLossAlert(maxHours, events, bar) {
+    const severe = events.filter((event) => event.hours >= bar);
+    if (severe.some((event) => event.endedAt === null)) {
+      return t("alertSevereDeadLossStillOpen", [formatHours(maxHours)]);
+    }
+    const latest = severe.reduce((max, event) => Math.max(max, event.endedAt), 0);
+    return t("alertSevereDeadLoss", [formatHours(maxHours), formatDateTime(latest)]);
+  }
+
   function buildVerdict(meta, summary, orders, transfers, live) {
     const evidence = [];
     const cautions = [];
@@ -817,7 +836,8 @@
     const highInitialLeverage = initialLeverage >= 10 && adverseRate >= 0.30;
 
     // Dead loss duration thresholds
-    const severeDeadLoss = summary.maxLossHoldHours >= 150;
+    const SEVERE_DEAD_LOSS_HOURS = 150;
+    const severeDeadLoss = summary.maxLossHoldHours >= SEVERE_DEAD_LOSS_HOURS;
     const extremeDeadLoss = summary.maxLossHoldHours >= 300;
 
     // Stagnant momentum detection
@@ -845,7 +865,7 @@
       alerts.push(t("alertLossDeposit", [transfers.lossPeriodDepositCount]));
     }
     if (severeDeadLoss) {
-      alerts.push(t("alertSevereDeadLoss", [formatHours(summary.maxLossHoldHours)]));
+      alerts.push(severeDeadLossAlert(summary.maxLossHoldHours, summary.lossHoldEvents, SEVERE_DEAD_LOSS_HOURS));
     }
 
     const destructiveMartingale = (

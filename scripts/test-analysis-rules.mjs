@@ -57,7 +57,7 @@ console.log("=== RUNNING UNIT TESTS FOR ANALYSIS RULES ===");
 // 2. Test Extreme Dead-loss Hard Veto (>= 300h)
 {
   const meta = { days: 60, mdd: 10, pnl: 500, copierPnl: 10000, aum: 50000, marginBalance: 5000 };
-  const summary = { closedTrades: 50, winRate: 0.90, payoffRatio: 0.8, expectancy: 10, maxLossHoldHours: 350, avgLossHoldHours: 40, avgWinHoldHours: 10 };
+  const summary = { closedTrades: 50, winRate: 0.90, payoffRatio: 0.8, expectancy: 10, maxLossHoldHours: 350, lossHoldEvents: [{ hours: 350, endedAt: Date.UTC(2026, 7, 1) }], avgLossHoldHours: 40, avgWinHoldHours: 10 };
   const orders = { adverseAddRate: 0.10, openOrders: 50, initialOrderMedian: 100 };
   const transfers = { lossPeriodDepositCount: 0 };
   const live = { openUnrealizedLossToMargin: 0, openUnrealizedLoss: 0 };
@@ -71,7 +71,7 @@ console.log("=== RUNNING UNIT TESTS FOR ANALYSIS RULES ===");
 // 3. Test Severe Dead-loss Gate (>= 150h capped at risky)
 {
   const meta = { days: 60, mdd: 10, pnl: 500, copierPnl: 60000, aum: 50000, marginBalance: 5000 };
-  const summary = { closedTrades: 50, winRate: 0.90, payoffRatio: 1.2, expectancy: 10, maxLossHoldHours: 180, avgLossHoldHours: 20, avgWinHoldHours: 10 };
+  const summary = { closedTrades: 50, winRate: 0.90, payoffRatio: 1.2, expectancy: 10, maxLossHoldHours: 180, lossHoldEvents: [{ hours: 180, endedAt: Date.UTC(2026, 7, 1) }], avgLossHoldHours: 20, avgWinHoldHours: 10 };
   const orders = { adverseAddRate: 0.10, openOrders: 50, initialOrderMedian: 100 };
   const transfers = { lossPeriodDepositCount: 0 };
   const live = { openUnrealizedLossToMargin: 0, openUnrealizedLoss: 0 };
@@ -292,6 +292,40 @@ console.log("=== RUNNING UNIT TESTS FOR ANALYSIS RULES ===");
   assert.equal(result.transfers.lossPeriodDepositCount, 2, "the deposit after the loss closed is not a rescue");
   assert.equal(result.transfers.lastLossPeriodDepositAt, start + 7 * day, "the latest rescue, not the latest deposit");
   console.log("PASS: the latest loss-period deposit is dated");
+}
+
+// 11. The dead-loss alert dates the latest hold at its bar — not the longest
+//     one — and says so when that hold is still open.
+{
+  const day = 24 * 3600 * 1000;
+  const start = Date.UTC(2026, 6, 1);
+  const lossRow = (openedDay, closedDay, pnl = "-50") => ({ symbol: "ETHUSDT", side: "Long", opened: start + openedDay * day, closed: start + closedDay * day, closingPnl: pnl, status: "All Closed" });
+  const run = (positionHistory) => analysis.analyzeBinance({
+    id: "dead-loss-dates",
+    detail: { startTime: start, marginBalance: "10000" },
+    positionHistory,
+    orderHistory: [],
+    transferHistory: [],
+    livePositions: [],
+    performanceWindows: {},
+    historyStatus: { positionHistory: { complete: true }, orderHistory: { complete: true }, transferHistory: { complete: true } }
+  });
+  const closedOnly = run([lossRow(1, 21), lossRow(22, 29), lossRow(34, 35)]);
+  assert.equal(closedOnly.summary.maxLossHoldHours, 480);
+  const expected = zhTwMessages.alertSevereDeadLoss.message
+    .replace("{0}", "20.0d")
+    .replace("{1}", analysis.formatDateTime(start + 29 * day));
+  assert.ok(closedOnly.verdict.alerts.includes(expected), `the 7-day hold ending on day 29 is the latest at the bar, not the 20-day one; alerts: ${closedOnly.verdict.alerts}`);
+
+  const stillOpen = run([
+    lossRow(1, 21),
+    { symbol: "ETHUSDT", side: "Long", opened: start + 30 * day, closed: null, updateTime: start + 38 * day, closingPnl: "-20", status: "Partially Closed" }
+  ]);
+  assert.ok(
+    stillOpen.verdict.alerts.includes(zhTwMessages.alertSevereDeadLossStillOpen.message.replace("{0}", "20.0d")),
+    `a partial close is not the end of the hold; alerts: ${stillOpen.verdict.alerts}`
+  );
+  console.log("PASS: the dead-loss alert dates the latest hold at its bar");
 }
 
 console.log("\nALL ANALYSIS UNIT TESTS PASSED SUCCESSFULLY!");

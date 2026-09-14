@@ -468,7 +468,10 @@
     "message": "🚨 虧損期補入金 {0} 次續命"
   },
   "alertSevereDeadLoss": {
-    "message": "🚨 歷史死扛虧損 {0}"
+    "message": "🚨 歷史死扛虧損 {0}，最近一次 {1} 平倉"
+  },
+  "alertSevereDeadLossStillOpen": {
+    "message": "🚨 歷史死扛虧損 {0}，最近一次至今仍未平倉"
   },
   "evidenceZeroLossMartingaleBomb": {
     "message": "從不平倉認賠（100% 勝率假象）且單邊逆勢加倉過深，具備極高穿倉尾部風險。"

@@ -468,7 +468,10 @@
     "message": "🚨 {0} Rescue Deposits in Loss"
   },
   "alertSevereDeadLoss": {
-    "message": "🚨 Dead Loss Held for {0}"
+    "message": "🚨 Dead Loss Held for {0}, latest closed {1}"
+  },
+  "alertSevereDeadLossStillOpen": {
+    "message": "🚨 Dead Loss Held for {0}, latest still open"
   },
   "evidenceZeroLossMartingaleBomb": {
     "message": "Never closes losing trades (100% win-rate illusion) with deep adverse laddering, posing extreme liquidation risk."

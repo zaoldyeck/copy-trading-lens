@@ -468,7 +468,10 @@
     "message": "🚨 亏损期补入金 {0} 次续命"
   },
   "alertSevereDeadLoss": {
-    "message": "🚨 历史死扛亏损 {0}"
+    "message": "🚨 历史死扛亏损 {0}，最近一次 {1} 平仓"
+  },
+  "alertSevereDeadLossStillOpen": {
+    "message": "🚨 历史死扛亏损 {0}，最近一次至今仍未平仓"
   },
   "evidenceZeroLossMartingaleBomb": {
     "message": "从不平仓认赔（100% 胜率假象）且单边逆势加仓过深，具备极高穿仓尾部风险。"
