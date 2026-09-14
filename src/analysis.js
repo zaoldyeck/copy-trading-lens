@@ -418,12 +418,69 @@
   // only "held" by a copier from the start date onward — charging them the
   // pre-portfolio months produces dead-loss readings longer than the
   // portfolio's entire lifetime (the tell that the caliber is wrong).
-  function binanceHoldHours(position, roundStartMs = 0) {
+  //
+  // The clock runs per unit held, not from the first entry to the last exit: a
+  // position closed 98% in two minutes and left 0.1 of 6 contracts open for
+  // eleven days was held for 4.6 hours on average, and a copier — whose
+  // partial closes follow the lead's by percentage — held it the same way
+  // (portfolio 5172137479216744961, CLUSDT, 2026-08-20, read as an 11.5-day
+  // dead loss before). A row whose fills the order history does not hold keeps
+  // the first-entry-to-last-exit clock, which is never shorter.
+  function binanceHoldHours(position, roundStartMs = 0, episode = null) {
     const rawOpened = positionOpenedAt(position);
     const closed = positionHeldUntil(position);
     const opened = roundStartMs && rawOpened && rawOpened < roundStartMs ? roundStartMs : rawOpened;
     if (!opened || !closed || closed < opened) return 0;
-    return (closed - opened) / HOUR_MS;
+    return episode ? unitHoldHours(episode, opened, closed) : (closed - opened) / HOUR_MS;
+  }
+
+  // Mean time each unit entered was held between `from` and `until`: the
+  // integral of the open quantity over time, divided by the quantity entered.
+  function unitHoldHours(episode, from, until) {
+    let open = 0;
+    let entered = 0;
+    let unitMs = 0;
+    let previous = from;
+    for (const fill of episode.fills) {
+      const t = Math.min(Math.max(fill.t, from), until);
+      unitMs += open * (t - previous);
+      previous = t;
+      if (fill.entry) {
+        open += fill.qty;
+        entered += fill.qty;
+      } else {
+        open = Math.max(0, open - fill.qty);
+      }
+    }
+    unitMs += open * (until - previous);
+    return entered > 0 ? unitMs / entered / HOUR_MS : (until - from) / HOUR_MS;
+  }
+
+  // The replayed position (src/positions.js via src/style.js) behind a
+  // position-history row: same symbol and side, overlapping it the longest.
+  // Start times rarely differ by more than a fill's duration, but a row and its
+  // replay are not guaranteed to share a millisecond, so the match is by overlap.
+  function episodeIndex(episodes) {
+    const index = new Map();
+    for (const episode of episodes) {
+      const key = `${episode.symbol}|${episode.direction}`;
+      if (!index.has(key)) index.set(key, []);
+      index.get(key).push(episode);
+    }
+    return (row) => {
+      const from = positionOpenedAt(row);
+      const until = positionHeldUntil(row);
+      let best = null;
+      let bestOverlap = 0;
+      for (const episode of index.get(`${row.symbol}|${String(row.side || "").toUpperCase()}`) || []) {
+        const overlap = Math.min(until, episode.end) - Math.max(from, episode.start);
+        if (overlap >= 0 && (best === null || overlap > bestOverlap)) {
+          best = episode;
+          bestOverlap = overlap;
+        }
+      }
+      return best;
+    };
   }
 
   function binancePriceMoveBps(position) {
@@ -435,7 +492,7 @@
     return move * 10000;
   }
 
-  function analyzeBinanceOrders(orders) {
+  function analyzeBinanceOrders(orders, episodes) {
     let openOrders = 0;
     let closeOrders = 0;
     let adverseAdds = 0;
@@ -453,7 +510,7 @@
     // Which fills open, add to, close or flip a position comes from the one
     // shared replay (src/positions.js via src/style.js), never from guessing
     // here: one-way accounts flip through zero and a breakeven close has zero pnl.
-    for (const episode of global.CopyTradingLensStyle.buildEpisodes(orders).episodes) {
+    for (const episode of episodes) {
       const long = episode.direction === "LONG";
       openOrders += episode.entries.length;
       closeOrders += episode.exits.length;
@@ -616,6 +673,7 @@
 
   function summarizeClosedPositions(positions, exchange, options = {}) {
     const roundStartMs = num(options.roundStartMs, 0);
+    const episodeOf = options.episodes ? episodeIndex(options.episodes) : null;
     const { inRound, preRound } = splitPositionsByRound(positions, roundStartMs);
     // Binance's own definition: a partially closed position is not a closed
     // position. Its realized-so-far pnl says nothing about how it ends, so it
@@ -629,23 +687,31 @@
     const getClose = exchange === "OKX"
       ? (row) => num(firstDefined(row.uTime, row.closeTime), 0)
       : positionClosedAt;
+    // hours: per unit held where the row's fills are in the history, otherwise
+    // first entry to last exit; rowHours: always first entry to last exit.
     const getHold = exchange === "OKX"
       ? (row) => {
         const open = num(row.openTime, 0);
         const close = getClose(row);
-        return open && close && close >= open ? (close - open) / HOUR_MS : 0;
+        const hours = open && close && close >= open ? (close - open) / HOUR_MS : 0;
+        return { hours, rowHours: hours, perUnit: false };
       }
       : (row) => {
         const rawOpened = positionOpenedAt(row);
         if (roundStartMs && rawOpened && rawOpened < roundStartMs && positionHeldUntil(row) >= roundStartMs) {
           holdClampedToRoundStart += 1;
         }
-        return binanceHoldHours(row, roundStartMs);
+        const episode = episodeOf ? episodeOf(row) : null;
+        return {
+          hours: binanceHoldHours(row, roundStartMs, episode),
+          rowHours: binanceHoldHours(row, roundStartMs),
+          perUnit: Boolean(episode)
+        };
       };
 
     const wins = [];
     const losses = [];
-    const winHolds = [];
+    const winHoldRecords = [];
     // Each loss hold with the moment it ended: its close, or null while the
     // position is still open.
     const lossHoldEvents = [];
@@ -660,10 +726,10 @@
       if (exchange === "Binance") priceMoves.push(binancePriceMoveBps(row));
       if (pnl > 0) {
         wins.push(pnl);
-        if (hold) winHolds.push(hold);
+        if (hold.hours) winHoldRecords.push(hold);
       } else if (pnl < 0) {
         losses.push(pnl);
-        if (hold) lossHoldEvents.push({ hours: hold, endedAt: getClose(row) });
+        if (hold.hours) lossHoldEvents.push({ ...hold, endedAt: getClose(row) });
       }
     }
 
@@ -673,9 +739,20 @@
     for (const row of stillOpen) {
       if (getPnl(row) >= 0) continue;
       const hold = getHold(row);
-      if (hold) lossHoldEvents.push({ hours: hold, endedAt: null });
+      if (hold.hours) lossHoldEvents.push({ ...hold, endedAt: null });
     }
+    const winHolds = winHoldRecords.map((record) => record.hours);
     const lossHolds = lossHoldEvents.map((event) => event.hours);
+    const mean = (values) => safeDivide(values.reduce((sum, value) => sum + value, 0), values.length, 0);
+    // Win holds against loss holds only on one clock. Rows outside the order
+    // history keep the longer row clock, so a trader whose losses predate the
+    // fills and whose wins do not would otherwise compare a row clock with a
+    // per-unit one (4216060947283912192 flipped from watch to avoid that way).
+    const winPerUnit = winHoldRecords.filter((record) => record.perUnit);
+    const lossPerUnit = lossHoldEvents.filter((event) => event.perUnit);
+    const comparableHoldHours = winPerUnit.length && lossPerUnit.length
+      ? { win: mean(winPerUnit.map((record) => record.hours)), loss: mean(lossPerUnit.map((event) => event.hours)) }
+      : { win: mean(winHoldRecords.map((record) => record.rowHours)), loss: mean(lossHoldEvents.map((event) => event.rowHours)) };
 
     const dominantSymbol = [...symbols.entries()].sort((a, b) => b[1] - a[1])[0];
     const avgWin = safeDivide(wins.reduce((sum, value) => sum + value, 0), wins.length, 0);
@@ -697,18 +774,15 @@
       avgLoss,
       payoffRatio: avgLoss < 0 ? avgWin / Math.abs(avgLoss) : null,
       expectancy: safeDivide(wins.reduce((sum, value) => sum + value, 0) + losses.reduce((sum, value) => sum + value, 0), closed.length, 0),
-      avgWinHoldHours: safeDivide(winHolds.reduce((sum, value) => sum + value, 0), winHolds.length, 0),
-      avgLossHoldHours: safeDivide(lossHolds.reduce((sum, value) => sum + value, 0), lossHolds.length, 0),
+      avgWinHoldHours: mean(winHolds),
+      avgLossHoldHours: mean(lossHolds),
       maxLossHoldHours: lossHolds.length ? Math.max(...lossHolds) : 0,
       lossHoldEvents,
       medianHoldHours: median([...winHolds, ...lossHolds]),
       medianWinHoldHours: median(winHolds),
       medianLossHoldHours: median(lossHolds),
-      lossHoldRatio: safeDivide(
-        safeDivide(lossHolds.reduce((sum, value) => sum + value, 0), lossHolds.length, 0),
-        Math.max(0.1, safeDivide(winHolds.reduce((sum, value) => sum + value, 0), winHolds.length, 0)),
-        0
-      ),
+      comparableHoldHours,
+      lossHoldRatio: safeDivide(comparableHoldHours.loss, Math.max(0.1, comparableHoldHours.win), 0),
       dominantSymbol: dominantSymbol ? dominantSymbol[0] : "",
       dominantSymbolShare: dominantSymbol ? safeDivide(dominantSymbol[1], closed.length, 0) : 0,
       tpMedianBps: median(priceMoves.filter((value) => value > 0)),
@@ -875,7 +949,7 @@
     if (meta.days >= 30) positives.push(t("positiveDays", [meta.days.toFixed(0)]));
     if (summary.closedTrades >= 50) positives.push(t("positiveClosedTrades", [summary.closedTrades]));
     if (summary.payoffRatio !== null && summary.payoffRatio >= 1) positives.push(t("positivePayoff", [summary.payoffRatio.toFixed(2)]));
-    if (summary.avgLossHoldHours > 0 && summary.avgLossHoldHours < summary.avgWinHoldHours) positives.push(t("positiveLossHoldShort"));
+    if (summary.comparableHoldHours.loss > 0 && summary.comparableHoldHours.loss < summary.comparableHoldHours.win) positives.push(t("positiveLossHoldShort"));
     if (meta.days > 0 && meta.days < 30) cautions.push(t("cautionTooFewDays", [meta.days.toFixed(1)]));
     if (!Number.isFinite(meta.roi)) cautions.push(t("cautionNoAllPeriodRoi"));
     if (Number.isFinite(meta.roi) && !meta.allPeriodPerformance?.reliable) cautions.push(t("cautionReconstructedNeedsCompleteness"));
@@ -1006,8 +1080,9 @@
     const meta = extractBinanceMeta(raw, pageMetrics);
     const roundStart = roundStartMsOf(raw);
     const { inRound: roundPositions, preRound: preRoundPositions } = splitPositionsByRound(raw.positionHistory || [], roundStart);
-    const summary = summarizeClosedPositions(raw.positionHistory || [], "Binance", { roundStartMs: roundStart });
-    const orders = analyzeBinanceOrders(raw.orderHistory || []);
+    const { episodes } = global.CopyTradingLensStyle.buildEpisodes(raw.orderHistory || []);
+    const summary = summarizeClosedPositions(raw.positionHistory || [], "Binance", { roundStartMs: roundStart, episodes });
+    const orders = analyzeBinanceOrders(raw.orderHistory || [], episodes);
     // Same caliber for the rescue-deposit test: a deposit is only "capital
     // injected while bleeding" if the losing position belongs to this round.
     // A still-open row counts here: a partial close at a loss proves the position

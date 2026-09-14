@@ -57,7 +57,7 @@ console.log("=== RUNNING UNIT TESTS FOR ANALYSIS RULES ===");
 // 2. Test Extreme Dead-loss Hard Veto (>= 300h)
 {
   const meta = { days: 60, mdd: 10, pnl: 500, copierPnl: 10000, aum: 50000, marginBalance: 5000 };
-  const summary = { closedTrades: 50, winRate: 0.90, payoffRatio: 0.8, expectancy: 10, maxLossHoldHours: 350, lossHoldEvents: [{ hours: 350, endedAt: Date.UTC(2026, 7, 1) }], avgLossHoldHours: 40, avgWinHoldHours: 10 };
+  const summary = { closedTrades: 50, winRate: 0.90, payoffRatio: 0.8, expectancy: 10, maxLossHoldHours: 350, lossHoldEvents: [{ hours: 350, endedAt: Date.UTC(2026, 7, 1) }], avgLossHoldHours: 40, avgWinHoldHours: 10, comparableHoldHours: { win: 10, loss: 40 } };
   const orders = { adverseAddRate: 0.10, openOrders: 50, initialOrderMedian: 100 };
   const transfers = { lossPeriodDepositCount: 0 };
   const live = { openUnrealizedLossToMargin: 0, openUnrealizedLoss: 0 };
@@ -71,7 +71,7 @@ console.log("=== RUNNING UNIT TESTS FOR ANALYSIS RULES ===");
 // 3. Test Severe Dead-loss Gate (>= 150h capped at risky)
 {
   const meta = { days: 60, mdd: 10, pnl: 500, copierPnl: 60000, aum: 50000, marginBalance: 5000 };
-  const summary = { closedTrades: 50, winRate: 0.90, payoffRatio: 1.2, expectancy: 10, maxLossHoldHours: 180, lossHoldEvents: [{ hours: 180, endedAt: Date.UTC(2026, 7, 1) }], avgLossHoldHours: 20, avgWinHoldHours: 10 };
+  const summary = { closedTrades: 50, winRate: 0.90, payoffRatio: 1.2, expectancy: 10, maxLossHoldHours: 180, lossHoldEvents: [{ hours: 180, endedAt: Date.UTC(2026, 7, 1) }], avgLossHoldHours: 20, avgWinHoldHours: 10, comparableHoldHours: { win: 10, loss: 20 } };
   const orders = { adverseAddRate: 0.10, openOrders: 50, initialOrderMedian: 100 };
   const transfers = { lossPeriodDepositCount: 0 };
   const live = { openUnrealizedLossToMargin: 0, openUnrealizedLoss: 0 };
@@ -95,7 +95,7 @@ console.log("=== RUNNING UNIT TESTS FOR ANALYSIS RULES ===");
       "90D": { roi: 5.0 }
     }
   };
-  const summary = { closedTrades: 15, winRate: 0.85, payoffRatio: 1.0, expectancy: 50, maxLossHoldHours: 20, avgLossHoldHours: 5, avgWinHoldHours: 10 };
+  const summary = { closedTrades: 15, winRate: 0.85, payoffRatio: 1.0, expectancy: 50, maxLossHoldHours: 20, avgLossHoldHours: 5, avgWinHoldHours: 10, comparableHoldHours: { win: 10, loss: 5 } };
   const orders = { adverseAddRate: 0.05, openOrders: 15, initialOrderMedian: 100 };
   const transfers = { lossPeriodDepositCount: 0 };
   const live = { openUnrealizedLossToMargin: 0, openUnrealizedLoss: 0 };
@@ -109,7 +109,7 @@ console.log("=== RUNNING UNIT TESTS FOR ANALYSIS RULES ===");
 // 5. Test High Initial Leverage Risk
 {
   const meta = { days: 40, mdd: 15, pnl: 500, copierPnl: 5000, aum: 1000, marginBalance: 500 };
-  const summary = { closedTrades: 40, winRate: 0.80, payoffRatio: 0.5, expectancy: 10, maxLossHoldHours: 30, avgLossHoldHours: 5, avgWinHoldHours: 10 };
+  const summary = { closedTrades: 40, winRate: 0.80, payoffRatio: 0.5, expectancy: 10, maxLossHoldHours: 30, avgLossHoldHours: 5, avgWinHoldHours: 10, comparableHoldHours: { win: 10, loss: 5 } };
   const orders = { adverseAddRate: 0.35, openOrders: 100, initialOrderMedian: 8000 }; // 16x initial leverage!
   const transfers = { lossPeriodDepositCount: 0 };
   const live = { openUnrealizedLossToMargin: 0, openUnrealizedLoss: 0 };
@@ -133,7 +133,7 @@ console.log("=== RUNNING UNIT TESTS FOR ANALYSIS RULES ===");
       "30D": { roi: 45.0 }
     }
   };
-  const summary = { closedTrades: 80, winRate: 0.70, payoffRatio: 1.5, expectancy: 50, maxLossHoldHours: 20, avgLossHoldHours: 5, avgWinHoldHours: 10 };
+  const summary = { closedTrades: 80, winRate: 0.70, payoffRatio: 1.5, expectancy: 50, maxLossHoldHours: 20, avgLossHoldHours: 5, avgWinHoldHours: 10, comparableHoldHours: { win: 10, loss: 5 } };
   const orders = { adverseAddRate: 0.05, openOrders: 80, initialOrderMedian: 1000 };
   const transfers = { lossPeriodDepositCount: 0 };
   const live = { openUnrealizedLossToMargin: 0, openUnrealizedLoss: 0 };
@@ -330,6 +330,36 @@ console.log("=== RUNNING UNIT TESTS FOR ANALYSIS RULES ===");
     `a partial close is not the end of the hold; alerts: ${stillOpen.verdict.alerts}`
   );
   console.log("PASS: the dead-loss alert dates the latest hold at its bar");
+}
+
+// 12. A hold is timed per unit held. Portfolio 5172137479216744961 bought 6
+//     CLUSDT, sold 5.9 ninety seconds later and the last 0.1 eleven days after:
+//     the alert read an 11.5-day dead loss on a 0.69 USDT loss. A copier's
+//     partial closes follow the lead's by percentage, so it held the same way.
+{
+  const row = { symbol: "CLUSDT", opened: 1787232044165, closed: 1788227882033, avgCost: 86.56, avgClosePrice: 86.50683333, closingPnl: "-0.68731005", maxOpenInterest: 6, closedVolume: 6, side: "Long", status: "All Closed", updateTime: 1788227882033, leverage: "2" };
+  const fill = (side, type, qty, price, pnl, time) => ({ symbol: "CLUSDT", side, type, positionSide: "LONG", executedQty: qty, avgPrice: price, totalPnl: pnl, orderUpdateTime: time, orderTime: time });
+  const result = analysis.analyzeBinance({
+    id: "5172137479216744961",
+    detail: { startTime: 1786241817347, marginBalance: "14310" },
+    positionHistory: [row],
+    orderHistory: [
+      fill("BUY", "MARKET", 6, 86.56, 0, 1787232044164),
+      fill("SELL", "MARKET", 5.9, 86.51, -0.295, 1787232134288),
+      fill("SELL", "LIMIT", 0.1, 86.32, -0.024, 1788227882033)
+    ],
+    transferHistory: [],
+    livePositions: [],
+    performanceWindows: {},
+    historyStatus: { positionHistory: { complete: true }, orderHistory: { complete: true }, transferHistory: { complete: true } }
+  });
+  const expectedHours = (6 * (1787232134288 - 1787232044165) + 0.1 * (1788227882033 - 1787232134288)) / 6 / 3600000;
+  assert.ok(Math.abs(result.summary.maxLossHoldHours - expectedHours) < 1e-9, `unit hold ${expectedHours}h, got ${result.summary.maxLossHoldHours}h`);
+  assert.ok(!result.verdict.alerts.some((alert) => alert.includes("死扛")), `no dead-loss alert for residue; alerts: ${result.verdict.alerts}`);
+
+  const withoutFills = analysis.analyzeBinance({ ...result, id: "no-fills", detail: { startTime: 1786241817347, marginBalance: "14310" }, positionHistory: [row], orderHistory: [], transferHistory: [], livePositions: [], performanceWindows: {}, historyStatus: { positionHistory: { complete: true }, orderHistory: { complete: true }, transferHistory: { complete: true } } });
+  assert.ok(Math.abs(withoutFills.summary.maxLossHoldHours - (row.closed - row.opened) / 3600000) < 1e-9, "without its fills a row keeps the first-entry-to-last-exit clock");
+  console.log("PASS: holds are timed per unit held");
 }
 
 console.log("\nALL ANALYSIS UNIT TESTS PASSED SUCCESSFULLY!");
