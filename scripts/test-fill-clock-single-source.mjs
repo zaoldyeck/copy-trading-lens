@@ -2,7 +2,7 @@
 // CopyTradingLensPositions.fillTimeOf (src/positions.js). The row carries two
 // clocks — orderTime (placed) and orderUpdateTime (filled) — and reading the
 // placement clock as a fill replayed resting take-profits before the entries
-// they closed: style.js and analysis.js did exactly that until 2026-09-15.
+// they closed: style.js and analysis.js did exactly that until 2026-09-14.
 //
 // Fails when shipped code reads `.orderTime` anywhere, or `.orderUpdateTime`
 // outside fillTimeOf. Comments are not code and are skipped.

@@ -65,7 +65,7 @@
   // two: portfolio 5137430378342777089 placed a SOXLUSDT buy at 12:46:07 UTC on
   // 2026-08-27 that filled at 13:47:25.291, and Binance's position-history row
   // closes at exactly 13:47:25.291. Positions are built from fills, so every
-  // replay runs on the fill clock. Over 333,138 cached orders (2026-09-15) the
+  // replay runs on the fill clock. Over 333,138 cached orders (2026-09-14) the
   // field was always present and never earlier than orderTime; 34% filled more
   // than a second after they were placed and 9% more than an hour after.
   function fillTimeOf(order) {

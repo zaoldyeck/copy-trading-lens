@@ -120,7 +120,12 @@
   // stay level with the 7-14 day cuts (within a point or above) for C = 13-20
   // on both the 148 never-labelled traders (59-62% vs 60%) and the
   // hand-labelled ones scored against their labels (64-69% vs 65%); below 13
-  // the labelled set falls to 56-64%. 16 sits mid-band.
+  // the labelled set falls to 56-64%. 16 sits mid-band. Re-run on the fill
+  // clock (2026-09-14, scan-forward-window-count-fillclock-2026-09-14.json,
+  // after replay stopped ordering fills by placement time): never-labelled
+  // 13-20 at 60-63% vs 61%, labelled 16-18 at 64-67% vs 66% (13-15 at 59-61%);
+  // 16 stays inside both bands, and the 1.8-point gap to the labelled bar is
+  // under one trader of its 38.
   const MIN_CLOSED_IN_SHORT_WINDOW = 16;
   // ...but not below two days. Same cuts, 16+ closed positions, by length on
   // the never-labelled traders: 0-1 day 50%, 1-2 days 47% (27 traders), then
