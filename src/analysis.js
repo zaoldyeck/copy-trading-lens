@@ -467,14 +467,37 @@
       if (!index.has(key)) index.set(key, []);
       index.get(key).push(episode);
     }
+    // Per book: episodes by start, with the running maximum of their ends, so
+    // a lookup visits only the episodes that can overlap the row. A trader with
+    // thousands of rows on one symbol made the plain scan quadratic.
+    const books = new Map();
+    for (const [key, list] of index) {
+      const sorted = [...list].sort((a, b) => a.start - b.start);
+      const maxEnd = [];
+      sorted.forEach((episode, i) => maxEnd.push(Math.max(episode.end, i ? maxEnd[i - 1] : -Infinity)));
+      books.set(key, { sorted, maxEnd });
+    }
     return (row) => {
+      const book = books.get(`${row.symbol}|${String(row.side || "").toUpperCase()}`);
+      if (!book) return null;
       const from = positionOpenedAt(row);
       const until = positionHeldUntil(row);
+      const { sorted, maxEnd } = book;
+      let lo = 0;
+      let hi = sorted.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (sorted[mid].start <= until) lo = mid + 1;
+        else hi = mid;
+      }
+      // Walking back from the last episode starting by `until`; ties go to the
+      // earliest episode, as the forward scan did.
       let best = null;
       let bestOverlap = 0;
-      for (const episode of index.get(`${row.symbol}|${String(row.side || "").toUpperCase()}`) || []) {
+      for (let i = lo - 1; i >= 0 && maxEnd[i] >= from; i -= 1) {
+        const episode = sorted[i];
         const overlap = Math.min(until, episode.end) - Math.max(from, episode.start);
-        if (overlap >= 0 && (best === null || overlap > bestOverlap)) {
+        if (overlap >= 0 && (best === null || overlap >= bestOverlap)) {
           best = episode;
           bestOverlap = overlap;
         }
@@ -598,6 +621,69 @@
       lastLossPeriodDepositAt: lossPeriodDeposits.reduce((latest, item) => Math.max(latest, num(firstDefined(item.time, item.ts, item.cTime), 0)), 0) || null,
       rescueTimeline
     };
+  }
+
+  // The largest single position against the account it was opened on: peak
+  // notional (maxOpenInterest x avgCost) over the account at that moment. The
+  // account is counted back from today's margin balance (the exchange's own
+  // number): less pnl realised since, less USDT paid in since, plus USDT paid
+  // out since. Counting forward from the first deposit instead needs every
+  // position since the start, and Binance keeps about 120 days of them — for a
+  // February portfolio it read 350 USDT where the account held thousands.
+  // The inverse is the adverse move that would have zeroed the account.
+  // Unrealised pnl today is not subtracted, so it is an estimate.
+  function biggestBetOf(allPositions, roundPositions, transfers, marginBalance) {
+    if (!(marginBalance > 0)) return null;
+    const flows = transfers
+      .filter((item) => String(item.coin || "USDT").toUpperCase() === "USDT")
+      .map((item) => {
+        const amount = Math.abs(num(firstDefined(item.amount, item.amt), 0));
+        const sign = isCapitalInflowTransfer(item) ? 1 : transferDirection(item) === "out" ? -1 : 0;
+        return { time: num(firstDefined(item.time, item.ts, item.cTime), 0), amount: sign * amount };
+      })
+      .filter((flow) => flow.time > 0 && flow.amount !== 0);
+    // Everything realised or transferred at or after a moment, by suffix sums
+    // over time-sorted events: one pass instead of a rescan per position.
+    const since = (events) => {
+      const sorted = [...events].sort((a, b) => a.time - b.time);
+      const suffix = new Array(sorted.length + 1).fill(0);
+      for (let i = sorted.length - 1; i >= 0; i -= 1) suffix[i] = suffix[i + 1] + sorted[i].amount;
+      return (moment) => {
+        let lo = 0;
+        let hi = sorted.length;
+        while (lo < hi) {
+          const mid = (lo + hi) >> 1;
+          if (sorted[mid].time < moment) lo = mid + 1;
+          else hi = mid;
+        }
+        return suffix[lo];
+      };
+    };
+    const pnlSince = since(allPositions
+      .filter((row) => positionClosedAt(row) > 0)
+      .map((row) => ({ time: positionClosedAt(row), amount: binancePositionPnl(row) })));
+    const flowsSince = since(flows);
+    let biggest = null;
+    for (const row of roundPositions) {
+      const opened = positionOpenedAt(row);
+      const notional = num(row.maxOpenInterest, 0) * num(row.avgCost, 0);
+      if (!opened || !(notional > 0)) continue;
+      // Binance will not open a position whose initial margin exceeds the
+      // account, so its notional over the account cannot exceed the leverage it
+      // was opened at. When the count-back says otherwise (82 of 444 cached
+      // traders: unrealised pnl in today's balance, fee and profit-share flows
+      // that are not transfers), the estimate is wrong and the exchange's
+      // bound is the figure that is known to hold.
+      const rowLeverage = num(row.leverage, 0);
+      const estimate = marginBalance - pnlSince(opened) - flowsSince(opened);
+      const account = rowLeverage > 0 ? Math.max(estimate, notional / rowLeverage) : estimate;
+      if (!(account > 0)) continue;
+      const leverage = notional / account;
+      if (!biggest || leverage > biggest.leverage) {
+        biggest = { leverage, symbol: String(row.symbol || ""), openedAt: opened, notional, account, boundByLeverage: account !== estimate, wipeOutMovePct: 100 / leverage };
+      }
+    }
+    return biggest;
   }
 
   function analyzeLivePositions(livePositions, orderAnalysis, marginBalance) {
@@ -863,7 +949,19 @@
     return t("alertSevereDeadLoss", [formatHours(maxHours), formatDateTime(latest)]);
   }
 
-  function buildVerdict(meta, summary, orders, transfers, live) {
+  // A single bet this large against the account is how accounts end.
+  // tools/research/backtest-risk-rules.mjs (2026-09-14): 225 cached traders,
+  // the biggest bet read from their snapshot, followed a median 39 days. Share
+  // that closed the portfolio or fell 30%+ on Binance's own ROI curve, scanned
+  // at every 1x from 1x to 40x and on two halves split by portfolio id:
+  //   at or above 12x: 81% of 83 (halves 76% / 85%), flat at 81-86% up to 21x
+  //   below 3x:        19% of 59 (halves 16% / 21%)
+  //   all traders:     53%; by verdict level before this gate avoid 57%,
+  //                    risky 53%, followable 44%; with it avoid 59%, risky 35%
+  // The bar sits where the above-share stops rising on both halves (12-15x).
+  const BIGGEST_BET_AVOID_LEVERAGE = 12;
+
+  function buildVerdict(meta, summary, orders, transfers, live, biggestBet = null) {
     const evidence = [];
     const cautions = [];
     const positives = [];
@@ -977,10 +1075,19 @@
     if (meta.closeLeadCount >= 8) cautions.push(t("cautionCloseLeadCount", [meta.closeLeadCount]));
     if (meta.allPeriodPerformance?.preStartHistoryDays > 2) cautions.push(t("cautionPreStartHistory", [meta.allPeriodPerformance.preStartHistoryDays.toFixed(0)]));
 
+    const allInBet = Boolean(biggestBet && biggestBet.leverage >= BIGGEST_BET_AVOID_LEVERAGE);
+    if (allInBet) {
+      cautions.unshift(t("cautionBiggestBet", [biggestBet.leverage.toFixed(1), biggestBet.symbol, biggestBet.wipeOutMovePct.toFixed(1)]));
+    }
+
     if (transfers.lossPeriodDepositCount > 0) {
       level = "avoid";
       title = t("verdictAvoid");
       evidence.push(t("evidenceLossDeposit"));
+    } else if (allInBet) {
+      level = "avoid";
+      title = t("verdictAvoid");
+      evidence.push(t("evidenceBiggestBet"));
     } else if (extremeDeadLoss) {
       level = "avoid";
       title = t("verdictAvoid");
@@ -1090,12 +1197,17 @@
     const losses = roundPositions.filter((position) => binancePositionPnl(position) < 0);
     const transfers = analyzeTransfers(raw.transferHistory || [], losses);
     const live = analyzeLivePositions(raw.livePositions || [], orders, meta.marginBalance);
+    // Only positions opened inside this portfolio: one opened before its first
+    // deposit was sized against an account the count-back cannot see (a 60M
+    // USDT portfolio read a pre-start BTC short as 3x, bound by leverage).
+    const openedInRound = roundStart ? roundPositions.filter((row) => positionOpenedAt(row) >= roundStart) : roundPositions;
+    const biggestBet = biggestBetOf(raw.positionHistory || [], openedInRound, raw.transferHistory || [], meta.marginBalance);
     const gaps = binanceDataGaps(raw);
     const { strategy, verdict } = gaps.length
       ? incompleteAnalysis(gaps)
       : {
         strategy: inferStrategy(summary, global.CopyTradingLensStyle.classify(raw.orderHistory || [])),
-        verdict: buildVerdict(meta, summary, orders, transfers, live)
+        verdict: buildVerdict(meta, summary, orders, transfers, live, biggestBet)
       };
     return {
       platform: "Binance",
@@ -1105,6 +1217,7 @@
       orders,
       transfers,
       live,
+      biggestBet,
       strategy,
       verdict,
       rawCounts: {
@@ -1214,6 +1327,8 @@
       orders,
       transfers,
       live,
+      // OKX serves no transfer history, so the account behind a bet is unknown.
+      biggestBet: null,
       strategy,
       verdict,
       rawCounts: {

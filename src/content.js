@@ -300,7 +300,14 @@
               : t("lossPeriodDepositNone"),
             transfers.lossPeriodDepositCount > 0 ? "is-danger" : ""
           ),
-          metricCard(t("metricRestartCount"), String(meta.closeLeadCount || 0), t("portfolioRestart"))
+          metricCard(t("metricRestartCount"), String(meta.closeLeadCount || 0), t("portfolioRestart")),
+          analysis.biggestBet
+            ? metricCard(
+              t("metricBiggestBet"),
+              t("biggestBetValue", [analysis.biggestBet.leverage.toFixed(1)]),
+              t(analysis.biggestBet.boundByLeverage ? "biggestBetHintBound" : "biggestBetHint", [analysis.biggestBet.symbol, fmt.formatDateTime(analysis.biggestBet.openedAt), analysis.biggestBet.wipeOutMovePct.toFixed(1)])
+            )
+            : metricCard(t("metricBiggestBet"), "N/A")
         ]),
         h("section", { class: "ctl-section" }, [
           h("h3", { text: t("sectionRisks") }),

@@ -206,6 +206,18 @@
   "metricRestartCount": {
     "message": "Historical closures"
   },
+  "metricBiggestBet": {
+    "message": "Biggest single bet"
+  },
+  "biggestBetValue": {
+    "message": "{0}x the account"
+  },
+  "biggestBetHint": {
+    "message": "{0} ({1}); a {2}% adverse move zeroes the account"
+  },
+  "biggestBetHintBound": {
+    "message": "{0} ({1}); a {2}% adverse move zeroes the account. The account then could not be counted back, so this is the position's own leverage cap"
+  },
   "hintHistoryApi": {
     "message": "History/API"
   },
@@ -397,6 +409,12 @@
   },
   "cautionCloseLeadCount": {
     "message": "Historical closures: {0}. Old performance and current-round data may be disconnected."
+  },
+  "cautionBiggestBet": {
+    "message": "Biggest single bet was {0}x the account ({1}); a {2}% adverse move would have zeroed it."
+  },
+  "evidenceBiggestBet": {
+    "message": "Of lead traders who bet 12x their account or more, about eight in ten later closed the portfolio or fell 30% or more."
   },
   "cautionPreStartHistory": {
     "message": "Detected trade history predating the official start date by {0} days — bleed-through from a prior, closed lead portfolio. Behaviour stats (win rate, payoff, holding time) already exclude those rows; all-period ROI and drawdown still include them, so the two are on different calibers."

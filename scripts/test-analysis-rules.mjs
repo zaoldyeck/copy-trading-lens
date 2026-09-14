@@ -362,4 +362,64 @@ console.log("=== RUNNING UNIT TESTS FOR ANALYSIS RULES ===");
   console.log("PASS: holds are timed per unit held");
 }
 
+// 13. The biggest bet is read against the account counted back from today's
+//     margin balance, so a history Binance has already trimmed cannot shrink
+//     the account and inflate the bet.
+{
+  const day = 24 * 3600 * 1000;
+  const start = Date.UTC(2026, 6, 1);
+  const status = { positionHistory: { complete: true }, orderHistory: { complete: true }, transferHistory: { complete: true } };
+  const result = analysis.analyzeBinance({
+    id: "biggest-bet",
+    detail: { startTime: start, marginBalance: "1000" },
+    positionHistory: [
+      { symbol: "ETHUSDT", side: "Long", opened: start + 1 * day, closed: start + 2 * day, closingPnl: "500", maxOpenInterest: 0.5, avgCost: 2000, status: "All Closed" },
+      { symbol: "SOXLUSDT", side: "Short", opened: start + 3 * day, closed: start + 4 * day, closingPnl: "0", maxOpenInterest: 200, avgCost: 100, status: "All Closed" }
+    ],
+    orderHistory: [],
+    transferHistory: [{ time: start, coin: "USDT", amount: 500, transType: "LEAD_INVEST" }],
+    livePositions: [],
+    performanceWindows: {},
+    historyStatus: status
+  });
+  assert.equal(result.biggestBet.symbol, "SOXLUSDT");
+  assert.ok(Math.abs(result.biggestBet.account - 1000) < 1e-9, `account ${result.biggestBet.account}`);
+  assert.ok(Math.abs(result.biggestBet.leverage - 20) < 1e-9);
+  assert.ok(Math.abs(result.biggestBet.wipeOutMovePct - 5) < 1e-9);
+
+  // Trim the first position and the deposit away, as Binance's retention does:
+  // the second bet still reads 20x because the account is counted back.
+  const trimmed = analysis.analyzeBinance({
+    id: "biggest-bet-trimmed",
+    detail: { startTime: start, marginBalance: "1000" },
+    positionHistory: [{ symbol: "SOXLUSDT", side: "Short", opened: start + 3 * day, closed: start + 4 * day, closingPnl: "0", maxOpenInterest: 200, avgCost: 100, status: "All Closed" }],
+    orderHistory: [],
+    transferHistory: [],
+    livePositions: [],
+    performanceWindows: {},
+    historyStatus: status
+  });
+  assert.ok(Math.abs(trimmed.biggestBet.leverage - 20) < 1e-9, `trimmed history: ${trimmed.biggestBet.leverage}x`);
+
+  // A 20x bet makes the verdict avoid and says so first.
+  assert.equal(result.verdict.level, "avoid");
+  assert.equal(result.verdict.cautions[0], zhTwMessages.cautionBiggestBet.message.replace("{0}", "20.0").replace("{1}", "SOXLUSDT").replace("{2}", "5.0"));
+
+  // The exchange will not open more notional than leverage x account, so a
+  // count-back that says otherwise is capped at the position's own leverage.
+  const bounded = analysis.analyzeBinance({
+    id: "biggest-bet-bounded",
+    detail: { startTime: start, marginBalance: "100" },
+    positionHistory: [{ symbol: "SOXLUSDT", side: "Short", opened: start + 3 * day, closed: start + 4 * day, closingPnl: "0", maxOpenInterest: 200, avgCost: 100, leverage: "20", status: "All Closed" }],
+    orderHistory: [],
+    transferHistory: [],
+    livePositions: [],
+    performanceWindows: {},
+    historyStatus: status
+  });
+  assert.ok(Math.abs(bounded.biggestBet.leverage - 20) < 1e-9, `bounded by the row's leverage: ${bounded.biggestBet.leverage}x`);
+  assert.equal(bounded.biggestBet.boundByLeverage, true);
+  console.log("PASS: the biggest bet is read against the account counted back from today, bounded by leverage, and gates the verdict");
+}
+
 console.log("\nALL ANALYSIS UNIT TESTS PASSED SUCCESSFULLY!");

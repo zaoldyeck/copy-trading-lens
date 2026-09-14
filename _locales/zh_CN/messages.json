@@ -206,6 +206,18 @@
   "metricRestartCount": {
     "message": "历史关闭"
   },
+  "metricBiggestBet": {
+    "message": "单笔最大押注"
+  },
+  "biggestBetValue": {
+    "message": "账户的 {0} 倍"
+  },
+  "biggestBetHint": {
+    "message": "{0}（{1}），反向 {2}% 账户归零"
+  },
+  "biggestBetHintBound": {
+    "message": "{0}（{1}），反向 {2}% 账户归零；当时账户估不准，以开仓杠杆上限计"
+  },
   "hintHistoryApi": {
     "message": "历史/API"
   },
@@ -397,6 +409,12 @@
   },
   "cautionCloseLeadCount": {
     "message": "历史关闭项目 {0} 次，旧绩效与现轮数据可能被切断。"
+  },
+  "cautionBiggestBet": {
+    "message": "单笔最大押注达账户的 {0} 倍（{1}），价格反向 {2}% 账户就归零。"
+  },
+  "evidenceBiggestBet": {
+    "message": "曾把账户押到 12 倍以上的带单员，事后约八成关闭带单或回撤 30% 以上。"
   },
   "cautionPreStartHistory": {
     "message": "侦测到历史交易记录早于官方起始时间 {0} 天，属前一轮已关闭带单的残留。胜率、盈亏比、持仓时间等行为统计已排除这些数据；全期间 ROI 与回撤仍含前一轮，两者口径不同，不要混着看。"

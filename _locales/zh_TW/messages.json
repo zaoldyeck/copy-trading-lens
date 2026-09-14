@@ -206,6 +206,18 @@
   "metricRestartCount": {
     "message": "歷史關閉"
   },
+  "metricBiggestBet": {
+    "message": "單筆最大押注"
+  },
+  "biggestBetValue": {
+    "message": "帳戶的 {0} 倍"
+  },
+  "biggestBetHint": {
+    "message": "{0}（{1}），反向 {2}% 帳戶歸零"
+  },
+  "biggestBetHintBound": {
+    "message": "{0}（{1}），反向 {2}% 帳戶歸零；當時帳戶估不準，以開倉槓桿上限計"
+  },
   "hintHistoryApi": {
     "message": "歷史/API"
   },
@@ -397,6 +409,12 @@
   },
   "cautionCloseLeadCount": {
     "message": "歷史關閉項目 {0} 次，舊績效與現輪資料可能被切斷。"
+  },
+  "cautionBiggestBet": {
+    "message": "單筆最大押注達帳戶的 {0} 倍（{1}），價格反向 {2}% 帳戶就歸零。"
+  },
+  "evidenceBiggestBet": {
+    "message": "曾把帳戶押到 12 倍以上的帶單員，事後約八成關閉帶單或回撤 30% 以上。"
   },
   "cautionPreStartHistory": {
     "message": "偵測到歷史交易記錄早於官方起始時間 {0} 天，屬前一輪已關閉帶單的殘留。勝率、盈虧比、持倉時間等行為統計已排除這些資料；全期間 ROI 與回撤仍含前一輪，兩者口徑不同，不要混著看。"

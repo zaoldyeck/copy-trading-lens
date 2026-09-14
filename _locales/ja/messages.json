@@ -206,6 +206,18 @@
   "metricRestartCount": {
     "message": "過去の閉鎖"
   },
+  "metricBiggestBet": {
+    "message": "最大の単一ポジション"
+  },
+  "biggestBetValue": {
+    "message": "口座の {0} 倍"
+  },
+  "biggestBetHint": {
+    "message": "{0}（{1}）、逆行 {2}% で口座ゼロ"
+  },
+  "biggestBetHintBound": {
+    "message": "{0}（{1}）、逆行 {2}% で口座ゼロ。当時の口座を逆算できないため建玉レバレッジの上限で計算"
+  },
   "hintHistoryApi": {
     "message": "履歴/API"
   },
@@ -397,6 +409,12 @@
   },
   "cautionCloseLeadCount": {
     "message": "過去の閉鎖回数は {0} 回です。旧実績と現ラウンドのデータが切れている可能性があります。"
+  },
+  "cautionBiggestBet": {
+    "message": "最大の単一ポジションは口座の {0} 倍（{1}）、{2}% の逆行で口座がゼロになる水準。"
+  },
+  "evidenceBiggestBet": {
+    "message": "口座の 12 倍以上を張ったリードトレーダーは、その後約 8 割がポートフォリオを閉じるか 30% 以上下落した。"
   },
   "cautionPreStartHistory": {
     "message": "公式開始日より {0} 日早い取引履歴を検出しました。前回の閉鎖済みリード実績の残存です。勝率・損益比・保有時間などの行動統計からは除外済みですが、全期間 ROI とドローダウンには含まれたままのため、両者の基準は異なります。"
