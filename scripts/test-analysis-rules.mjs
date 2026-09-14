@@ -579,6 +579,18 @@ console.log("=== RUNNING UNIT TESTS FOR ANALYSIS RULES ===");
   });
   assert.ok(Math.abs(untouched.equityAt(start + 20 * day) - 9500) < 1e-9, `untouched position marked: ${untouched.equityAt(start + 20 * day)}`);
 
+  // Replays 5117780547953263617: a 100 ETHUSDT short opened and closed ten
+  // minutes later for -6,246 with no closing fill in the history. Hourly marks
+  // flat at 2,500 see no loss; the row's closingPnl is the loss, at its close.
+  const liquidated = global.CopyTradingLensEquity.equityCountBack({
+    orders: [fill("ETHUSDT", "SELL", "SHORT", 100, 2500, 0, start + 40 * day)],
+    positionHistory: [{ symbol: "ETHUSDT", side: "Short", opened: start + 40 * day, closed: start + 40 * day + 600000, closingPnl: "-6246", maxOpenInterest: 100, closedVolume: 100, avgCost: 2500 }],
+    flows: [],
+    marginBalance: 1000,
+    market: { nowMs: start + 50 * day, symbols: { ETHUSDT: { funding: [], marks: [[start + 40 * day, 2500, start + 50 * day, 2500]] } } }
+  });
+  assert.ok(Math.abs(liquidated.equityAt(start + 40 * day) - 7246) < 1e-9, `equity before the liquidation: ${liquidated.equityAt(start + 40 * day)}`);
+
   // A symbol whose funding and marks could not be read leaves equity missing
   // that symbol's moves, so the analysis says the data is incomplete.
   const unread = analysis.analyzeBinance({ ...raw, id: "market-unread", marketHistory: { ...market, failed: [{ symbol: "CLUSDT", error: "HTTP 400" }] } });

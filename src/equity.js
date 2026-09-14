@@ -24,9 +24,9 @@
   //
   // Against the exchange's own totals (tools/research/probe-equity-countback.mjs,
   // 2026-09-14, 436 cached traders): Binance's 30D pnl is matched within 5% for
-  // 189 of 372 (the count-back this replaced: 64), its 7D pnl for 165 of 420
+  // 203 of 372 (the count-back this replaced: 64), its 7D pnl for 176 of 420
   // (57), and equity before the first fill equals the opening investment within
-  // 5% for 44 of 99 (7). On portfolio 5108371059752839168 the cumulative pnl
+  // 5% for 57 of 99 (7). On portfolio 5108371059752839168 the cumulative pnl
   // follows its ROI chart to 603 USDT on average over 58 days. The tails left
   // are not explained yet.
   //
@@ -78,8 +78,10 @@
   // there, at the mark then.
   function bookPath(stretches, markAt) {
     const points = [];
+    const ranges = [];
     let sizeBefore = 0;
     stretches.forEach((stretch, index) => {
+      const start = points.length;
       const first = stretch.steps[0];
       const sign = signOf(first.side);
       if (stretch.shortfall > 0) {
@@ -97,8 +99,9 @@
         if (stretch.until === last.time) last.size = 0;
         else points.push({ time: stretch.until, price: markAt(stretch.until) ?? last.price, size: 0, fill: null });
       }
+      ranges.push({ stretch, start, end: points.length - 1 });
     });
-    return { points, sizeBefore };
+    return { points, ranges, sizeBefore };
   }
 
   function sizeAt(path, time) {
@@ -169,8 +172,8 @@
       const history = market.symbols?.[symbol];
       if (!history || !history.marks?.length) unpriced.add(symbol);
       const markAt = markReader(history?.marks);
-      const { points, sizeBefore } = bookPath(stretches, markAt);
-      paths.set(key, { key, symbol, points, sizeBefore, steps: stretches.flatMap((stretch) => stretch.steps), markAt, funding: [...(history?.funding || [])].sort((a, b) => a[0] - b[0]) });
+      const { points, ranges, sizeBefore } = bookPath(stretches, markAt);
+      paths.set(key, { key, symbol, points, ranges, sizeBefore, steps: stretches.flatMap((stretch) => stretch.steps), markAt, funding: [...(history?.funding || [])].sort((a, b) => a[0] - b[0]) });
     }
 
     // A position still open on the exchange whose book has no fill in the
@@ -192,7 +195,7 @@
       const markAt = markReader(history?.marks);
       const opened = num(row.opened, 0);
       const points = opened > 0 ? [{ time: opened, price: markAt(opened) ?? num(row.avgCost, 0), size, fill: null }] : [];
-      paths.set(key, { key, symbol, points, sizeBefore: opened > 0 ? 0 : size, steps: [], markAt, funding: [...(history?.funding || [])].sort((a, b) => a[0] - b[0]) });
+      paths.set(key, { key, symbol, points, ranges: [], sizeBefore: opened > 0 ? 0 : size, steps: [], markAt, funding: [...(history?.funding || [])].sort((a, b) => a[0] - b[0]) });
     }
 
     const fundingReceived = (path, from, until, sizeOf) => {
@@ -210,6 +213,8 @@
       return fundingReceived(path, from, until, (time) => sizeAt({ points, sizeBefore: 0 }, time));
     });
 
+    const feeRate = fee.rate;
+
     // Everything after a moment, as suffix sums over time-sorted events:
     // mark-to-market between consecutive fills of a book (the last one to the
     // mark now), funding settled on the size held, fees on notional traded.
@@ -226,6 +231,33 @@
         if (size) events.push({ time, move: 0, fee: 0, funding: -size * mark * rate });
       }
     }
+    // A position whose whole life is inside the history is settled by the
+    // exchange's own closingPnl at its close: the difference from the path
+    // above lands there. It is the fee estimate's error on a complete
+    // position, and the whole loss on one whose closing fills are missing: a
+    // 100 ETHUSDT short on 5117780547953263617 was closed ten minutes after
+    // opening for -6,246 with no closing fill in the history (liquidations
+    // are not in order history), which hourly marks put at a fraction of that.
+    const historyStart = Math.min(...[...fillsByBook.values()].flat().map(P.fillTimeOf));
+    for (const path of paths.values()) {
+      for (const { stretch, start, end } of path.ranges) {
+        if (!(stretch.until > 0) || stretch.openedByFlip) continue;
+        if (stretch.shortfall > 0 && !(stretch.heldFrom >= historyStart)) continue;
+        const closing = (positionHistory || [])
+          .filter((row) => num(row.closed, 0) === stretch.until && String(row.symbol || "") === path.symbol
+            && (path.key.endsWith("|NET") || path.key.endsWith(`|${String(row.side || "").toUpperCase() === "SHORT" ? "SHORT" : "LONG"}`)));
+        if (!closing.length) continue;
+        let modelled = 0;
+        for (let i = start; i <= end; i += 1) {
+          const point = path.points[i];
+          if (i + 1 < path.points.length) modelled += point.size * (path.points[i + 1].price - point.price);
+          if (point.fill) modelled -= (feeRate ?? 0) * point.fill.fillQty * point.fill.price;
+        }
+        modelled += fundingReceived(path, path.points[start].time, stretch.until, (time) => sizeAt(path, time));
+        const settled = closing.reduce((sum, row) => sum + num(row.closingPnl, 0), 0);
+        events.push({ time: stretch.until, move: settled - modelled, fee: 0, funding: 0 });
+      }
+    }
     for (const flow of flows || []) events.push({ time: flow.time, move: 0, fee: 0, funding: 0, flow: flow.amount });
     events.sort((a, b) => a.time - b.time);
     const suffix = new Array(events.length + 1).fill(null).map(() => ({ move: 0, fee: 0, funding: 0, flow: 0 }));
@@ -237,7 +269,6 @@
         flow: suffix[i + 1].flow + (events[i].flow || 0)
       };
     }
-    const feeRate = fee.rate;
 
     // Held at `time` (after any fill at that instant): the move from the mark
     // then to that book's next fill price, or to the mark now.
