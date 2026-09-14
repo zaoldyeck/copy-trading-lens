@@ -17,7 +17,7 @@ global.chrome = {
 
 // Same load order as manifest.json: analysis.js reads styles decided by
 // style.js, which rebuilds positions through positions.js.
-for (const file of ["i18n.js", "positions.js", "style.js", "analysis.js"]) {
+for (const file of ["i18n.js", "positions.js", "style.js", "equity.js", "analysis.js"]) {
   // eslint-disable-next-line no-eval
   eval(load(file));
 }
@@ -394,6 +394,7 @@ console.log("=== RUNNING UNIT TESTS FOR ANALYSIS RULES ===");
     transferHistory: [{ time: start, coin: "USDT", amount: 500, transType: "LEAD_INVEST" }],
     livePositions: [],
     performanceWindows: {},
+    marketHistory: { nowMs: start + 10 * day, symbols: {} },
     historyStatus: status
   });
   assert.equal(result.biggestBet.symbol, "SOXLUSDT");
@@ -411,6 +412,7 @@ console.log("=== RUNNING UNIT TESTS FOR ANALYSIS RULES ===");
     transferHistory: [],
     livePositions: [],
     performanceWindows: {},
+    marketHistory: { nowMs: start + 10 * day, symbols: {} },
     historyStatus: status
   });
   assert.ok(Math.abs(trimmed.biggestBet.leverage - 20) < 1e-9, `trimmed history: ${trimmed.biggestBet.leverage}x`);
@@ -429,6 +431,7 @@ console.log("=== RUNNING UNIT TESTS FOR ANALYSIS RULES ===");
     transferHistory: [],
     livePositions: [],
     performanceWindows: {},
+    marketHistory: { nowMs: start + 10 * day, symbols: {} },
     historyStatus: status
   });
   assert.ok(Math.abs(bounded.biggestBet.leverage - 20) < 1e-9, `bounded by the row's leverage: ${bounded.biggestBet.leverage}x`);
@@ -440,22 +443,43 @@ console.log("=== RUNNING UNIT TESTS FOR ANALYSIS RULES ===");
 //     small, scaled up for weeks while most of the account was paid out, and
 //     only partly closed. Its row pairs the eventual peak with the opening
 //     day's account and leaves the partial close's pnl out of the count-back,
-//     which read 2.4x. The fills date the peak and carry the pnl.
+//     which read 2.4x. The fills date the peak, and equity then is today's
+//     balance less the price moves, funding and transfers since, plus fees.
 {
   const day = 24 * 3600 * 1000;
+  const hour = 3600 * 1000;
   const start = Date.UTC(2026, 6, 1);
   const status = { positionHistory: { complete: true }, orderHistory: { complete: true }, transferHistory: { complete: true } };
   const fill = (symbol, side, positionSide, qty, price, pnl, time) => ({ symbol, side, type: "LIMIT", positionSide, executedQty: qty, avgPrice: price, totalPnl: pnl, orderUpdateTime: time, orderTime: time });
+  const clFills = [
+    fill("CLUSDT", "BUY", "LONG", 4, 100, 0, start + 1 * day),
+    fill("CLUSDT", "BUY", "LONG", 36, 100, 0, start + 10 * day),
+    fill("CLUSDT", "SELL", "LONG", 10, 150, 500, start + 20 * day)
+  ];
+  const market = {
+    nowMs: start + 30 * day,
+    symbols: {
+      // CLUSDT marked at 100 until day 10 and 150 after; one settlement on day
+      // 15 at -0.1% pays the 40 long 40 x 100 x 0.1% = 4.
+      CLUSDT: { funding: [[start + 15 * day, -0.001, 100]], marks: [[start, 100, start + 10 * day - 1, 100], [start + 10 * day, 150, start + 30 * day, 150]] },
+      XYZUSDT: { funding: [], marks: [[start + 2 * day, 110, start + 2 * day + hour, 110]] }
+    }
+  };
   const raw = {
     id: "biggest-bet-scaled-up",
-    detail: { startTime: start, marginBalance: "1000" },
+    // 2,503.70 today = 500 at the day-10 fill + 2,000 of price move on the 40
+    // held from 100 to 150 + 4 funding - 0.30 fees on the 1,500 sold on day 20.
+    detail: { startTime: start, marginBalance: "2503.7" },
     positionHistory: [
-      { symbol: "CLUSDT", side: "Long", opened: start + 1 * day, closed: null, closingPnl: "500", maxOpenInterest: 40, closedVolume: 10, avgCost: 100, leverage: "50", status: "Partially Closed" }
+      { symbol: "CLUSDT", side: "Long", opened: start + 1 * day, closed: null, closingPnl: "504", maxOpenInterest: 40, closedVolume: 10, avgCost: 100, leverage: "50", status: "Partially Closed" },
+      // Whole life inside the fills: 100 gross, no funding, 99.58 closingPnl,
+      // so fees are 0.42 on 2,100 traded, a 2 bps rate.
+      { symbol: "XYZUSDT", side: "Long", opened: start + 2 * day, closed: start + 2 * day + hour, closingPnl: "99.58", maxOpenInterest: 10, closedVolume: 10, avgCost: 100, leverage: "20", status: "All Closed" }
     ],
     orderHistory: [
-      fill("CLUSDT", "BUY", "LONG", 4, 100, 0, start + 1 * day),
-      fill("CLUSDT", "BUY", "LONG", 36, 100, 0, start + 10 * day),
-      fill("CLUSDT", "SELL", "LONG", 10, 150, 500, start + 20 * day)
+      ...clFills,
+      fill("XYZUSDT", "BUY", "LONG", 10, 100, 0, start + 2 * day),
+      fill("XYZUSDT", "SELL", "LONG", 10, 110, 100, start + 2 * day + hour)
     ],
     transferHistory: [
       { time: start, coin: "USDT", amount: 500, transType: "LEAD_INVEST" },
@@ -463,13 +487,23 @@ console.log("=== RUNNING UNIT TESTS FOR ANALYSIS RULES ===");
     ],
     livePositions: [],
     performanceWindows: {},
+    marketHistory: market,
     historyStatus: status
   };
+  const equity = global.CopyTradingLensEquity.equityCountBack({
+    orders: raw.orderHistory,
+    positionHistory: raw.positionHistory,
+    flows: [{ time: start, amount: 500 }, { time: start + 5 * day, amount: -2000 }],
+    marginBalance: 2503.7,
+    market
+  });
+  assert.ok(Math.abs(equity.feeRate - 0.0002) < 1e-12, `fee rate read off the closed row: ${equity.feeRate}`);
+  assert.ok(Math.abs(equity.equityAt(start + 10 * day) - 500) < 1e-9, `equity at the day-10 fill: ${equity.equityAt(start + 10 * day)}`);
+  // Without the funding term it would read 504; without fees 499.70; without
+  // marking the 30 still held it would not reach 500 either.
   const result = analysis.analyzeBinance(raw);
-  // At the day-10 fill: 1000 today, less the 500 realised since, nothing paid
-  // since, so 500 held 4,000 of notional. The row read 4,000 over the opening
-  // day's 3,000 (the withdrawal added back, the partial pnl not taken out).
   assert.equal(result.biggestBet.at, start + 10 * day);
+  assert.equal(result.biggestBet.symbol, "CLUSDT");
   assert.equal(result.biggestBet.side, "LONG");
   assert.ok(Math.abs(result.biggestBet.account - 500) < 1e-9, `account at the peak fill: ${result.biggestBet.account}`);
   assert.ok(Math.abs(result.biggestBet.leverage - 8) < 1e-9, `8x at the peak, got ${result.biggestBet.leverage}x`);
@@ -490,7 +524,8 @@ console.log("=== RUNNING UNIT TESTS FOR ANALYSIS RULES ===");
       { symbol: "ETHUSDT", side: "Short", opened: start + 1 * day, closed: start + 30 * day, closingPnl: "0", maxOpenInterest: 30, closedVolume: 30, avgCost: 100, leverage: "100", status: "All Closed" }
     ],
     orderHistory: ethFills,
-    transferHistory: [{ time: start + 5 * day, coin: "USDT", amount: 9000, from: "Lead Trading Account", to: "Fiat and Spot", transType: "LEAD_WITHDRAW" }]
+    transferHistory: [{ time: start + 5 * day, coin: "USDT", amount: 9000, from: "Lead Trading Account", to: "Fiat and Spot", transType: "LEAD_WITHDRAW" }],
+    marketHistory: { nowMs: start + 30 * day, symbols: { ETHUSDT: { funding: [], marks: [[start, 200, start + 30 * day, 200]] } } }
   });
   const stretches = global.CopyTradingLensPositions.sizeAfterEachFill("ETHUSDT|SHORT", ethFills, [{ symbol: "ETHUSDT", side: "Short", closed: start + 30 * day }]);
   assert.deepEqual(stretches.map((stretch) => stretch.steps.map((step) => step.qty)), [[30, 0]], "the pre-history size is carried");
@@ -508,14 +543,48 @@ console.log("=== RUNNING UNIT TESTS FOR ANALYSIS RULES ===");
   const oneWay = analysis.analyzeBinance({
     ...raw,
     id: "biggest-bet-one-way",
-    detail: { startTime: start, marginBalance: "6000" },
+    detail: { startTime: start, marginBalance: "7504" },
     positionHistory: [{ ...raw.positionHistory[0], opened: start + 1 * day - 5600 }],
-    orderHistory: raw.orderHistory.map((order) => ({ ...order, positionSide: "BOTH" })),
+    orderHistory: clFills.map((order) => ({ ...order, positionSide: "BOTH" })),
     transferHistory: [{ time: start + 5 * day, coin: "USDT", amount: 5000, from: "Fiat and Spot", to: "Lead Trading Account", transType: "LEAD_DEPOSIT" }]
   });
   assert.equal(oneWay.biggestBet.at, start + 1 * day, "read at the fills on a one-way book, not at the row's opening");
   assert.ok(Math.abs(oneWay.biggestBet.leverage - 0.8) < 1e-9, `one-way: ${oneWay.biggestBet.leverage}x`);
-  console.log("PASS: the biggest bet is read at the fill that made it that large, with the pnl realised since");
+  // A one-way close that flips carries its remainder into the next position,
+  // and a close with no opening fill is dated by its row's opening.
+  const P = global.CopyTradingLensPositions;
+  const flipFills = [
+    fill("SOLUSDT", "BUY", "BOTH", 10, 100, 0, start + 1 * day),
+    fill("SOLUSDT", "SELL", "BOTH", 15, 110, 100, start + 2 * day),
+    fill("SOLUSDT", "BUY", "BOTH", 5, 105, 25, start + 3 * day)
+  ];
+  const flipRows = [
+    { symbol: "SOLUSDT", side: "Long", opened: start + 1 * day, closed: start + 2 * day },
+    { symbol: "SOLUSDT", side: "Short", opened: start + 2 * day, closed: start + 3 * day }
+  ];
+  const flipped = P.sizeAfterEachFill("SOLUSDT|NET", flipFills, flipRows);
+  assert.deepEqual(flipped.map((stretch) => [stretch.openedByFlip, stretch.steps.map((step) => `${step.side}:${step.qty}`)]), [[false, ["LONG:10", "SHORT:5"]], [true, ["LONG:0"]]]);
+  const orphan = P.sizeAfterEachFill("DOGEUSDT|LONG", [fill("DOGEUSDT", "SELL", "LONG", 10, 1, 2, start + 5 * day)], [{ symbol: "DOGEUSDT", side: "Long", opened: start + 4 * day, closed: start + 5 * day }]);
+  assert.deepEqual([orphan[0].shortfall, orphan[0].heldFrom], [10, start + 4 * day]);
+
+  // A position open on the exchange with no fill in the history was held the
+  // whole time: 5 BNB long from before the history, marked 600 on day 20 and
+  // 700 now, is 500 of the equity change after day 20.
+  const untouched = global.CopyTradingLensEquity.equityCountBack({
+    orders: [],
+    positionHistory: [{ symbol: "BNBUSDT", side: "Long", opened: start - 10 * day, closed: null, maxOpenInterest: 6, closedVolume: 1, avgCost: 500 }],
+    flows: [],
+    marginBalance: 10000,
+    market: { nowMs: start + 30 * day, symbols: { BNBUSDT: { funding: [], marks: [[start, 500, start + 20 * day, 600], [start + 20 * day, 600, start + 30 * day, 700]] } } }
+  });
+  assert.ok(Math.abs(untouched.equityAt(start + 20 * day) - 9500) < 1e-9, `untouched position marked: ${untouched.equityAt(start + 20 * day)}`);
+
+  // A symbol whose funding and marks could not be read leaves equity missing
+  // that symbol's moves, so the analysis says the data is incomplete.
+  const unread = analysis.analyzeBinance({ ...raw, id: "market-unread", marketHistory: { ...market, failed: [{ symbol: "CLUSDT", error: "HTTP 400" }] } });
+  assert.equal(unread.verdict.level, "incomplete");
+  assert.ok(unread.verdict.cautions.some((caution) => caution.includes(zhTwMessages.gapMarketHistory.message)), `cautions: ${unread.verdict.cautions}`);
+  console.log("PASS: the biggest bet is read at the fill that made it that large, against equity counted back through moves, funding and fees");
 }
 
 console.log("\nALL ANALYSIS UNIT TESTS PASSED SUCCESSFULLY!");

@@ -791,6 +791,9 @@
   "gapLivePositions": {
     "message": "当前持仓"
   },
+  "gapMarketHistory": {
+    "message": "资金费率与标记价格"
+  },
   "gapPerformance": {
     "message": "绩效区间"
   },

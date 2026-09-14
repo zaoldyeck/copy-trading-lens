@@ -791,6 +791,9 @@
   "gapLivePositions": {
     "message": "現在のポジション"
   },
+  "gapMarketHistory": {
+    "message": "資金調達率とマーク価格"
+  },
   "gapPerformance": {
     "message": "成績期間"
   },

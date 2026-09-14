@@ -62,6 +62,8 @@ global.fetch = async (url, options) => {
   }
   if (url.includes("/lead-data/positions")) return makeResponse({ code: "000000", data: [] });
   if (url.includes("/home-page/query-list")) return makeResponse({ code: "000000", data: { total: 0, list: [] } });
+  // Funding and mark-price reads for the fetched fills (src/providers.js fetchBinanceMarketHistory).
+  if (url.includes("/fapi/v1/fundingRate") || url.includes("/fapi/v1/markPriceKlines")) return makeResponse([]);
   throw new Error(`Unexpected URL in test stub: ${url}`);
 };
 
@@ -71,6 +73,8 @@ global.window = global;
 
 // eslint-disable-next-line no-eval
 eval(providersSrc);
+// eslint-disable-next-line no-eval
+eval(readFileSync(path.join(__dirname, "../src/positions.js"), "utf8"));
 
 const raw = await global.CopyTradingLensProviders.fetchLeadData({ platform: "Binance", id: "000000000000000000" });
 const fetchedSeqs = raw.orderHistory.map((row) => row.seq);

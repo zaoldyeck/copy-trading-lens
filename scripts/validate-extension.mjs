@@ -11,6 +11,7 @@ const requiredFiles = [
   ...supportedLocales.map((locale) => `_locales/${locale}/messages.json`),
   "src/i18n.js",
   "src/style.js",
+  "src/equity.js",
   "src/analysis.js",
   "src/providers.js",
   "src/positions.js",
@@ -136,6 +137,7 @@ if (unused.length) fail(`message keys defined but never referenced: ${unused.joi
 const jsFiles = [
   "src/i18n.js",
   "src/style.js",
+  "src/equity.js",
   "src/analysis.js",
   "src/providers.js",
   "src/positions.js",

@@ -791,6 +791,9 @@
   "gapLivePositions": {
     "message": "Open positions"
   },
+  "gapMarketHistory": {
+    "message": "Funding and mark prices"
+  },
   "gapPerformance": {
     "message": "Performance windows"
   },

@@ -791,6 +791,9 @@
   "gapLivePositions": {
     "message": "目前持倉"
   },
+  "gapMarketHistory": {
+    "message": "資金費率與標記價格"
+  },
   "gapPerformance": {
     "message": "績效區間"
   },

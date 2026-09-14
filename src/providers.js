@@ -401,6 +401,18 @@
     const orderData = orderHistory.ok ? orderHistory.data : {};
     const transferData = transferHistory.ok ? transferHistory.data : {};
 
+    // Funding and mark prices for every symbol the fills touched, from the
+    // oldest fill to now: what the account earned or paid between a fill and
+    // today beyond the fills themselves (src/equity.js).
+    const orderRows = asArray(orderData.rows);
+    const fillTimes = orderRows.map(global.CopyTradingLensPositions.fillTimeOf).filter((time) => time > 0);
+    const nowMs = Date.now();
+    // Symbols held open with no fill in the history are priced too.
+    const openSymbols = asArray(positionData.rows).filter((row) => !(Number(row.closed) > 0)).map((row) => row.symbol);
+    const marketHistory = fillTimes.length
+      ? { nowMs, ...(await fetchBinanceMarketHistory([...orderRows.map((order) => order.symbol), ...openSymbols], Math.min(...fillTimes), nowMs)) }
+      : { nowMs, startMs: nowMs, endMs: nowMs, symbols: {}, failed: [] };
+
     return {
       id: portfolioId,
       url: location.href,
@@ -413,6 +425,7 @@
       positionHistory: positionHistory.ok ? asArray(positionData.rows) : [],
       orderHistory: orderHistory.ok ? asArray(orderData.rows) : [],
       transferHistory: transferHistory.ok ? asArray(transferData.rows) : [],
+      marketHistory,
       historyStatus: {
         positionHistory: positionHistory.ok ? {
           total: positionData.total,
@@ -493,6 +506,73 @@
 
     const missing = wanted.filter((symbol) => !(symbol in marks));
     return { marks, missing, fetchedAtMs: Date.now(), source };
+  }
+
+  // What the account went through between a fill and now, beyond the fills
+  // themselves: the funding every held position paid or received, and the mark
+  // price that valued everything else held at that fill. Both are public
+  // market data behind www.binance.com's /fapi proxy.
+  //
+  // GET /fapi/v1/fundingRate returns at most 1000 rows per call and each row
+  // carries the markPrice it settled on; GET /fapi/v1/markPriceKlines returns
+  // at most 1500 candles (USDⓈ-M Futures API, Market Data, 2026-09-14). Pages
+  // walk forward from startTime until a short page.
+  const FUNDING_PAGE_LIMIT = 1000;
+  const KLINE_PAGE_LIMIT = 1500;
+  const HOUR_MS = 3600000;
+
+  async function fapiPages(pathFor, timeOf, limit, startMs, endMs) {
+    const rows = [];
+    let cursor = startMs;
+    for (;;) {
+      const { value } = await untilAnswered(() => fetchJson(`${BINANCE_BASE}${pathFor(cursor)}`, { method: "GET" }));
+      const page = asArray(value);
+      rows.push(...page);
+      if (page.length < limit) break;
+      const next = timeOf(page[page.length - 1]) + 1;
+      if (!(next > cursor) || next > endMs) break;
+      cursor = next;
+    }
+    return rows;
+  }
+
+  async function fetchBinanceSymbolHistory(symbol, startMs, endMs) {
+    const encoded = encodeURIComponent(symbol);
+    const [funding, klines] = await Promise.all([
+      fapiPages((from) => `/fapi/v1/fundingRate?symbol=${encoded}&startTime=${from}&endTime=${endMs}&limit=${FUNDING_PAGE_LIMIT}`, (row) => Number(row.fundingTime), FUNDING_PAGE_LIMIT, startMs, endMs),
+      // Hourly: the candle opening at or before startMs is included so every
+      // moment in the range sits inside a candle.
+      fapiPages((from) => `/fapi/v1/markPriceKlines?symbol=${encoded}&interval=1h&startTime=${from}&endTime=${endMs}&limit=${KLINE_PAGE_LIMIT}`, (row) => Number(row[0]), KLINE_PAGE_LIMIT, Math.floor(startMs / HOUR_MS) * HOUR_MS, endMs)
+    ]);
+    return {
+      funding: funding.map((row) => [Number(row.fundingTime), Number(row.fundingRate), Number(row.markPrice)])
+        .filter(([time, rate, mark]) => time > 0 && Number.isFinite(rate) && mark > 0),
+      marks: klines.map((row) => [Number(row[0]), Number(row[1]), Number(row[6]), Number(row[4])])
+        .filter(([openTime, open, closeTime, close]) => openTime > 0 && open > 0 && closeTime > openTime && close > 0)
+    };
+  }
+
+  // Funding shares a 500-per-5-minutes limit per IP with /fapi/v1/fundingInfo;
+  // symbols are read a few at a time so a trader of hundreds of symbols waits
+  // on 429 backoff instead of flooding it.
+  const MARKET_HISTORY_CONCURRENCY = 4;
+
+  async function fetchBinanceMarketHistory(symbols, startMs, endMs) {
+    const wanted = Array.from(new Set(asArray(symbols).map(String).filter(Boolean)));
+    const bySymbol = {};
+    const failed = [];
+    let next = 0;
+    const worker = async () => {
+      while (next < wanted.length) {
+        const symbol = wanted[next];
+        next += 1;
+        const result = await safeFetch(`market:${symbol}`, () => fetchBinanceSymbolHistory(symbol, startMs, endMs));
+        if (result.ok) bySymbol[symbol] = result.data;
+        else failed.push({ symbol, error: result.error });
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(MARKET_HISTORY_CONCURRENCY, wanted.length) }, worker));
+    return { startMs, endMs, symbols: bySymbol, failed };
   }
 
   // OKX v5: code "0" is success; 50011 is its rate-limit refusal (docs: Error Code → REST API).
@@ -580,6 +660,7 @@
     detectLeadPage,
     fetchLeadData,
     fetchBinanceListPage,
-    fetchBinanceMarkPrices
+    fetchBinanceMarkPrices,
+    fetchBinanceMarketHistory
   };
 })(window);

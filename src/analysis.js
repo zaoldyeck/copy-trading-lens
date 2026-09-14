@@ -623,30 +623,24 @@
     };
   }
 
-  // The largest single position against the account at the moment it was that
-  // large. The account is counted back from today's margin balance (the
-  // exchange's own number): less pnl realised since, less USDT paid in since,
-  // plus USDT paid out since. Counting forward from the first deposit instead
-  // needs every position since the start, and Binance keeps about 120 days of
-  // them — for a February portfolio it read 350 USDT where the account held
-  // thousands. The inverse is the adverse move that would have zeroed the
-  // account. Unrealised pnl today is not subtracted, so it is an estimate.
+  // The largest single position against the account's equity at the moment it
+  // was that large; the inverse is the adverse move that would have zeroed the
+  // account. Equity is counted back from today's margin balance through price
+  // moves, funding, fees and transfers since (src/equity.js).
   //
-  // Inside the fetched fills the size is read after every fill, against the
-  // account at that fill, and pnl realised since is the fills' own. A position
-  // row only carries its peak (maxOpenInterest), not when it was reached:
-  // portfolio 5108371059752839168 opened CLUSDT with 3,000 on 2026-07-29 and
-  // reached 32,000 six weeks later, after 840K USDT had been paid out, so
-  // pairing that peak with the opening day's account read 2.4x where the fills
-  // read 4.8x. Rows are still read, at their opening, for positions older than
-  // the fills whose peak the fills do not reach; a row closed before the fills
-  // begin adds its pnl to the count-back. Pnl realised before the fills by a
-  // position still held when they begin is not visible anywhere.
-  function biggestBetOf({ orders, allPositions, betRows, transfers, marginBalance, roundStart }) {
+  // Inside the fetched fills the size is read after every fill. A position row
+  // only carries its peak (maxOpenInterest), not when it was reached: portfolio
+  // 5108371059752839168 opened CLUSDT with 3,000 on 2026-07-29 and reached
+  // 32,000 six weeks later, after 840K USDT had been paid out, so pairing that
+  // peak with the opening day's account read 2.4x; its biggest bet is a 60 BTC
+  // short on 2026-08-28 at 27.6x the equity then. Rows are still read, at
+  // their opening, for positions older than the fills whose peak the fills do
+  // not reach: equity then is the equity when the fills begin, less the
+  // closingPnl of rows closed in between and the transfers in between. Price
+  // moves and funding on positions held before the fills are not visible.
+  function biggestBetOf({ orders, allPositions, betRows, transfers, marginBalance, roundStart, market }) {
     if (!(marginBalance > 0)) return null;
-    const { fillTimeOf, bucketKeyOf, sizeAfterEachFill, leverageFor } = global.CopyTradingLensPositions;
-    const historyStart = orders.reduce((oldest, order) => Math.min(oldest, fillTimeOf(order) || Infinity), Infinity);
-    const roundFills = orders.filter((order) => fillTimeOf(order) > 0 && fillTimeOf(order) >= roundStart);
+    const { fillTimeOf, leverageFor } = global.CopyTradingLensPositions;
     const flows = transfers
       .filter((item) => String(item.coin || "USDT").toUpperCase() === "USDT")
       .map((item) => {
@@ -655,42 +649,17 @@
         return { time: num(firstDefined(item.time, item.ts, item.cTime), 0), amount: sign * amount };
       })
       .filter((flow) => flow.time > 0 && flow.amount !== 0);
-    // Everything realised or transferred after a moment, by suffix sums over
-    // time-sorted events: one pass instead of a rescan per position. Strictly
-    // after, because the size read at a fill is the size once it filled, so
-    // the account it is held on already has that fill's own pnl.
-    const since = (events) => {
-      const sorted = [...events].sort((a, b) => a.time - b.time);
-      const suffix = new Array(sorted.length + 1).fill(0);
-      for (let i = sorted.length - 1; i >= 0; i -= 1) suffix[i] = suffix[i + 1] + sorted[i].amount;
-      return (moment) => {
-        let lo = 0;
-        let hi = sorted.length;
-        while (lo < hi) {
-          const mid = (lo + hi) >> 1;
-          if (sorted[mid].time <= moment) lo = mid + 1;
-          else hi = mid;
-        }
-        return suffix[lo];
-      };
-    };
-    const pnlSince = since([
-      ...orders.filter((order) => fillTimeOf(order) > 0).map((order) => ({ time: fillTimeOf(order), amount: num(order.totalPnl, 0) })),
-      ...allPositions
-        .filter((row) => positionClosedAt(row) > 0 && positionClosedAt(row) < historyStart)
-        .map((row) => ({ time: positionClosedAt(row), amount: binancePositionPnl(row) }))
-    ]);
-    const flowsSince = since(flows);
+    const equity = global.CopyTradingLensEquity.equityCountBack({ orders, positionHistory: allPositions, flows, marginBalance, market });
+    if (!equity) return null;
+    const historyStart = orders.reduce((oldest, order) => Math.min(oldest, fillTimeOf(order) || Infinity), Infinity);
+
     let biggest = null;
-    const consider = ({ moment, notional, leverageCap, symbol, side }) => {
+    const consider = ({ moment, notional, leverageCap, symbol, side, estimate }) => {
       if (!(notional > 0)) return;
       // Binance will not open a position whose initial margin exceeds the
       // account, so its notional over the account cannot exceed the leverage it
-      // was opened at. When the count-back says otherwise (82 of 444 cached
-      // traders: unrealised pnl in today's balance, fee and profit-share flows
-      // that are not transfers), the estimate is wrong and the exchange's
-      // bound is the figure that is known to hold.
-      const estimate = marginBalance - pnlSince(moment) - flowsSince(moment);
+      // was opened at. When the count-back says otherwise, the estimate is
+      // wrong and the exchange's bound is the figure that is known to hold.
       const account = leverageCap > 0 ? Math.max(estimate, notional / leverageCap) : estimate;
       if (!(account > 0)) return;
       const leverage = notional / account;
@@ -699,26 +668,33 @@
       }
     };
 
-    const fillsByBook = new Map();
-    for (const order of roundFills) {
-      const key = bucketKeyOf(String(order.symbol || ""), order.positionSide);
-      if (!fillsByBook.has(key)) fillsByBook.set(key, []);
-      fillsByBook.get(key).push(order);
-    }
-    const stretchesByBook = new Map();
-    for (const [key, fills] of fillsByBook) {
-      const symbol = key.slice(0, key.lastIndexOf("|"));
-      const stretches = sizeAfterEachFill(key, fills, allPositions);
-      stretchesByBook.set(key, stretches);
+    for (const path of equity.paths.values()) {
       // Binance sets leverage per symbol, so one lookup serves every fill.
-      const leverageCap = leverageFor(symbol, "", null, allPositions).leverage;
-      for (const { steps } of stretches) {
-        for (const step of steps) {
-          consider({ moment: step.time, notional: step.qty * step.price, leverageCap, symbol, side: step.side });
-        }
+      const leverageCap = leverageFor(path.symbol, "", null, allPositions).leverage;
+      for (const step of path.steps) {
+        if (step.time < roundStart) continue;
+        consider({ moment: step.time, notional: step.qty * step.price, leverageCap, symbol: path.symbol, side: step.side, estimate: equity.equityAt(step.time) });
       }
     }
 
+    // Rows closed before the fills begin, by close time, for the pnl between a
+    // row's opening and the start of the fills.
+    const closedBefore = allPositions
+      .filter((row) => positionClosedAt(row) > 0 && positionClosedAt(row) < historyStart)
+      .map((row) => ({ time: positionClosedAt(row), pnl: binancePositionPnl(row) }))
+      .sort((a, b) => a.time - b.time);
+    const pnlSuffix = new Array(closedBefore.length + 1).fill(0);
+    for (let i = closedBefore.length - 1; i >= 0; i -= 1) pnlSuffix[i] = pnlSuffix[i + 1] + closedBefore[i].pnl;
+    const pnlBetween = (from) => {
+      let lo = 0;
+      let hi = closedBefore.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (closedBefore[mid].time <= from) lo = mid + 1;
+        else hi = mid;
+      }
+      return pnlSuffix[lo];
+    };
     for (const row of betRows) {
       const opened = positionOpenedAt(row);
       if (!opened || opened >= historyStart) continue;
@@ -731,10 +707,11 @@
       // own first fill's clock (5.6s on that portfolio's CLUSDT row), so a
       // position opened by the oldest fetched fill lands here too.
       const closed = positionClosedAt(row);
-      const book = stretchesByBook.get(bucketKeyOf(symbol, "BOTH")) || stretchesByBook.get(bucketKeyOf(symbol, side)) || [];
+      const book = equity.stretchesByBook.get(`${symbol}|NET`) || equity.stretchesByBook.get(`${symbol}|${side}`) || [];
       const stretch = (closed === 0 || closed >= historyStart) ? book.find((item) => item.until === closed) : null;
       if (stretch && stretch.steps.some((step) => step.side === side && step.qty >= peakQty)) continue;
-      consider({ moment: opened, notional: peakQty * num(row.avgCost, 0), leverageCap: num(row.leverage, 0), symbol, side });
+      const estimate = equity.equityAt(opened) - pnlBetween(opened);
+      consider({ moment: opened, notional: peakQty * num(row.avgCost, 0), leverageCap: num(row.leverage, 0), symbol, side, estimate });
     }
     return biggest;
   }
@@ -1014,10 +991,11 @@
   //   all traders:     53%; by verdict level before this gate avoid 57%,
   //                    risky 53%, followable 44%; with it avoid 59%, risky 35%
   // The bar sits where the above-share stops rising on both halves (12-15x).
-  // Re-run the same day once the bet was read at its peak fill rather than at
-  // the position's opening: at or above 12x 79% of 90 (halves 77% / 81%),
-  // flat at 77-80% from 11x to 20x on the whole set; below 3x 18% of 57
-  // (halves 11% / 24%). The plateau still starts at 11-12x on both halves.
+  // Re-run the same day with the bet read at its peak fill against equity
+  // counted back through price moves, funding and fees (src/equity.js;
+  // reports/backtest-risk-rules-2026-09-14-equity.txt): at or above 12x 82% of
+  // 82 (halves 79% / 85%), flat at 80-85% from 11x to 20x on the whole set;
+  // below 3x 19% of 54 (halves 12% / 25%). Both halves step up at 11x.
   const BIGGEST_BET_AVOID_LEVERAGE = 12;
 
   function buildVerdict(meta, summary, orders, transfers, live, biggestBet = null) {
@@ -1216,6 +1194,9 @@
     if (endpoints.detail && !endpoints.detail.ok) gaps.push(t("gapDetail"));
     if (endpoints.livePositions && !endpoints.livePositions.ok) gaps.push(t("gapLivePositions"));
     if (Object.entries(endpoints).some(([key, result]) => key.startsWith("performance:") && !result.ok)) gaps.push(t("gapPerformance"));
+    // Without a symbol's funding and marks, equity between a fill and now
+    // misses that symbol's price moves and funding (src/equity.js).
+    if (raw.marketHistory?.failed?.length) gaps.push(t("gapMarketHistory"));
     return gaps;
   }
 
@@ -1267,7 +1248,8 @@
       betRows: openedInRound,
       transfers: raw.transferHistory || [],
       marginBalance: meta.marginBalance,
-      roundStart
+      roundStart,
+      market: raw.marketHistory
     });
     const gaps = binanceDataGaps(raw);
     const { strategy, verdict } = gaps.length

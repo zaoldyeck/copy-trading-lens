@@ -246,31 +246,52 @@
    * size of another. A one-way book cannot tell a shortfall from a flip, so it
    * starts each stretch flat.
    *
-   * @returns {{until: number, steps: {time: number, price: number, qty: number, side: string}[]}[]}
-   *   stretches oldest first; `until` is the flat that ends one, 0 for the open one
+   * @returns {{until: number, openedByFlip: boolean, heldFrom: number, shortfall: number, steps: {time: number, price: number, qty: number, side: string, fillQty: number, pnl: number, type: string}[]}[]}
+   *   stretches oldest first; `until` is the flat that ends one, 0 for the open
+   *   one; `shortfall` the size already held when the stretch's fills begin,
+   *   held since `heldFrom` (the row's opening; 0 when no row dates it)
    */
   function sizeAfterEachFill(key, fills, positionHistory) {
     const oneWay = isOneWayBucket(key);
     const symbol = symbolOfKey(key);
     const bookSide = oneWay ? "" : key.slice(key.lastIndexOf("|") + 1);
-    const flats = [...new Set((positionHistory || [])
-      .filter((row) => String(row.symbol || "") === symbol && (oneWay || positionHistorySide(row) === bookSide))
-      .map(positionClosedMs)
-      .filter((closed) => closed > 0))]
-      .sort((a, b) => a - b);
+    const bookRows = (positionHistory || [])
+      .filter((row) => String(row.symbol || "") === symbol && (oneWay || positionHistorySide(row) === bookSide));
+    const flats = [...new Set(bookRows.map(positionClosedMs).filter((closed) => closed > 0))].sort((a, b) => a - b);
+    // When the position a stretch belongs to was opened, by the exchange's row
+    // (0 when no row says): a shortfall is held from then, not from the start
+    // of the history. Binance's order history sometimes omits an opening fill
+    // (a SIRENUSDT close of 3,247 with no opening, on a portfolio whose fills
+    // reach back to its first deposit), and that size did not exist before the
+    // row opened.
+    const openedBy = (until) => bookRows
+      .filter((row) => positionClosedMs(row) === until)
+      .reduce((earliest, row) => {
+        const opened = num(row.opened, 0);
+        return opened > 0 && (!earliest || opened < earliest) ? opened : earliest;
+      }, 0);
     const ordered = [...fills].sort((a, b) => fillTimeOf(a) - fillTimeOf(b));
     const openSign = bookSide === "SHORT" ? -1n : 1n;
     const stretches = [];
     let flatIndex = 0;
     let current = null;
+    // A one-way close can flip: the fill that ends a row at its exact close
+    // opens the next position with the remainder, so that size carries into
+    // the next stretch. A hedge book is flat at every close.
+    let carried = 0n;
     const finish = () => {
       if (!current) return;
       const { raw, shortfall } = current;
+      const last = raw[raw.length - 1];
+      carried = oneWay && last && last.time === current.until ? last.held : 0n;
       stretches.push({
         until: current.until,
+        openedByFlip: current.openedByFlip,
+        heldFrom: openedBy(current.until),
+        shortfall: fromScaledQty(shortfall),
         steps: raw.map((step) => {
           const held = step.held + shortfall;
-          return { time: step.time, price: step.price, qty: fromScaledQty(absBig(held)), side: oneWay ? (held < 0n ? "SHORT" : "LONG") : bookSide };
+          return { time: step.time, price: step.price, qty: fromScaledQty(absBig(held)), side: oneWay ? (held < 0n ? "SHORT" : "LONG") : bookSide, fillQty: step.fillQty, pnl: step.pnl, type: step.type };
         })
       });
       current = null;
@@ -288,10 +309,13 @@
         }
         flatIndex += 1;
       }
-      if (!current) current = { raw: [], held: 0n, shortfall: 0n, until: flatIndex < flats.length ? flats[flatIndex] : 0 };
+      if (!current) {
+        current = { raw: [], held: carried, shortfall: 0n, openedByFlip: carried !== 0n, until: flatIndex < flats.length ? flats[flatIndex] : 0 };
+        carried = 0n;
+      }
       current.held += oneWay ? delta : delta * openSign;
       if (!oneWay && -current.held > current.shortfall) current.shortfall = -current.held;
-      current.raw.push({ time, price: num(fill.avgPrice, 0), held: current.held });
+      current.raw.push({ time, price: num(fill.avgPrice, 0), held: current.held, fillQty: fromScaledQty(absBig(delta)), pnl: num(fill.totalPnl, 0), type: String(fill.type || "") });
     }
     finish();
     return stretches;
