@@ -212,11 +212,14 @@
   "biggestBetValue": {
     "message": "{0}x the account"
   },
+  "biggestBetPosition": {
+    "message": "{0} {1}"
+  },
   "biggestBetHint": {
-    "message": "{0} ({1}); a {2}% adverse move zeroes the account"
+    "message": "{0} ({1}): a {2}% move against it loses the whole account"
   },
   "biggestBetHintBound": {
-    "message": "{0} ({1}); a {2}% adverse move zeroes the account. The account then could not be counted back, so this is the position's own leverage cap"
+    "message": "{0} ({1}): a {2}% move against it loses the whole account. The account at that moment could not be counted back, so the symbol's leverage cap stands in for it"
   },
   "hintHistoryApi": {
     "message": "History/API"
@@ -270,13 +273,13 @@
     "message": "This analysis only uses data available to the current browser session and computes locally. It is not investment advice and does not guarantee profit or safety."
   },
   "familyInsufficient": {
-    "message": "Recent records are not yet enough to read a trading style"
+    "message": "Trading style cannot be read yet"
   },
   "styleNeedOrders": {
     "message": "Only {0} fills in the records; at least {1} needed"
   },
   "styleNeedClosedPositions": {
-    "message": "Only {0} positions seen from open to close in the records; at least {1} needed"
+    "message": "Only {0} positions seen from open to close in the records; at least {1} needed. {2} more are still held"
   },
   "styleNeedWindow": {
     "message": "Fill records cover only {0} days with {1} complete positions; under {2} days, at least {3} days and {4} complete positions are needed"
@@ -411,7 +414,7 @@
     "message": "Historical closures: {0}. Old performance and current-round data may be disconnected."
   },
   "cautionBiggestBet": {
-    "message": "Biggest single bet was {0}x the account ({1}); a {2}% adverse move would have zeroed it."
+    "message": "Biggest single bet was {0}x the account ({1}): a {2}% move against it would have lost the whole account."
   },
   "evidenceBiggestBet": {
     "message": "Of lead traders who bet 12x their account or more, about eight in ten later closed the portfolio or fell 30% or more."

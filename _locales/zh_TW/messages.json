@@ -212,11 +212,14 @@
   "biggestBetValue": {
     "message": "帳戶的 {0} 倍"
   },
+  "biggestBetPosition": {
+    "message": "{0} {1}單"
+  },
   "biggestBetHint": {
-    "message": "{0}（{1}），反向 {2}% 帳戶歸零"
+    "message": "{0}（{1}）：價格往不利方向走 {2}%，虧損就等於整個帳戶"
   },
   "biggestBetHintBound": {
-    "message": "{0}（{1}），反向 {2}% 帳戶歸零；當時帳戶估不準，以開倉槓桿上限計"
+    "message": "{0}（{1}）：價格往不利方向走 {2}%，虧損就等於整個帳戶（當時帳戶大小推算不出來，改用該幣的槓桿上限估）"
   },
   "hintHistoryApi": {
     "message": "歷史/API"
@@ -270,13 +273,13 @@
     "message": "此分析只使用目前瀏覽器可取得資料並在本機計算，不是投資建議，也不保證收益或安全。"
   },
   "familyInsufficient": {
-    "message": "近期紀錄還不足以判斷交易風格"
+    "message": "交易風格暫時判斷不出來"
   },
   "styleNeedOrders": {
     "message": "紀錄內成交只有 {0} 筆，至少要 {1} 筆"
   },
   "styleNeedClosedPositions": {
-    "message": "紀錄內從開倉到平倉完整看得到的倉位只有 {0} 個，至少要 {1} 個"
+    "message": "紀錄內從開倉到平倉完整看得到的倉位只有 {0} 個，至少要 {1} 個；另有 {2} 個倉位還抱著沒平完"
   },
   "styleNeedWindow": {
     "message": "成交紀錄只涵蓋 {0} 天、完整倉位 {1} 個；不滿 {2} 天時，要涵蓋至少 {3} 天且至少 {4} 個完整倉位"
@@ -411,7 +414,7 @@
     "message": "歷史關閉項目 {0} 次，舊績效與現輪資料可能被切斷。"
   },
   "cautionBiggestBet": {
-    "message": "單筆最大押注達帳戶的 {0} 倍（{1}），價格反向 {2}% 帳戶就歸零。"
+    "message": "單筆最大押注是帳戶的 {0} 倍（{1}）：價格往不利方向走 {2}%，虧損就等於整個帳戶。"
   },
   "evidenceBiggestBet": {
     "message": "曾把帳戶押到 12 倍以上的帶單員，事後約八成關閉帶單或回撤 30% 以上。"

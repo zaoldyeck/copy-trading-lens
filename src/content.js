@@ -305,7 +305,11 @@
             ? metricCard(
               t("metricBiggestBet"),
               t("biggestBetValue", [analysis.biggestBet.leverage.toFixed(1)]),
-              t(analysis.biggestBet.boundByLeverage ? "biggestBetHintBound" : "biggestBetHint", [analysis.biggestBet.symbol, fmt.formatDateTime(analysis.biggestBet.openedAt), analysis.biggestBet.wipeOutMovePct.toFixed(1)])
+              t(analysis.biggestBet.boundByLeverage ? "biggestBetHintBound" : "biggestBetHint", [
+                t("biggestBetPosition", [analysis.biggestBet.symbol, t(analysis.biggestBet.side === "SHORT" ? "posShort" : "posLong")]),
+                fmt.formatDateTime(analysis.biggestBet.at),
+                analysis.biggestBet.wipeOutMovePct.toFixed(1)
+              ])
             )
             : metricCard(t("metricBiggestBet"), "N/A")
         ]),

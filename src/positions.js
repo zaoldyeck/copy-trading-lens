@@ -231,6 +231,73 @@
   }
 
   /**
+   * The size one book held after each of its fills, split at the instants the
+   * exchange's own position history says the book was flat.
+   *
+   * Order history keeps about two months (median span 54 days over 437 cached
+   * traders, 2026-09-14) while position history keeps far longer, so a hedge
+   * book often closes more inside the fetched fills than it opens: the position
+   * predates the history. Between two flats, the smallest size the book can
+   * have held at the start is its largest running shortfall, and that size is
+   * carried through the stretch. Portfolio 5108371059752839168's ETHUSDT long
+   * bought 153 and sold 423 inside the history; with the shortfall carried it
+   * peaks at 423, the exchange row's maxOpenInterest. Splitting at the rows'
+   * closes keeps a fill Binance left out of one position from inflating the
+   * size of another. A one-way book cannot tell a shortfall from a flip, so it
+   * starts each stretch flat.
+   *
+   * @returns {{until: number, steps: {time: number, price: number, qty: number, side: string}[]}[]}
+   *   stretches oldest first; `until` is the flat that ends one, 0 for the open one
+   */
+  function sizeAfterEachFill(key, fills, positionHistory) {
+    const oneWay = isOneWayBucket(key);
+    const symbol = symbolOfKey(key);
+    const bookSide = oneWay ? "" : key.slice(key.lastIndexOf("|") + 1);
+    const flats = [...new Set((positionHistory || [])
+      .filter((row) => String(row.symbol || "") === symbol && (oneWay || positionHistorySide(row) === bookSide))
+      .map(positionClosedMs)
+      .filter((closed) => closed > 0))]
+      .sort((a, b) => a - b);
+    const ordered = [...fills].sort((a, b) => fillTimeOf(a) - fillTimeOf(b));
+    const openSign = bookSide === "SHORT" ? -1n : 1n;
+    const stretches = [];
+    let flatIndex = 0;
+    let current = null;
+    const finish = () => {
+      if (!current) return;
+      const { raw, shortfall } = current;
+      stretches.push({
+        until: current.until,
+        steps: raw.map((step) => {
+          const held = step.held + shortfall;
+          return { time: step.time, price: step.price, qty: fromScaledQty(absBig(held)), side: oneWay ? (held < 0n ? "SHORT" : "LONG") : bookSide };
+        })
+      });
+      current = null;
+    };
+    for (const fill of ordered) {
+      const delta = signedFillDelta(fill, key);
+      if (delta === 0n) continue;
+      const time = fillTimeOf(fill);
+      // A row closes at its closing fill's exact millisecond, so that fill
+      // belongs to the stretch the close ends.
+      while (flatIndex < flats.length && flats[flatIndex] < time) {
+        if (current) {
+          current.until = flats[flatIndex];
+          finish();
+        }
+        flatIndex += 1;
+      }
+      if (!current) current = { raw: [], held: 0n, shortfall: 0n, until: flatIndex < flats.length ? flats[flatIndex] : 0 };
+      current.held += oneWay ? delta : delta * openSign;
+      if (!oneWay && -current.held > current.shortfall) current.shortfall = -current.held;
+      current.raw.push({ time, price: num(fill.avgPrice, 0), held: current.held });
+    }
+    finish();
+    return stretches;
+  }
+
+  /**
    * Replay one bucket's fills into a live position.
    *
    * Cost basis follows Binance's own entry-price semantics: adds raise the
@@ -837,6 +904,8 @@
     summarizePortfolio,
     stepBook,
     replayPositions,
+    sizeAfterEachFill,
+    leverageFor,
     fillTimeOf,
     // exported for tests
     replayFills,

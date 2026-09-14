@@ -256,6 +256,18 @@ console.log("=== RUNNING UNIT TESTS FOR ANALYSIS RULES ===");
   const strategy = analysis.inferStrategy({ payoffRatio: null, winRate: 1, dominantSymbolShare: 1 }, style);
   assert.equal(strategy.family, zhTwMessages.familyInsufficient.message);
   assert.ok(strategy.labels.includes("成交紀錄只涵蓋 0.7 天、完整倉位 10 個；不滿 7 天時，要涵蓋至少 2 天且至少 16 個完整倉位"), `labels: ${strategy.labels}`);
+
+  // A position trader (portfolio 5108371059752839168, 2026-09-14: 160 fills
+  // over 59 days, 4 positions closed, 7 still held) fails on closed positions
+  // with a long, complete record, so the reason counts what is still held and
+  // the headline does not blame the record.
+  assert.ok(!/紀錄/.test(zhTwMessages.familyInsufficient.message), "the headline does not say the record is short");
+  const day = 24 * hour;
+  const ladder = Array.from({ length: 20 }, (_, k) => ({ symbol: "CLUSDT", side: "BUY", positionSide: "LONG", executedQty: 100, avgPrice: 80 - k * 0.2, totalPnl: 0, orderTime: start + k * day / 2, orderUpdateTime: start + k * day / 2, type: "LIMIT" }));
+  const holder = global.CopyTradingLensStyle.classify([...roundTrips(3, 50), ...ladder]);
+  assert.deepEqual([...holder.insufficient], ["fewClosedPositions"]);
+  const holderStrategy = analysis.inferStrategy({ payoffRatio: null, winRate: 1, dominantSymbolShare: 1 }, holder);
+  assert.ok(holderStrategy.labels.includes("紀錄內從開倉到平倉完整看得到的倉位只有 3 個，至少要 5 個；另有 1 個倉位還抱著沒平完"), `labels: ${holderStrategy.labels}`);
   console.log("PASS: a withheld style says which gate it failed");
 
   // What makes a short record readable is how many positions it shows: a busy
@@ -403,7 +415,7 @@ console.log("=== RUNNING UNIT TESTS FOR ANALYSIS RULES ===");
 
   // A 20x bet makes the verdict avoid and says so first.
   assert.equal(result.verdict.level, "avoid");
-  assert.equal(result.verdict.cautions[0], zhTwMessages.cautionBiggestBet.message.replace("{0}", "20.0").replace("{1}", "SOXLUSDT").replace("{2}", "5.0"));
+  assert.equal(result.verdict.cautions[0], zhTwMessages.cautionBiggestBet.message.replace("{0}", "20.0").replace("{1}", "SOXLUSDT 空單").replace("{2}", "5.0"));
 
   // The exchange will not open more notional than leverage x account, so a
   // count-back that says otherwise is capped at the position's own leverage.
@@ -420,6 +432,71 @@ console.log("=== RUNNING UNIT TESTS FOR ANALYSIS RULES ===");
   assert.ok(Math.abs(bounded.biggestBet.leverage - 20) < 1e-9, `bounded by the row's leverage: ${bounded.biggestBet.leverage}x`);
   assert.equal(bounded.biggestBet.boundByLeverage, true);
   console.log("PASS: the biggest bet is read against the account counted back from today, bounded by leverage, and gates the verdict");
+}
+
+// 14. Replays portfolio 5108371059752839168 (2026-09-14): CLUSDT long opened
+//     small, scaled up for weeks while most of the account was paid out, and
+//     only partly closed. Its row pairs the eventual peak with the opening
+//     day's account and leaves the partial close's pnl out of the count-back,
+//     which read 2.4x. The fills date the peak and carry the pnl.
+{
+  const day = 24 * 3600 * 1000;
+  const start = Date.UTC(2026, 6, 1);
+  const status = { positionHistory: { complete: true }, orderHistory: { complete: true }, transferHistory: { complete: true } };
+  const fill = (symbol, side, positionSide, qty, price, pnl, time) => ({ symbol, side, type: "LIMIT", positionSide, executedQty: qty, avgPrice: price, totalPnl: pnl, orderUpdateTime: time, orderTime: time });
+  const raw = {
+    id: "biggest-bet-scaled-up",
+    detail: { startTime: start, marginBalance: "1000" },
+    positionHistory: [
+      { symbol: "CLUSDT", side: "Long", opened: start + 1 * day, closed: null, closingPnl: "500", maxOpenInterest: 40, closedVolume: 10, avgCost: 100, leverage: "50", status: "Partially Closed" }
+    ],
+    orderHistory: [
+      fill("CLUSDT", "BUY", "LONG", 4, 100, 0, start + 1 * day),
+      fill("CLUSDT", "BUY", "LONG", 36, 100, 0, start + 10 * day),
+      fill("CLUSDT", "SELL", "LONG", 10, 150, 500, start + 20 * day)
+    ],
+    transferHistory: [
+      { time: start, coin: "USDT", amount: 500, transType: "LEAD_INVEST" },
+      { time: start + 5 * day, coin: "USDT", amount: 2000, from: "Lead Trading Account", to: "Fiat and Spot", transType: "LEAD_WITHDRAW" }
+    ],
+    livePositions: [],
+    performanceWindows: {},
+    historyStatus: status
+  };
+  const result = analysis.analyzeBinance(raw);
+  // At the day-10 fill: 1000 today, less the 500 realised since, nothing paid
+  // since, so 500 held 4,000 of notional. The row read 4,000 over the opening
+  // day's 3,000 (the withdrawal added back, the partial pnl not taken out).
+  assert.equal(result.biggestBet.at, start + 10 * day);
+  assert.equal(result.biggestBet.side, "LONG");
+  assert.ok(Math.abs(result.biggestBet.account - 500) < 1e-9, `account at the peak fill: ${result.biggestBet.account}`);
+  assert.ok(Math.abs(result.biggestBet.leverage - 8) < 1e-9, `8x at the peak, got ${result.biggestBet.leverage}x`);
+
+  // A hedge book whose fills close more than they open was already holding the
+  // difference: ETHUSDT short opened before the history, 10 added inside it,
+  // 30 bought back at the row's close. Its peak is dated inside the fills, so
+  // the row's opening-day reading is not taken.
+  const ethFills = [
+    fill("ETHUSDT", "SELL", "SHORT", 10, 200, 0, start + 12 * day),
+    fill("ETHUSDT", "BUY", "SHORT", 30, 200, 0, start + 30 * day)
+  ];
+  const preHistory = analysis.analyzeBinance({
+    ...raw,
+    id: "biggest-bet-pre-history",
+    detail: { startTime: start, marginBalance: "1000" },
+    positionHistory: [
+      { symbol: "ETHUSDT", side: "Short", opened: start + 1 * day, closed: start + 30 * day, closingPnl: "0", maxOpenInterest: 30, closedVolume: 30, avgCost: 100, leverage: "100", status: "All Closed" }
+    ],
+    orderHistory: ethFills,
+    transferHistory: [{ time: start + 5 * day, coin: "USDT", amount: 9000, from: "Lead Trading Account", to: "Fiat and Spot", transType: "LEAD_WITHDRAW" }]
+  });
+  const stretches = global.CopyTradingLensPositions.sizeAfterEachFill("ETHUSDT|SHORT", ethFills, [{ symbol: "ETHUSDT", side: "Short", closed: start + 30 * day }]);
+  assert.deepEqual(stretches.map((stretch) => stretch.steps.map((step) => step.qty)), [[30, 0]], "the pre-history size is carried");
+  // Fill reading: 30 x 200 = 6,000 over 1,000. The row's opening-day reading
+  // (3,000 over 10,000 with the withdrawal added back) would have been 0.3x.
+  assert.equal(preHistory.biggestBet.at, start + 12 * day);
+  assert.ok(Math.abs(preHistory.biggestBet.leverage - 6) < 1e-9, `6x inside the fills, got ${preHistory.biggestBet.leverage}x`);
+  console.log("PASS: the biggest bet is read at the fill that made it that large, with the pnl realised since");
 }
 
 console.log("\nALL ANALYSIS UNIT TESTS PASSED SUCCESSFULLY!");

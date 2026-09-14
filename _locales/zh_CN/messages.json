@@ -212,11 +212,14 @@
   "biggestBetValue": {
     "message": "账户的 {0} 倍"
   },
+  "biggestBetPosition": {
+    "message": "{0} {1}单"
+  },
   "biggestBetHint": {
-    "message": "{0}（{1}），反向 {2}% 账户归零"
+    "message": "{0}（{1}）：价格往不利方向走 {2}%，亏损就等于整个账户"
   },
   "biggestBetHintBound": {
-    "message": "{0}（{1}），反向 {2}% 账户归零；当时账户估不准，以开仓杠杆上限计"
+    "message": "{0}（{1}）：价格往不利方向走 {2}%，亏损就等于整个账户（当时账户大小推算不出来，改用该币的杠杆上限估）"
   },
   "hintHistoryApi": {
     "message": "历史/API"
@@ -270,13 +273,13 @@
     "message": "此分析只使用当前浏览器可取得数据并在本机计算，不是投资建议，也不保证收益或安全。"
   },
   "familyInsufficient": {
-    "message": "近期记录还不足以判断交易风格"
+    "message": "交易风格暂时判断不出来"
   },
   "styleNeedOrders": {
     "message": "记录内成交只有 {0} 笔，至少要 {1} 笔"
   },
   "styleNeedClosedPositions": {
-    "message": "记录内从开仓到平仓完整看得到的仓位只有 {0} 个，至少要 {1} 个"
+    "message": "记录内从开仓到平仓完整看得到的仓位只有 {0} 个，至少要 {1} 个；另有 {2} 个仓位还拿着没平完"
   },
   "styleNeedWindow": {
     "message": "成交记录只涵盖 {0} 天、完整仓位 {1} 个；不满 {2} 天时，要涵盖至少 {3} 天且至少 {4} 个完整仓位"
@@ -411,7 +414,7 @@
     "message": "历史关闭项目 {0} 次，旧绩效与现轮数据可能被切断。"
   },
   "cautionBiggestBet": {
-    "message": "单笔最大押注达账户的 {0} 倍（{1}），价格反向 {2}% 账户就归零。"
+    "message": "单笔最大押注是账户的 {0} 倍（{1}）：价格往不利方向走 {2}%，亏损就等于整个账户。"
   },
   "evidenceBiggestBet": {
     "message": "曾把账户押到 12 倍以上的带单员，事后约八成关闭带单或回撤 30% 以上。"
