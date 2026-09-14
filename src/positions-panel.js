@@ -30,8 +30,9 @@
   // threshold — it changes nothing the reconstruction decides, only how stale
   // the PnL on screen can be. The panel always prints the timestamp of the
   // prices it used, so the staleness is visible rather than assumed, and the
-  // refresh button forces a read.
-  const MARK_REFRESH_MS = 5000;
+  // refresh button forces a read. Each read costs at most request weight 10
+  // (see fetchBinanceMarkPrices), so 3s is at most 200 weight a minute per tab.
+  const MARK_REFRESH_MS = 3000;
 
   const PRIVATE_TOKEN = /私人|私密|不公開|不公开|非公開|非公开|\bprivate\b/i;
   const POSITION_TOKEN = /倉位|仓位|持倉|持仓|ポジション|positions?/i;
