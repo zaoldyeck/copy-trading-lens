@@ -11,6 +11,10 @@
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
+  async function waitForResume(waitUntilResumed) {
+    if (typeof waitUntilResumed === "function") await waitUntilResumed();
+  }
+
   function asArray(value) {
     return Array.isArray(value) ? value : [];
   }
@@ -21,6 +25,8 @@
   }
 
   async function fetchJson(url, options = {}) {
+    const { waitUntilResumed, ...requestOptions } = options;
+    await waitForResume(waitUntilResumed);
     const headers = {
       "accept": "application/json, text/plain, */*",
       "content-type": "application/json",
@@ -36,7 +42,7 @@
       response = await fetch(url, {
         credentials: "include",
         cache: "no-store",
-        ...options,
+        ...requestOptions,
         headers
       });
     } catch (error) {
@@ -92,14 +98,16 @@
   // history abandoned mid-read reports missing risk as absent risk, so a refusal the server
   // tells us is temporary is never allowed to end a read; only a real answer (data, or a
   // non-retriable error) does.
-  async function untilAnswered(fn) {
+  async function untilAnswered(fn, waitUntilResumed) {
     let lastRetryError = "";
     for (let attempt = 1; ; attempt += 1) {
+      await waitForResume(waitUntilResumed);
       try {
         return { value: await fn(), retries: attempt - 1, lastRetryError };
       } catch (error) {
         if (!isRetriable(error)) throw error;
         lastRetryError = error.message;
+        await waitForResume(waitUntilResumed);
         await sleep(retryDelayMs(attempt));
       }
     }
@@ -119,16 +127,20 @@
     }
   }
 
-  async function postBinance(path, payload) {
+  async function postBinance(path, payload, waitUntilResumed) {
     const { value } = await untilAnswered(async () => requireBinanceOk(path, await fetchJson(`${BINANCE_BASE}${path}`, {
       method: "POST",
-      body: JSON.stringify(payload)
-    })));
+      body: JSON.stringify(payload),
+      waitUntilResumed
+    })), waitUntilResumed);
     return value;
   }
 
-  async function getBinance(path) {
-    const { value } = await untilAnswered(async () => requireBinanceOk(path, await fetchJson(`${BINANCE_BASE}${path}`, { method: "GET" })));
+  async function getBinance(path, waitUntilResumed) {
+    const { value } = await untilAnswered(async () => requireBinanceOk(path, await fetchJson(`${BINANCE_BASE}${path}`, {
+      method: "GET",
+      waitUntilResumed
+    })), waitUntilResumed);
     return value;
   }
 
@@ -151,12 +163,13 @@
     return base + Math.floor(Math.random() * 250);
   }
 
-  async function fetchBinancePagedPage(path, portfolioId, pageNumber, pageSize) {
+  async function fetchBinancePagedPage(path, portfolioId, pageNumber, pageSize, waitUntilResumed) {
     const { value, retries, lastRetryError } = await untilAnswered(async () => requireBinanceOk(path,
       await fetchJson(`${BINANCE_BASE}${path}`, {
         method: "POST",
-        body: JSON.stringify({ portfolioId, pageNumber, pageSize })
-      })));
+        body: JSON.stringify({ portfolioId, pageNumber, pageSize }),
+        waitUntilResumed
+      })), waitUntilResumed);
     return { response: value, retries, lastRetryError };
   }
 
@@ -211,7 +224,7 @@
     return 0;
   }
 
-  async function fetchBinancePagedDetailed(path, portfolioId, onProgress) {
+  async function fetchBinancePagedDetailed(path, portfolioId, onProgress, waitUntilResumed) {
     const rows = [];
     let total = null;
     let totalAtPreviousPage = null;
@@ -222,7 +235,7 @@
     let depthLimited = false;
     let duplicateRows = 0;
     for (let pageNumber = 1; ; pageNumber += 1) {
-      const page = await fetchBinancePagedPage(path, portfolioId, pageNumber, PAGE_SIZE);
+      const page = await fetchBinancePagedPage(path, portfolioId, pageNumber, PAGE_SIZE, waitUntilResumed);
       const response = page.response;
       retryCount += page.retries;
       if (page.lastRetryError) lastRetryError = page.lastRetryError;
@@ -239,6 +252,7 @@
         prematureRetries += 1;
         if (prematureRetries <= MAX_PREMATURE_RETRIES) {
           lastRetryError = `Binance ${path} page ${pageNumber} returned short data before total was reached`;
+          await waitForResume(waitUntilResumed);
           await sleep(retryDelayMs(prematureRetries));
           pageNumber -= 1;
           continue;
@@ -280,6 +294,7 @@
       // account that traded while we were reading it.
       if (pageRows.length < PAGE_SIZE) break;
       if (Number.isFinite(total) && rows.length >= total) break;
+      await waitForResume(waitUntilResumed);
       await sleep(120);
     }
     return {
@@ -297,7 +312,7 @@
     };
   }
 
-  async function fetchBinanceListPage(timeRange, pageNumber, nickname = "", extraParams = {}) {
+  async function fetchBinanceListPage(timeRange, pageNumber, nickname = "", extraParams = {}, waitUntilResumed) {
     const response = await postBinance("/bapi/futures/v1/friendly/future/copy-trade/home-page/query-list", {
       pageNumber,
       pageSize: LIST_PAGE_SIZE,
@@ -309,40 +324,41 @@
       order: "DESC",
       userAsset: 0,
       ...extraParams
-    });
+    }, waitUntilResumed);
     return {
       total: Number(response?.data?.total ?? 0),
       rows: asArray(response?.data?.list)
     };
   }
 
-  async function fetchBinanceListItem(portfolioId, timeRange = "30D", nickname = "") {
+  async function fetchBinanceListItem(portfolioId, timeRange = "30D", nickname = "", waitUntilResumed) {
     if (nickname) {
-      const filtered = await fetchBinanceListPage(timeRange, 1, nickname);
+      const filtered = await fetchBinanceListPage(timeRange, 1, nickname, {}, waitUntilResumed);
       const found = filtered.rows.find((row) => String(row.leadPortfolioId) === String(portfolioId));
       if (found) return { item: found, source: "nickname", searchedPages: 1, total: filtered.total };
     }
 
     const maxPages = 20;
     for (let pageNumber = 1; pageNumber <= maxPages; pageNumber += 1) {
-      const page = await fetchBinanceListPage(timeRange, pageNumber, "");
+      const page = await fetchBinanceListPage(timeRange, pageNumber, "", {}, waitUntilResumed);
       const rows = page.rows;
       const found = rows.find((row) => String(row.leadPortfolioId) === String(portfolioId));
       if (found) return { item: found, source: "scan", searchedPages: pageNumber, total: page.total };
       if (rows.length < LIST_PAGE_SIZE) break;
+      await waitForResume(waitUntilResumed);
       await sleep(120);
     }
     return null;
   }
 
-  async function fetchBinancePerformanceWindows(portfolioId, detail) {
+  async function fetchBinancePerformanceWindows(portfolioId, detail, waitUntilResumed) {
     const nickname = String(detail?.nickname || detail?.nicknameTranslate || "").trim();
     const endpointResults = {};
     const windows = {};
 
     await Promise.all(BINANCE_TIME_RANGES.map(async (timeRange) => {
       const result = await safeFetch(`performance:${timeRange}`, () =>
-        fetchBinanceListItem(portfolioId, timeRange, nickname)
+        fetchBinanceListItem(portfolioId, timeRange, nickname, waitUntilResumed)
       );
       endpointResults[`performance:${timeRange}`] = result;
       if (result.ok && result.data?.item) {
@@ -362,6 +378,7 @@
   async function fetchBinanceLead(context, options = {}) {
     const portfolioId = context.id;
     const onProgress = typeof options.onProgress === "function" ? options.onProgress : null;
+    const waitUntilResumed = typeof options.waitUntilResumed === "function" ? options.waitUntilResumed : null;
     const progressFor = (label) => (onProgress
       ? (event) => onProgress({ label, ...event })
       : undefined);
@@ -370,26 +387,26 @@
     const endpointResults = {};
 
     const detailResult = await safeFetch("detail", () =>
-      getBinance(`/bapi/futures/v1/friendly/future/copy-trade/lead-portfolio/detail?portfolioId=${encodeURIComponent(portfolioId)}`)
+      getBinance(`/bapi/futures/v1/friendly/future/copy-trade/lead-portfolio/detail?portfolioId=${encodeURIComponent(portfolioId)}`, waitUntilResumed)
     );
     endpointResults.detail = detailResult;
 
     const detailData = detailResult.ok ? (detailResult.data?.data || {}) : {};
-    const performance = await fetchBinancePerformanceWindows(portfolioId, detailData);
+    const performance = await fetchBinancePerformanceWindows(portfolioId, detailData, waitUntilResumed);
     Object.assign(endpointResults, performance.endpointResults);
 
     const [live, positionHistory, orderHistory, transferHistory] = await Promise.all([
       safeFetch("livePositions", () =>
-        getBinance(`/bapi/futures/v1/friendly/future/copy-trade/lead-data/positions?portfolioId=${encodeURIComponent(portfolioId)}`)
+        getBinance(`/bapi/futures/v1/friendly/future/copy-trade/lead-data/positions?portfolioId=${encodeURIComponent(portfolioId)}`, waitUntilResumed)
       ),
       safeFetch("positionHistory", () =>
-        fetchBinancePagedDetailed("/bapi/futures/v1/friendly/future/copy-trade/lead-portfolio/position-history", portfolioId, progressFor("positionHistory"))
+        fetchBinancePagedDetailed("/bapi/futures/v1/friendly/future/copy-trade/lead-portfolio/position-history", portfolioId, progressFor("positionHistory"), waitUntilResumed)
       ),
       safeFetch("orderHistory", () =>
-        fetchBinancePagedDetailed("/bapi/futures/v1/friendly/future/copy-trade/lead-portfolio/order-history", portfolioId, progressFor("orderHistory"))
+        fetchBinancePagedDetailed("/bapi/futures/v1/friendly/future/copy-trade/lead-portfolio/order-history", portfolioId, progressFor("orderHistory"), waitUntilResumed)
       ),
       safeFetch("transferHistory", () =>
-        fetchBinancePagedDetailed("/bapi/futures/v1/friendly/future/copy-trade/lead-portfolio/transfer-history", portfolioId, progressFor("transferHistory"))
+        fetchBinancePagedDetailed("/bapi/futures/v1/friendly/future/copy-trade/lead-portfolio/transfer-history", portfolioId, progressFor("transferHistory"), waitUntilResumed)
       )
     ]);
     endpointResults.livePositions = live;
@@ -410,7 +427,7 @@
     // Symbols held open with no fill in the history are priced too.
     const openSymbols = asArray(positionData.rows).filter((row) => !(Number(row.closed) > 0)).map((row) => row.symbol);
     const marketHistory = fillTimes.length
-      ? { nowMs, ...(await fetchBinanceMarketHistory([...orderRows.map((order) => order.symbol), ...openSymbols], Math.min(...fillTimes), nowMs)) }
+      ? { nowMs, ...(await fetchBinanceMarketHistory([...orderRows.map((order) => order.symbol), ...openSymbols], Math.min(...fillTimes), nowMs, { waitUntilResumed })) }
       : { nowMs, startMs: nowMs, endMs: nowMs, symbols: {}, failed: [] };
 
     return {
@@ -472,7 +489,8 @@
   // crossover is the documented weight, not a tuning choice.
   const PREMIUM_INDEX_ALL_WEIGHT = 10;
 
-  async function fetchBinanceMarkPrices(symbols) {
+  async function fetchBinanceMarkPrices(symbols, options = {}) {
+    const waitUntilResumed = typeof options.waitUntilResumed === "function" ? options.waitUntilResumed : null;
     const wanted = Array.from(new Set(asArray(symbols).map((value) => String(value)).filter(Boolean)));
     if (!wanted.length) return { marks: {}, missing: [], fetchedAtMs: Date.now(), source: "none" };
 
@@ -480,7 +498,10 @@
     let source = "";
     if (wanted.length > PREMIUM_INDEX_ALL_WEIGHT) {
       const all = await safeFetch("mark:all", () =>
-        untilAnswered(() => fetchJson(`${BINANCE_BASE}/fapi/v1/premiumIndex`, { method: "GET" })).then((answer) => answer.value)
+        untilAnswered(() => fetchJson(`${BINANCE_BASE}/fapi/v1/premiumIndex`, {
+          method: "GET",
+          waitUntilResumed
+        }), waitUntilResumed).then((answer) => answer.value)
       );
       source = "premiumIndex:all";
       if (all.ok) {
@@ -495,7 +516,10 @@
       source = "premiumIndex:perSymbol";
       const results = await Promise.all(wanted.map((symbol) =>
         safeFetch(`mark:${symbol}`, () =>
-          untilAnswered(() => fetchJson(`${BINANCE_BASE}/fapi/v1/premiumIndex?symbol=${encodeURIComponent(symbol)}`, { method: "GET" })).then((answer) => answer.value)
+          untilAnswered(() => fetchJson(`${BINANCE_BASE}/fapi/v1/premiumIndex?symbol=${encodeURIComponent(symbol)}`, {
+            method: "GET",
+            waitUntilResumed
+          }), waitUntilResumed).then((answer) => answer.value)
         )
       ));
       results.forEach((result, index) => {
@@ -521,11 +545,14 @@
   const KLINE_PAGE_LIMIT = 1500;
   const HOUR_MS = 3600000;
 
-  async function fapiPages(pathFor, timeOf, limit, startMs, endMs) {
+  async function fapiPages(pathFor, timeOf, limit, startMs, endMs, waitUntilResumed) {
     const rows = [];
     let cursor = startMs;
     for (;;) {
-      const { value } = await untilAnswered(() => fetchJson(`${BINANCE_BASE}${pathFor(cursor)}`, { method: "GET" }));
+      const { value } = await untilAnswered(() => fetchJson(`${BINANCE_BASE}${pathFor(cursor)}`, {
+        method: "GET",
+        waitUntilResumed
+      }), waitUntilResumed);
       const page = asArray(value);
       rows.push(...page);
       if (page.length < limit) break;
@@ -536,18 +563,19 @@
     return rows;
   }
 
-  async function fetchBinanceSymbolHistory(symbol, startMs, endMs) {
+  async function fetchBinanceSymbolHistory(symbol, startMs, endMs, options = {}) {
+    const waitUntilResumed = typeof options.waitUntilResumed === "function" ? options.waitUntilResumed : null;
     const encoded = encodeURIComponent(symbol);
     const [funding, klines] = await Promise.all([
-      fapiPages((from) => `/fapi/v1/fundingRate?symbol=${encoded}&startTime=${from}&endTime=${endMs}&limit=${FUNDING_PAGE_LIMIT}`, (row) => Number(row.fundingTime), FUNDING_PAGE_LIMIT, startMs, endMs),
+      fapiPages((from) => `/fapi/v1/fundingRate?symbol=${encoded}&startTime=${from}&endTime=${endMs}&limit=${FUNDING_PAGE_LIMIT}`, (row) => Number(row.fundingTime), FUNDING_PAGE_LIMIT, startMs, endMs, waitUntilResumed),
       // Hourly: the candle opening at or before startMs is included so every
       // moment in the range sits inside a candle.
-      fapiPages((from) => `/fapi/v1/markPriceKlines?symbol=${encoded}&interval=1h&startTime=${from}&endTime=${endMs}&limit=${KLINE_PAGE_LIMIT}`, (row) => Number(row[0]), KLINE_PAGE_LIMIT, Math.floor(startMs / HOUR_MS) * HOUR_MS, endMs)
+      fapiPages((from) => `/fapi/v1/markPriceKlines?symbol=${encoded}&interval=1h&startTime=${from}&endTime=${endMs}&limit=${KLINE_PAGE_LIMIT}`, (row) => Number(row[0]), KLINE_PAGE_LIMIT, Math.floor(startMs / HOUR_MS) * HOUR_MS, endMs, waitUntilResumed)
     ]);
     return {
       funding: funding.map((row) => [Number(row.fundingTime), Number(row.fundingRate), Number(row.markPrice)])
         .filter(([time, rate, mark]) => time > 0 && Number.isFinite(rate) && mark > 0),
-      marks: klines.map((row) => [Number(row[0]), Number(row[1]), Number(row[6]), Number(row[4])])
+      marks: klines.map((row) => [Number(row[0]), Number(row[1]), Number(row[6]), Number(row[4]), Number(row[2]), Number(row[3])])
         .filter(([openTime, open, closeTime, close]) => openTime > 0 && open > 0 && closeTime > openTime && close > 0)
     };
   }
@@ -557,7 +585,8 @@
   // on 429 backoff instead of flooding it.
   const MARKET_HISTORY_CONCURRENCY = 4;
 
-  async function fetchBinanceMarketHistory(symbols, startMs, endMs) {
+  async function fetchBinanceMarketHistory(symbols, startMs, endMs, options = {}) {
+    const waitUntilResumed = typeof options.waitUntilResumed === "function" ? options.waitUntilResumed : null;
     const wanted = Array.from(new Set(asArray(symbols).map(String).filter(Boolean)));
     const bySymbol = {};
     const failed = [];
@@ -566,7 +595,7 @@
       while (next < wanted.length) {
         const symbol = wanted[next];
         next += 1;
-        const result = await safeFetch(`market:${symbol}`, () => fetchBinanceSymbolHistory(symbol, startMs, endMs));
+        const result = await safeFetch(`market:${symbol}`, () => fetchBinanceSymbolHistory(symbol, startMs, endMs, { waitUntilResumed }));
         if (result.ok) bySymbol[symbol] = result.data;
         else failed.push({ symbol, error: result.error });
       }
@@ -589,39 +618,44 @@
     });
   }
 
-  async function okxGet(pathWithQuery) {
+  async function okxGet(pathWithQuery, waitUntilResumed) {
     const { value } = await untilAnswered(async () =>
-      requireOkxOk(pathWithQuery, await fetchJson(`${OKX_BASE}${pathWithQuery}`, { method: "GET" })));
+      requireOkxOk(pathWithQuery, await fetchJson(`${OKX_BASE}${pathWithQuery}`, {
+        method: "GET",
+        waitUntilResumed
+      })), waitUntilResumed);
     return value;
   }
 
-  async function findOkxCandidate(uniqueName) {
+  async function findOkxCandidate(uniqueName, waitUntilResumed) {
     const rankTypes = ["yieldRatio", "pnl", "followPnl", "aum", "winRatio"];
     for (const rankType of rankTypes) {
       for (let start = 1; start <= 181; start += 20) {
-        const response = await okxGet(`/priapi/v5/ecotrade/public/follow-rank?size=20&type=${rankType}&start=${start}`);
+        const response = await okxGet(`/priapi/v5/ecotrade/public/follow-rank?size=20&type=${rankType}&start=${start}`, waitUntilResumed);
         const ranks = asArray(response?.data?.[0]?.ranks);
         const found = ranks.find((row) => String(row.uniqueName) === String(uniqueName));
         if (found) return found;
         if (ranks.length < 20) break;
+        await waitForResume(waitUntilResumed);
         await sleep(100);
       }
     }
     return null;
   }
 
-  async function fetchOkxLead(context) {
+  async function fetchOkxLead(context, options = {}) {
+    const waitUntilResumed = typeof options.waitUntilResumed === "function" ? options.waitUntilResumed : null;
     const uniqueName = context.id;
     const visibleText = document.body?.innerText || "";
     const pageTitle = document.title;
 
     const [candidate, positionHistory, livePositions] = await Promise.all([
-      safeFetch("candidate", () => findOkxCandidate(uniqueName)),
+      safeFetch("candidate", () => findOkxCandidate(uniqueName, waitUntilResumed)),
       safeFetch("positionHistory", () =>
-        okxGet(`/priapi/v5/ecotrade/public/position-history?uniqueName=${encodeURIComponent(uniqueName)}&limit=100`)
+        okxGet(`/priapi/v5/ecotrade/public/position-history?uniqueName=${encodeURIComponent(uniqueName)}&limit=100`, waitUntilResumed)
       ),
       safeFetch("livePositions", () =>
-        okxGet(`/priapi/v5/ecotrade/public/trader/position-detail?uniqueName=${encodeURIComponent(uniqueName)}`)
+        okxGet(`/priapi/v5/ecotrade/public/trader/position-detail?uniqueName=${encodeURIComponent(uniqueName)}`, waitUntilResumed)
       )
     ]);
 
@@ -652,7 +686,7 @@
 
   async function fetchLeadData(context, options = {}) {
     if (context.platform === "Binance") return fetchBinanceLead(context, options);
-    if (context.platform === "OKX") return fetchOkxLead(context);
+    if (context.platform === "OKX") return fetchOkxLead(context, options);
     throw new Error(`Unsupported platform: ${context.platform}`);
   }
 

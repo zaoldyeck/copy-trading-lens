@@ -1,0 +1,92 @@
+// Unit tests for the Optimal Position Stop-Loss Radar (src/analysis.js)
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import vm from "node:vm";
+import { fileURLToPath } from "node:url";
+
+const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+function loadScript(filePath, sandbox) {
+  const code = fs.readFileSync(path.join(root, filePath), "utf8");
+  vm.runInContext(code, sandbox);
+}
+
+const sandbox = {
+  window: {},
+  document: {
+    createElement: () => ({ setAttribute: () => {}, appendChild: () => {} })
+  },
+  console
+};
+sandbox.global = sandbox.window;
+sandbox.window.CopyTradingLensI18n = {
+  t: (k, s = []) => k + (s.length ? `[${s.join(",")}]` : "")
+};
+vm.createContext(sandbox);
+
+loadScript("src/positions.js", sandbox);
+loadScript("src/style.js", sandbox);
+loadScript("src/equity.js", sandbox);
+loadScript("src/analysis.js", sandbox);
+
+const analysis = sandbox.window.CopyTradingLensAnalysis;
+assert.ok(typeof analysis.analyzeStopLossRadar === "function", "analyzeStopLossRadar is exported");
+
+console.log("=== RUNNING UNIT TESTS FOR STOP LOSS RADAR ===");
+
+// 1. Edge Case: Insufficient data (< 3 positions)
+{
+  const result = analysis.analyzeStopLossRadar([{ avgCost: 100, avgClosePrice: 105, closingPnl: 5, leverage: 5 }]);
+  assert.equal(result.insufficientData, true, "fewer than 3 positions returns insufficientData");
+  console.log("PASS: handles insufficient positions gracefully");
+}
+
+// 2. Synthetic controlled positions test
+{
+  const positions = [
+    // 4 wins: slight floating dip then win
+    { symbol: "BTCUSDT", avgCost: 100, avgClosePrice: 110, closingPnl: 10, leverage: 10, side: "LONG", roi: 1.0 },
+    { symbol: "ETHUSDT", avgCost: 200, avgClosePrice: 210, closingPnl: 10, leverage: 10, side: "LONG", roi: 0.5 },
+    { symbol: "SOLUSDT", avgCost: 50, avgClosePrice: 52, closingPnl: 4, leverage: 10, side: "LONG", roi: 0.4 },
+    { symbol: "DOGEUSDT", avgCost: 10, avgClosePrice: 11, closingPnl: 1, leverage: 10, side: "LONG", roi: 1.0 },
+    // 1 severe loss: dipped to 50 on avgCost 100 (50% price drop = 500% ROE loss)
+    { symbol: "XRPUSDT", avgCost: 100, avgClosePrice: 50, closingPnl: -50, leverage: 10, side: "LONG", roi: -5.0 }
+  ];
+
+  const radar = analysis.analyzeStopLossRadar(positions, [], {}, null);
+  assert.equal(radar.insufficientData, false);
+  assert.equal(radar.dominantLeverage, 10);
+  assert.equal(radar.hasSevereBagHolding, true, "flags XRPUSDT as severe bag holding (-500% ROE)");
+  assert.equal(radar.worstHistoricalRoeMae, 500);
+  assert.ok(radar.recommendedRoe >= 30 && radar.recommendedRoe <= 85, "recommendedRoe is bounded between 30 and 85");
+  assert.equal(radar.recommendedPriceDrop, Number((radar.recommendedRoe / 10).toFixed(1)));
+  assert.ok(radar.winRetentionRate >= 90, "preserves at least 90% of winning trades");
+  console.log("PASS: synthetic controlled positions verify MAE and bag holding detection");
+}
+
+// 3. Real Cached Lead Traders Parity
+const cacheDir = path.join(root, "tools", "cache");
+if (fs.existsSync(path.join(cacheDir, "raw_4908633203782592768.json"))) {
+  const rawXuanMing = JSON.parse(fs.readFileSync(path.join(cacheDir, "raw_4908633203782592768.json"), "utf8"));
+  const radarXM = analysis.analyzeStopLossRadar(rawXuanMing.positionHistory, rawXuanMing.orderHistory, rawXuanMing.meta, rawXuanMing.marketHistory);
+
+  assert.equal(radarXM.dominantLeverage, 5, "玄冥二老 dominant leverage is 5x");
+  assert.ok(radarXM.recommendedRoe >= 45 && radarXM.recommendedRoe <= 85, "玄冥二老 recommended stop-loss is bounded in range");
+  assert.ok(radarXM.winRetentionRate >= 94, "玄冥二老 win retention rate is >= 94%");
+  console.log(`PASS: 玄冥二老 verified (Lev: ${radarXM.dominantLeverage}x, Rec: ${radarXM.recommendedRoe}%, PriceDrop: ${radarXM.recommendedPriceDrop}%, WinRet: ${radarXM.winRetentionRate}%)`);
+}
+
+if (fs.existsSync(path.join(cacheDir, "raw_5131925334830383361.json"))) {
+  const rawHai = JSON.parse(fs.readFileSync(path.join(cacheDir, "raw_5131925334830383361.json"), "utf8"));
+  const radarHai = analysis.analyzeStopLossRadar(rawHai.positionHistory, rawHai.orderHistory, rawHai.meta, rawHai.marketHistory);
+
+  assert.equal(radarHai.dominantLeverage, 10, "星辰社区-海 dominant leverage is 10x");
+  assert.equal(radarHai.hasSevereBagHolding, true, "星辰社区-海 flags severe bag holding");
+  assert.ok(radarHai.worstHistoricalRoeMae > 600, "星辰社区-海 worst historical drawdown > 600% ROE");
+  assert.ok(radarHai.recommendedRoe >= 50 && radarHai.recommendedRoe <= 75, "星辰社区-海 recommended stop loss is ~55-75% ROE");
+  assert.ok(radarHai.winRetentionRate >= 93, "星辰社区-海 win retention rate >= 93%");
+  console.log(`PASS: 星辰社区-海 verified (Lev: ${radarHai.dominantLeverage}x, Rec: ${radarHai.recommendedRoe}%, BagAlert: ${radarHai.hasSevereBagHolding}, WorstDD: -${radarHai.worstHistoricalRoeMae}%)`);
+}
+
+console.log("\nALL STOP LOSS RADAR UNIT TESTS PASSED SUCCESSFULLY!");

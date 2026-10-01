@@ -802,5 +802,41 @@
   },
   "familyIncompleteData": {
     "message": "数据不完整，暂时无法判断策略类型"
+  },
+  "sectionStopLossRadar": {
+    "message": "智能仓位止损推荐"
+  },
+  "badgeMathOptimal": {
+    "message": "数学期望最佳值"
+  },
+  "badgeBagHoldingAlert": {
+    "message": "高危死扛警告"
+  },
+  "radarRecommendedLabel": {
+    "message": "推荐填入「仓位止损」"
+  },
+  "radarRoeUnit": {
+    "message": "保证金 ROE %"
+  },
+  "radarEquivalentPrice": {
+    "message": "在 {0}x 杠杆下，相当于允许标的价格逆向波动 {1}%"
+  },
+  "radarWinRetention": {
+    "message": "赢单保留率"
+  },
+  "radarDominantLev": {
+    "message": "带单常用杠杆"
+  },
+  "radarWorstDrawdown": {
+    "message": "历史最深持仓浮亏"
+  },
+  "radarConservative": {
+    "message": "保守型止损建议"
+  },
+  "radarSevereBagWarning": {
+    "message": "⚠️ 警告：该带单员历史曾出现单笔 -{0}% 的严重死扛！强烈建议启用仓位止损以阻截黑天鹅爆仓。"
+  },
+  "radarBinanceRoeNotice": {
+    "message": "💡 币安提示：币安跟单的「仓位止损 (0-95%)」栏位是计算保证金亏损比率（ROE%），非标的跌幅。若设 5~10% 会因微小杂讯误砍大批赢单！请按上述推荐值设置。"
   }
 }

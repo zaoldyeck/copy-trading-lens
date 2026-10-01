@@ -906,6 +906,222 @@
     };
   }
 
+  function analyzeStopLossRadar(positions, orders = [], meta = {}, marketHistory = null) {
+    const list = Array.isArray(positions) ? positions : [];
+    if (list.length < 3) {
+      return {
+        insufficientData: true,
+        dominantLeverage: 1,
+        recommendedRoe: 50,
+        recommendedPriceDrop: 50,
+        conservativeRoe: 75,
+        aggressiveRoe: 30,
+        winRetentionRate: 100,
+        killedWinsCount: 0,
+        savedDisastersCount: 0,
+        hasSevereBagHolding: false,
+        worstHistoricalRoeMae: 0,
+        winStats: { median: 0, p75: 0, p90: 0, p95: 0, max: 0 },
+        lossStats: { median: 0, p90: 0, max: 0 },
+        simResults: []
+      };
+    }
+
+    const evaluated = [];
+    const leverages = [];
+
+    const fillsBySymbol = new Map();
+    for (const order of orders || []) {
+      const sym = String(order.symbol || "");
+      if (!sym) continue;
+      if (!fillsBySymbol.has(sym)) fillsBySymbol.set(sym, []);
+      fillsBySymbol.get(sym).push(order);
+    }
+
+    for (const p of list) {
+      const avgCost = num(p.avgCost, 0);
+      const avgClosePrice = num(p.avgClosePrice, 0);
+      const leverage = Math.max(1, num(p.leverage, num(p.lever, 1)));
+      leverages.push(leverage);
+      const side = String(p.side || (num(p.pnl, 0) < 0 ? "LONG" : "LONG")).toUpperCase();
+      const isShort = side.includes("SHORT");
+      const closingPnl = num(firstDefined(p.closingPnl, p.pnl), 0);
+      const roi = num(p.roi, 0);
+
+      if (!(avgCost > 0)) continue;
+
+      let priceMaePct = 0;
+      if (avgClosePrice > 0) {
+        priceMaePct = isShort
+          ? Math.max(0, (avgClosePrice - avgCost) / avgCost * 100)
+          : Math.max(0, (avgCost - avgClosePrice) / avgCost * 100);
+      }
+
+      const opened = num(firstDefined(p.opened, p.openTime), 0);
+      const closed = num(firstDefined(p.closed, p.uTime, p.closeTime), 0);
+      const sym = String(firstDefined(p.symbol, p.instId, ""));
+
+      // Intermediary adverse fills
+      const orderFills = fillsBySymbol.get(sym);
+      if (orderFills && opened > 0 && closed >= opened) {
+        for (const o of orderFills) {
+          const t = global.CopyTradingLensPositions?.fillTimeOf
+            ? global.CopyTradingLensPositions.fillTimeOf(o)
+            : num(firstDefined(o.fillTime, o.cTime), 0);
+          if (t >= opened && t <= closed) {
+            const price = num(firstDefined(o.avgPrice, o.fillPx, o.price), 0);
+            if (price > 0) {
+              const adverse = isShort
+                ? ((price - avgCost) / avgCost) * 100
+                : ((avgCost - price) / avgCost) * 100;
+              if (adverse > priceMaePct) priceMaePct = adverse;
+            }
+          }
+        }
+      }
+
+      // Public market mark candles
+      const historyMarks = marketHistory?.symbols?.[sym]?.marks;
+      if (Array.isArray(historyMarks) && opened > 0 && closed >= opened) {
+        for (const m of historyMarks) {
+          const mOpen = num(m[0], 0);
+          const mClose = num(m[2], 0);
+          if (mOpen <= closed && mClose >= opened) {
+            const high = num(m[4], num(m[3], avgCost));
+            const low = num(m[5], num(m[3], avgCost));
+            if (isShort && high > avgCost) {
+              const adverse = ((high - avgCost) / avgCost) * 100;
+              if (adverse > priceMaePct) priceMaePct = adverse;
+            } else if (!isShort && low < avgCost && low > 0) {
+              const adverse = ((avgCost - low) / avgCost) * 100;
+              if (adverse > priceMaePct) priceMaePct = adverse;
+            }
+          }
+        }
+      }
+
+      const roeMaePct = priceMaePct * leverage;
+      evaluated.push({
+        symbol: sym,
+        side,
+        leverage,
+        closingPnl,
+        roiPct: Math.abs(roi) < 1 && closingPnl !== 0 ? roi * 100 : roi,
+        priceMaePct,
+        roeMaePct,
+        isWin: closingPnl > 0,
+        isLoss: closingPnl < 0
+      });
+    }
+
+    if (!evaluated.length) {
+      return {
+        insufficientData: true,
+        dominantLeverage: 1,
+        recommendedRoe: 50,
+        recommendedPriceDrop: 50,
+        conservativeRoe: 75,
+        aggressiveRoe: 30,
+        winRetentionRate: 100,
+        killedWinsCount: 0,
+        savedDisastersCount: 0,
+        hasSevereBagHolding: false,
+        worstHistoricalRoeMae: 0,
+        winStats: { median: 0, p75: 0, p90: 0, p95: 0, max: 0 },
+        lossStats: { median: 0, p90: 0, max: 0 },
+        simResults: []
+      };
+    }
+
+    const wins = evaluated.filter((e) => e.isWin);
+    const losses = evaluated.filter((e) => e.isLoss);
+
+    const dominantLeverage = Math.round(median(leverages)) || 5;
+
+    const winRoeMae = wins.map((w) => w.roeMaePct);
+    const lossRoeMae = losses.map((l) => l.roeMaePct);
+
+    const winStats = {
+      p50: percentile(winRoeMae, 50),
+      p75: percentile(winRoeMae, 75),
+      p90: percentile(winRoeMae, 90),
+      p95: percentile(winRoeMae, 95),
+      max: winRoeMae.length ? Math.max(...winRoeMae) : 0
+    };
+
+    const lossStats = {
+      p50: percentile(lossRoeMae, 50),
+      p90: percentile(lossRoeMae, 90),
+      max: lossRoeMae.length ? Math.max(...lossRoeMae) : 0
+    };
+
+    const hasSevereBagHolding = lossStats.max >= 100 || losses.some((l) => l.roiPct <= -100);
+
+    const candidateThresholds = [15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95];
+    const simResults = [];
+
+    for (const L of candidateThresholds) {
+      const killedWins = wins.filter((w) => w.roeMaePct >= L).length;
+      const winRetentionRate = wins.length ? ((wins.length - killedWins) / wins.length) * 100 : 100;
+      const savedDisasters = losses.filter((l) => l.roeMaePct >= L && l.roeMaePct > L * 1.2).length;
+
+      let grossWin = 0;
+      let grossLoss = 0;
+      for (const t of evaluated) {
+        if (t.roeMaePct >= L) {
+          grossLoss += L;
+        } else if (t.isWin) {
+          grossWin += Math.max(t.roiPct, 0);
+        } else {
+          grossLoss += Math.abs(t.roiPct);
+        }
+      }
+      const simulatedProfitFactor = grossLoss > 0 ? grossWin / grossLoss : 99;
+
+      simResults.push({
+        threshold: L,
+        winRetentionRate,
+        killedWins,
+        savedDisasters,
+        simulatedProfitFactor
+      });
+    }
+
+    const rawRec = winStats.p95 > 0 ? Math.round(winStats.p95 / 5) * 5 : 50;
+    const recommendedRoe = Math.min(85, Math.max(30, rawRec));
+    const conservativeRoe = Math.min(95, Math.max(recommendedRoe + 10, 75));
+    const aggressiveRoe = Math.max(20, Math.min(recommendedRoe - 10, 40));
+
+    const recSim = simResults.find((s) => s.threshold === recommendedRoe) || simResults[0];
+
+    return {
+      insufficientData: false,
+      dominantLeverage,
+      recommendedRoe,
+      recommendedPriceDrop: Number((recommendedRoe / dominantLeverage).toFixed(1)),
+      conservativeRoe,
+      aggressiveRoe,
+      winRetentionRate: Number(recSim.winRetentionRate.toFixed(1)),
+      killedWinsCount: recSim.killedWins,
+      savedDisastersCount: recSim.savedDisasters,
+      hasSevereBagHolding,
+      worstHistoricalRoeMae: Number(lossStats.max.toFixed(1)),
+      winStats: {
+        median: Number(winStats.p50.toFixed(1)),
+        p75: Number(winStats.p75.toFixed(1)),
+        p90: Number(winStats.p90.toFixed(1)),
+        p95: Number(winStats.p95.toFixed(1)),
+        max: Number(winStats.max.toFixed(1))
+      },
+      lossStats: {
+        median: Number(lossStats.p50.toFixed(1)),
+        p90: Number(lossStats.p90.toFixed(1)),
+        max: Number(lossStats.max.toFixed(1))
+      },
+      simResults: simResults.filter((s) => [20, 35, 50, 75, 90].includes(s.threshold))
+    };
+  }
+
   const STYLE_FAMILY_KEYS = {
     insufficient: "familyInsufficient",
     martingale: "familyMartingale",
@@ -1263,6 +1479,7 @@
         strategy: inferStrategy(summary, global.CopyTradingLensStyle.classify(raw.orderHistory || [])),
         verdict: buildVerdict(meta, summary, orders, transfers, live, biggestBet)
       };
+    const stopLossRadar = analyzeStopLossRadar(raw.positionHistory || [], raw.orderHistory || [], meta, raw.marketHistory);
     return {
       platform: "Binance",
       generatedAt: new Date().toISOString(),
@@ -1272,6 +1489,7 @@
       transfers,
       live,
       biggestBet,
+      stopLossRadar,
       strategy,
       verdict,
       rawCounts: {
@@ -1373,6 +1591,7 @@
     const { strategy, verdict } = gaps.length
       ? incompleteAnalysis(gaps)
       : { strategy: inferStrategy(summary, styleFromPositionRows(summary)), verdict: buildVerdict(meta, summary, orders, transfers, live) };
+    const stopLossRadar = analyzeStopLossRadar(raw.positionHistory || [], [], meta, null);
     return {
       platform: "OKX",
       generatedAt: new Date().toISOString(),
@@ -1383,6 +1602,7 @@
       live,
       // OKX serves no transfer history, so the account behind a bet is unknown.
       biggestBet: null,
+      stopLossRadar,
       strategy,
       verdict,
       rawCounts: {
@@ -1397,6 +1617,7 @@
   global.CopyTradingLensAnalysis = {
     analyzeBinance,
     analyzeOkx,
+    analyzeStopLossRadar,
     binanceDataGaps,
     inferStrategy,
     buildVerdict,

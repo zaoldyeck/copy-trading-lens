@@ -14,4 +14,5 @@ chrome-store-publishing-guide*.md
 # needed to install, build, or test the extension.
 reports/
 tools/
+scratch/
 scripts/test-similarity.mjs

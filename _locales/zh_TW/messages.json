@@ -802,5 +802,41 @@
   },
   "familyIncompleteData": {
     "message": "資料不完整，暫時無法判斷策略型態"
+  },
+  "sectionStopLossRadar": {
+    "message": "智能倉位止損推薦"
+  },
+  "badgeMathOptimal": {
+    "message": "數學期望最佳值"
+  },
+  "badgeBagHoldingAlert": {
+    "message": "高危死扛警告"
+  },
+  "radarRecommendedLabel": {
+    "message": "推薦填入「倉位止損」"
+  },
+  "radarRoeUnit": {
+    "message": "保證金 ROE %"
+  },
+  "radarEquivalentPrice": {
+    "message": "在 {0}x 槓桿下，相當於允許標的價格逆向波動 {1}%"
+  },
+  "radarWinRetention": {
+    "message": "贏單保留率"
+  },
+  "radarDominantLev": {
+    "message": "帶單常用槓桿"
+  },
+  "radarWorstDrawdown": {
+    "message": "歷史最深持倉浮虧"
+  },
+  "radarConservative": {
+    "message": "保守型止損建議"
+  },
+  "radarSevereBagWarning": {
+    "message": "⚠️ 警告：該帶單員歷史曾出現單筆 -{0}% 的嚴重死扛！強烈建議啟用倉位止損以阻截黑天鵝爆倉。"
+  },
+  "radarBinanceRoeNotice": {
+    "message": "💡 幣安提示：幣安跟單的「倉位止損 (0-95%)」欄位是計算保證金虧損比率（ROE%），非標的跌幅。若設 5~10% 會因微小雜訊誤砍大批贏單！請按上述推薦值設定。"
   }
 }

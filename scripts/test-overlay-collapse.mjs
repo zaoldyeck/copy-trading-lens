@@ -1,11 +1,10 @@
 // Guard for the overlay's collapse button in src/content.js.
 //
-// "−" hides the overlay; it does not cancel or discard the analysis. Reading a
-// lead trader's history walks dozens of paginated requests, so reopening the
-// overlay must show the result already fetched — or the run still in flight —
-// never start another read. Before this guard the launcher re-ran the whole
-// analysis on every reopen, and a run that finished while collapsed threw its
-// result away.
+// "−" hides the overlay. A loading run is paused at its next provider request
+// boundary and resumes when the launcher is opened again; a finished run stays
+// cached and is never read again. Before this guard the launcher re-ran the
+// whole analysis on every reopen, and a run that finished while collapsed threw
+// its result away.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -77,6 +76,7 @@ function analysisFor(name) {
 function loadPage() {
   const documentElement = fakeElement("html");
   const fetches = [];
+  const fetchOptions = [];
   const panel = { mounts: [], fails: [], retry: null };
   const sandbox = {
     console,
@@ -98,9 +98,10 @@ function loadPage() {
     CopyTradingLensI18n: { t: (key) => key },
     CopyTradingLensProviders: {
       detectLeadPage: () => ({ platform: "Binance", id: "p1" }),
-      fetchLeadData() {
+      fetchLeadData(_context, options) {
         const call = deferred();
         fetches.push(call);
+        fetchOptions.push(options || {});
         return call.promise;
       }
     },
@@ -146,25 +147,32 @@ function loadPage() {
     walk(documentElement, (el) => { if (found === null && el.tag === "h2") found = el.textContent; });
     return found;
   };
-  return { fetches, panel, find, click, collapseButton, shownName };
+  return { fetches, fetchOptions, panel, find, click, collapseButton, shownName };
 }
 
 const tests = [];
 const test = (name, fn) => tests.push([name, fn]);
 
-test("collapsing mid-run keeps the run going and reopening shows its result", async () => {
+test("collapsing mid-run pauses the read until reopening, then shows its result", async () => {
   const page = loadPage();
   assert.equal(page.fetches.length, 1);
   assert.ok(page.find("ctl-loading"), "the overlay opens on the loading view");
 
   page.click(page.collapseButton());
   assert.ok(page.find("ctl-launcher"));
-  page.fetches[0].resolve({ name: "Trader" });
+  let resumed = false;
+  const waitingForResume = page.fetchOptions[0].waitUntilResumed().then(() => { resumed = true; });
   await tick();
-  assert.ok(page.find("ctl-launcher"), "a finished run does not reopen a collapsed overlay");
-  assert.deepEqual(page.panel.mounts, ["Trader"], "the positions panel still gets the result");
+  assert.equal(resumed, false, "the provider must remain paused while the overlay is closed");
 
   page.click(page.find("ctl-launcher"));
+  await waitingForResume;
+  assert.equal(resumed, true, "reopening must resume the existing provider read");
+  assert.ok(page.find("ctl-loading"), "reopening shows the resumed loading view");
+  page.fetches[0].resolve({ name: "Trader" });
+  await tick();
+  assert.deepEqual(page.panel.mounts, ["Trader"], "the positions panel still gets the result");
+
   assert.equal(page.fetches.length, 1, "reopening does not read the trader again");
   assert.ok(page.find("ctl-verdict"), "reopening shows the finished analysis");
 });
@@ -176,6 +184,18 @@ test("reopening a finished analysis does not read the trader again", async () =>
   page.click(page.collapseButton());
   page.click(page.find("ctl-launcher"));
   assert.equal(page.fetches.length, 1);
+  assert.ok(page.find("ctl-verdict"));
+});
+
+test("a run that finishes while collapsed stays cached", async () => {
+  const page = loadPage();
+  page.click(page.collapseButton());
+  page.fetches[0].resolve({ name: "Trader" });
+  await tick();
+  assert.ok(page.find("ctl-launcher"), "a completed hidden run must stay hidden");
+
+  page.click(page.find("ctl-launcher"));
+  assert.equal(page.fetches.length, 1, "reopening a completed hidden run must not re-read");
   assert.ok(page.find("ctl-verdict"));
 });
 

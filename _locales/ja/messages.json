@@ -802,5 +802,41 @@
   },
   "familyIncompleteData": {
     "message": "データ不完全のため戦略タイプを判断できません"
+  },
+  "sectionStopLossRadar": {
+    "message": "ポジション損切り最適化レーダー"
+  },
+  "badgeMathOptimal": {
+    "message": "数学的期待値最適"
+  },
+  "badgeBagHoldingAlert": {
+    "message": "深追含み損警告"
+  },
+  "radarRecommendedLabel": {
+    "message": "推奨ポジション損切り設定"
+  },
+  "radarRoeUnit": {
+    "message": "証拠金 ROE %"
+  },
+  "radarEquivalentPrice": {
+    "message": "{0}倍レバレッジ時、原資産の逆行許容幅 {1}% に相当"
+  },
+  "radarWinRetention": {
+    "message": "勝トレード保持率"
+  },
+  "radarDominantLev": {
+    "message": "主たるレバレッジ"
+  },
+  "radarWorstDrawdown": {
+    "message": "過去最大含み損"
+  },
+  "radarConservative": {
+    "message": "保守的損切り設定"
+  },
+  "radarSevereBagWarning": {
+    "message": "⚠️ 警告：過去に単一ポジションで -{0}% の深刻な含み損を耐えた履歴があります。ロスカット設定を強く推奨します。"
+  },
+  "radarBinanceRoeNotice": {
+    "message": "💡 バイナンス注意事項：コピートレードの「ポジション損切り(0-95%)」は証拠金損失率(ROE%)であり、現物価格変動%ではありません。5〜10%にするとノイズで多くの利益ポジションが早期誤決済されます。上記推奨値をご利用ください。"
   }
 }

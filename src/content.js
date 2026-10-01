@@ -3,13 +3,35 @@
 
   const ROOT_ID = "copy-trading-lens-root";
   // The analysis of the lead page in view: { key, context, phase: "loading" |
-  // "ready" | "failed", raw, analysis, error }. Collapsing only hides it, so
-  // reopening paints what is already here instead of reading the trader again.
+  // "ready" | "failed", raw, analysis, error }. Collapsing a loading run pauses
+  // its provider at the next request boundary; reopening resumes that same run.
+  // A finished run is kept in memory, so reopening never reads the trader again.
   let run = null;
   let runSeq = 0;
   let collapsed = false;
   let root = null;
   let routeTimer = null;
+
+  function createFetchControl(initiallyPaused = false) {
+    let paused = initiallyPaused;
+    const waiters = new Set();
+    return {
+      pause() {
+        paused = true;
+      },
+      resume() {
+        if (!paused) return;
+        paused = false;
+        const pending = [...waiters];
+        waiters.clear();
+        pending.forEach((resolve) => resolve());
+      },
+      waitUntilResumed() {
+        if (!paused) return Promise.resolve();
+        return new Promise((resolve) => waiters.add(resolve));
+      }
+    };
+  }
 
   function t(key, substitutions = []) {
     return window.CopyTradingLensI18n?.t(key, substitutions) || key;
@@ -56,6 +78,10 @@
 
   function setCollapsed(value) {
     collapsed = value;
+    if (run?.phase === "loading") {
+      if (collapsed) run.fetchControl.pause();
+      else run.fetchControl.resume();
+    }
     paint();
   }
 
@@ -182,6 +208,51 @@
       cautions.push(t("settingDefault"));
     }
     return cautions;
+  }
+
+  function renderStopLossRadar(radar) {
+    if (!radar || radar.insufficientData) return null;
+    const hasBag = radar.hasSevereBagHolding;
+    return h("section", { class: "ctl-section ctl-radar-section" }, [
+      h("div", { class: "ctl-radar-header" }, [
+        h("h3", { text: t("sectionStopLossRadar") }),
+        hasBag
+          ? h("span", { class: "ctl-radar-badge is-danger", text: t("badgeBagHoldingAlert") })
+          : h("span", { class: "ctl-radar-badge is-safe", text: t("badgeMathOptimal") })
+      ]),
+      h("div", { class: "ctl-radar-box" }, [
+        h("div", { class: "ctl-radar-primary" }, [
+          h("div", { class: "ctl-radar-label", text: t("radarRecommendedLabel") }),
+          h("div", { class: "ctl-radar-value" }, [
+            h("span", { class: "ctl-radar-number", text: `${radar.recommendedRoe}%` }),
+            h("span", { class: "ctl-radar-unit", text: t("radarRoeUnit") })
+          ]),
+          h("div", { class: "ctl-radar-sub", text: t("radarEquivalentPrice", [radar.dominantLeverage, radar.recommendedPriceDrop]) })
+        ]),
+        h("div", { class: "ctl-radar-grid" }, [
+          h("div", { class: "ctl-radar-stat" }, [
+            h("span", { text: t("radarWinRetention") }),
+            h("strong", { text: `${radar.winRetentionRate}%` })
+          ]),
+          h("div", { class: "ctl-radar-stat" }, [
+            h("span", { text: t("radarDominantLev") }),
+            h("strong", { text: `${radar.dominantLeverage}x` })
+          ]),
+          h("div", { class: "ctl-radar-stat" }, [
+            h("span", { text: t("radarWorstDrawdown") }),
+            h("strong", { class: hasBag ? "is-danger" : "", text: `-${radar.worstHistoricalRoeMae}%` })
+          ]),
+          h("div", { class: "ctl-radar-stat" }, [
+            h("span", { text: t("radarConservative") }),
+            h("strong", { text: `${radar.conservativeRoe}%` })
+          ])
+        ])
+      ]),
+      hasBag
+        ? h("div", { class: "ctl-radar-alert", text: t("radarSevereBagWarning", [radar.worstHistoricalRoeMae]) })
+        : null,
+      h("div", { class: "ctl-radar-notice", text: t("radarBinanceRoeNotice") })
+    ]);
   }
 
   function renderLoading(context) {
@@ -321,6 +392,7 @@
           h("h3", { text: t("sectionPositives") }),
           bullets(verdict.positives, t("noPositives"))
         ]),
+        renderStopLossRadar(analysis.stopLossRadar),
         h("section", { class: "ctl-section" }, [
           h("h3", { text: t("sectionSettings") }),
           bullets(settingAdvice(analysis), "")
@@ -341,6 +413,7 @@
   async function runAnalysis(force = false) {
     const context = window.CopyTradingLensProviders.detectLeadPage();
     if (!context) {
+      run?.fetchControl?.resume();
       run = null;
       paint();
       window.CopyTradingLensPositionsPanel?.unmount();
@@ -348,11 +421,19 @@
     }
     const key = `${context.platform}:${context.id}:${location.href}`;
     if (!force && run?.key === key && root) return;
+    // Release an older paused read before replacing it. It is superseded and
+    // may otherwise remain suspended forever after a route change or refresh.
+    run?.fetchControl?.resume();
     // The in-page positions panel needs the same payload as the overlay, so the
-    // fetch happens even when the overlay is collapsed — a lead trader's full
-    // history is paginated over dozens of requests and must be paid for once,
-    // not once per consumer.
-    const current = { id: ++runSeq, key, context, phase: "loading" };
+    // fetch happens once per run. When the overlay is already collapsed, start
+    // the new run paused so a route check cannot unexpectedly flood the page.
+    const current = {
+      id: ++runSeq,
+      key,
+      context,
+      phase: "loading",
+      fetchControl: createFetchControl(collapsed)
+    };
     run = current;
     // A refresh or a route change starts a newer run while this one is still
     // reading; whichever answers last, only the newest may land.
@@ -361,6 +442,7 @@
     window.CopyTradingLensPositionsPanel?.beginLoading(context, () => runAnalysis(true));
     try {
       const raw = await window.CopyTradingLensProviders.fetchLeadData(context, {
+        waitUntilResumed: () => current.fetchControl.waitUntilResumed(),
         onProgress: (event) => {
           if (!superseded()) window.CopyTradingLensPositionsPanel?.setProgress(event);
         }

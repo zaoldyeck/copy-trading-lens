@@ -802,5 +802,41 @@
   },
   "familyIncompleteData": {
     "message": "Incomplete data — strategy type cannot be judged"
+  },
+  "sectionStopLossRadar": {
+    "message": "Optimal Position Stop-Loss Radar"
+  },
+  "badgeMathOptimal": {
+    "message": "Math Expectancy Optimal"
+  },
+  "badgeBagHoldingAlert": {
+    "message": "Deep Bag-Holding Warning"
+  },
+  "radarRecommendedLabel": {
+    "message": "Recommended Stop-Loss Setting"
+  },
+  "radarRoeUnit": {
+    "message": "Margin ROE %"
+  },
+  "radarEquivalentPrice": {
+    "message": "At {0}x leverage, allows underlying price adverse move of {1}%"
+  },
+  "radarWinRetention": {
+    "message": "Win Retention Rate"
+  },
+  "radarDominantLev": {
+    "message": "Dominant Leverage"
+  },
+  "radarWorstDrawdown": {
+    "message": "Worst Historical Drawdown"
+  },
+  "radarConservative": {
+    "message": "Conservative Setting"
+  },
+  "radarSevereBagWarning": {
+    "message": "⚠️ Warning: Trader had historical position drawdown reaching -{0}%! Strictly recommend stop-loss to avoid blowups."
+  },
+  "radarBinanceRoeNotice": {
+    "message": "💡 Binance Tip: 'Position Stop-Loss (0-95%)' input is Margin ROE %, NOT price change %. Setting 5-10% kills 50%+ of wins prematurely due to normal volatility! Follow the radar recommendation above."
   }
 }
