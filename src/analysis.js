@@ -984,11 +984,12 @@
 
       // Public market mark candles
       const historyMarks = marketHistory?.symbols?.[sym]?.marks;
-      if (Array.isArray(historyMarks) && opened > 0 && closed >= opened) {
+      const effectiveClose = closed > 0 ? closed : (opened > 0 ? (marketHistory?.nowMs || Date.now()) : 0);
+      if (Array.isArray(historyMarks) && opened > 0 && effectiveClose >= opened) {
         for (const m of historyMarks) {
           const mOpen = num(m[0], 0);
           const mClose = num(m[2], 0);
-          if (mOpen <= closed && mClose >= opened) {
+          if (mOpen <= effectiveClose && mClose >= opened) {
             const high = num(m[4], num(m[3], avgCost));
             const low = num(m[5], num(m[3], avgCost));
             if (isShort && high > avgCost) {
@@ -1105,7 +1106,16 @@
       });
     }
 
-    const rawRec = winStats.p95 > 0 ? Math.round(winStats.p95 / 5) * 5 : 50;
+    let rawRec;
+    if (winStats.p95 > 0) {
+      rawRec = Math.round(winStats.p95 / 5) * 5;
+    } else if (lossStats.p90 > 0) {
+      // Data-driven fallback keyed off trader's actual loss cutoff threshold rather than an ungrounded magic number
+      rawRec = Math.min(85, Math.max(30, Math.round(lossStats.p90 / 5) * 5 + 10));
+    } else {
+      rawRec = 40;
+    }
+
     const recommendedRoe = Math.min(85, Math.max(30, rawRec));
     const conservativeRoe = Math.min(95, Math.max(recommendedRoe + 10, 75));
     const aggressiveRoe = Math.max(20, Math.min(recommendedRoe - 10, 40));
@@ -1125,6 +1135,7 @@
       hasSevereBagHolding,
       worstHistoricalRoeMae: Number(lossStats.max.toFixed(1)),
       isPreciseMae,
+      pendingKlines: !isPreciseMae,
       allStats: {
         median: Number(allStats.p50.toFixed(1)),
         p50: Number(allStats.p50.toFixed(1)),

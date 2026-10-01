@@ -381,6 +381,7 @@
 
   async function fetchBinanceLead(context, options = {}) {
     const portfolioId = context.id;
+    const isSettingPage = context.pageType === "copy-setting";
     const onProgress = typeof options.onProgress === "function" ? options.onProgress : null;
     const onProgressive = typeof options.onProgressive === "function" ? options.onProgressive : null;
     const waitUntilResumed = typeof options.waitUntilResumed === "function" ? options.waitUntilResumed : null;
@@ -434,8 +435,40 @@
     endpointResults.livePositions = live;
     endpointResults.positionHistory = positionHistory;
     const positionData = positionHistory.ok ? positionHistory.data : {};
+    const positionRows = positionHistory.ok ? asArray(positionData.rows) : [];
+    const liveRows = live.ok ? binanceDataList(live.data) : [];
 
-    // Progressive update Stage 2: positions & live exposure ready (Enables Stop Loss Radar in under 1s!)
+    // Extract symbols from positions and live exposure, prioritized by frequency
+    const posSymCounts = new Map();
+    for (const p of positionRows) {
+      if (p.symbol) posSymCounts.set(p.symbol, (posSymCounts.get(p.symbol) || 0) + 1);
+    }
+    for (const p of liveRows) {
+      if (p.symbol) posSymCounts.set(p.symbol, (posSymCounts.get(p.symbol) || 0) + 100);
+    }
+    const positionSymbols = [...posSymCounts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 25)
+      .map(([sym]) => sym);
+
+    const positionTimes = positionRows.map((r) => Number(r.opened || r.openTime)).filter((t) => t > 0);
+    const nowMs = Date.now();
+    const positionStartMs = positionTimes.length ? Math.min(...positionTimes) : nowMs;
+
+    // Concurrently fetch mark candles for position symbols to enable instantaneous, accurate MAE (~200-400ms)
+    const markCandles = (positionSymbols.length && positionStartMs < nowMs)
+      ? await fetchBinanceMarkCandles(positionSymbols, positionStartMs, nowMs, { waitUntilResumed })
+      : { symbols: {}, failed: [] };
+
+    const initialMarketHistory = {
+      nowMs,
+      startMs: positionStartMs,
+      endMs: nowMs,
+      symbols: markCandles.symbols,
+      failed: markCandles.failed
+    };
+
+    // Progressive update Stage 2: positions & real K-line marks ready (Enables Stop Loss Radar in under 1s!)
     onProgressive?.({
       stage: "positions",
       raw: {
@@ -446,11 +479,11 @@
         detail: detailData,
         performanceWindows: {},
         listItem: {},
-        livePositions: live.ok ? binanceDataList(live.data) : [],
-        positionHistory: positionHistory.ok ? asArray(positionData.rows) : [],
+        livePositions: liveRows,
+        positionHistory: positionRows,
         orderHistory: [],
         transferHistory: [],
-        marketHistory: null,
+        marketHistory: initialMarketHistory,
         historyStatus: {
           positionHistory: positionHistory.ok ? {
             total: positionData.total,
@@ -468,7 +501,7 @@
 
     // Concurrently fetch performance windows, orderHistory, and transferHistory
     const [performance, orderHistory, transferHistory] = await Promise.all([
-      fetchBinancePerformanceWindows(portfolioId, detailData, waitUntilResumed),
+      fetchBinancePerformanceWindows(portfolioId, detailData, waitUntilResumed, { isSettingPage }),
       safeFetch("orderHistory", () =>
         fetchBinancePagedDetailed("/bapi/futures/v1/friendly/future/copy-trade/lead-portfolio/order-history", portfolioId, progressFor("orderHistory"), waitUntilResumed)
       ),
@@ -482,6 +515,7 @@
 
     const orderData = orderHistory.ok ? orderHistory.data : {};
     const transferData = transferHistory.ok ? transferHistory.data : {};
+    const orderRows = asArray(orderData.rows);
 
     // Progressive update Stage 3: orders & performance windows ready
     onProgressive?.({
@@ -494,11 +528,11 @@
         detail: detailData,
         performanceWindows: performance.windows,
         listItem: performance.windows["30D"] || performance.windows["365D"] || {},
-        livePositions: live.ok ? binanceDataList(live.data) : [],
-        positionHistory: positionHistory.ok ? asArray(positionData.rows) : [],
-        orderHistory: orderHistory.ok ? asArray(orderData.rows) : [],
-        transferHistory: transferHistory.ok ? asArray(transferData.rows) : [],
-        marketHistory: null,
+        livePositions: liveRows,
+        positionHistory: positionRows,
+        orderHistory: orderRows,
+        transferHistory: asArray(transferData.rows),
+        marketHistory: initialMarketHistory,
         historyStatus: {
           positionHistory: positionHistory.ok ? {
             total: positionData.total,
@@ -535,34 +569,30 @@
     // Funding and mark prices for every symbol the fills and positions touched, from the
     // oldest fill/position to now: what the account earned or paid between a fill and
     // today beyond the fills themselves (src/equity.js), and exact candle MAE for stop-loss radar.
-    const orderRows = asArray(orderData.rows);
-    const positionRows = asArray(positionData.rows);
     const fillTimes = orderRows.map(global.CopyTradingLensPositions.fillTimeOf).filter((time) => time > 0);
-    const positionTimes = positionRows.map((row) => Number(row.opened || row.openTime)).filter((time) => time > 0);
     const allTimes = [...fillTimes, ...positionTimes];
-    const nowMs = Date.now();
     // Symbols held open with no fill in the history are priced too.
     const openSymbols = positionRows.filter((row) => !(Number(row.closed) > 0)).map((row) => row.symbol);
 
-    const symCounts = new Map();
+    const allSymCounts = new Map();
     for (const r of positionRows) {
-      if (r.symbol) symCounts.set(r.symbol, (symCounts.get(r.symbol) || 0) + 1);
+      if (r.symbol) allSymCounts.set(r.symbol, (allSymCounts.get(r.symbol) || 0) + 1);
     }
     for (const o of orderRows) {
-      if (o.symbol) symCounts.set(o.symbol, (symCounts.get(o.symbol) || 0) + 1);
+      if (o.symbol) allSymCounts.set(o.symbol, (allSymCounts.get(o.symbol) || 0) + 1);
     }
     for (const s of openSymbols) {
-      symCounts.set(s, 9999);
+      allSymCounts.set(s, 9999);
     }
-    const prioritizedSymbols = [...symCounts.entries()]
+    const prioritizedSymbols = [...allSymCounts.entries()]
       .sort((a, b) => b[1] - a[1])
       .slice(0, 20)
       .map(([sym]) => sym);
 
     const startMs = allTimes.length ? Math.min(...allTimes) : nowMs;
     const marketHistory = (prioritizedSymbols.length && startMs < nowMs)
-      ? { nowMs, ...(await fetchBinanceMarketHistory(prioritizedSymbols, startMs, nowMs, { waitUntilResumed })) }
-      : { nowMs, startMs: nowMs, endMs: nowMs, symbols: {}, failed: [] };
+      ? { nowMs, ...(await fetchBinanceMarketHistory(prioritizedSymbols, startMs, nowMs, { waitUntilResumed, existingSymbols: initialMarketHistory.symbols })) }
+      : initialMarketHistory;
 
     return {
       id: portfolioId,
@@ -718,17 +748,79 @@
   // symbols are read a few at a time so a trader of hundreds of symbols waits
   // on 429 backoff instead of flooding it.
   const MARKET_HISTORY_CONCURRENCY = 4;
+  const MARK_CANDLES_CONCURRENCY = 6;
 
-  async function fetchBinanceMarketHistory(symbols, startMs, endMs, options = {}) {
+  async function fetchBinanceMarkCandles(symbols, startMs, endMs, options = {}) {
     const waitUntilResumed = typeof options.waitUntilResumed === "function" ? options.waitUntilResumed : null;
     const wanted = Array.from(new Set(asArray(symbols).map(String).filter(Boolean)));
-    const bySymbol = {};
+    const symbolsData = {};
     const failed = [];
     let next = 0;
     const worker = async () => {
       while (next < wanted.length) {
         const symbol = wanted[next];
         next += 1;
+        const encoded = encodeURIComponent(symbol);
+        try {
+          const klines = await fapiPages(
+            (from) => `/fapi/v1/markPriceKlines?symbol=${encoded}&interval=1h&startTime=${from}&endTime=${endMs}&limit=${KLINE_PAGE_LIMIT}`,
+            (row) => Number(row[0]),
+            KLINE_PAGE_LIMIT,
+            Math.floor(startMs / HOUR_MS) * HOUR_MS,
+            endMs,
+            waitUntilResumed
+          );
+          symbolsData[symbol] = {
+            marks: klines.map((row) => [Number(row[0]), Number(row[1]), Number(row[6]), Number(row[4]), Number(row[2]), Number(row[3])])
+              .filter(([openTime, open, closeTime, close]) => openTime > 0 && open > 0 && closeTime > openTime && close > 0)
+          };
+        } catch (error) {
+          failed.push({ symbol, error: error?.message || String(error) });
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(MARK_CANDLES_CONCURRENCY, wanted.length) }, worker));
+    return { symbols: symbolsData, failed };
+  }
+
+  async function fetchBinanceMarketHistory(symbols, startMs, endMs, options = {}) {
+    const waitUntilResumed = typeof options.waitUntilResumed === "function" ? options.waitUntilResumed : null;
+    const existingSymbols = options.existingSymbols || {};
+    const wanted = Array.from(new Set(asArray(symbols).map(String).filter(Boolean)));
+    const bySymbol = { ...existingSymbols };
+    const failed = [];
+    let next = 0;
+    const worker = async () => {
+      while (next < wanted.length) {
+        const symbol = wanted[next];
+        next += 1;
+        const encoded = encodeURIComponent(symbol);
+        const existing = bySymbol[symbol];
+        if (existing?.marks?.length && !existing?.funding) {
+          const result = await safeFetch(`funding:${symbol}`, () =>
+            fapiPages(
+              (from) => `/fapi/v1/fundingRate?symbol=${encoded}&startTime=${from}&endTime=${endMs}&limit=${FUNDING_PAGE_LIMIT}`,
+              (row) => Number(row.fundingTime),
+              FUNDING_PAGE_LIMIT,
+              startMs,
+              endMs,
+              waitUntilResumed
+            )
+          );
+          if (result.ok) {
+            bySymbol[symbol] = {
+              ...existing,
+              funding: asArray(result.data).map((row) => [Number(row.fundingTime), Number(row.fundingRate), Number(row.markPrice)])
+                .filter(([time, rate, mark]) => time > 0 && Number.isFinite(rate) && mark > 0)
+            };
+          } else {
+            failed.push({ symbol, error: result.error });
+          }
+          continue;
+        }
+        if (existing?.marks?.length && existing?.funding?.length) {
+          continue;
+        }
         const result = await safeFetch(`market:${symbol}`, () => fetchBinanceSymbolHistory(symbol, startMs, endMs, { waitUntilResumed }));
         if (result.ok) bySymbol[symbol] = result.data;
         else failed.push({ symbol, error: result.error });
@@ -887,6 +979,7 @@
     fetchLeadData,
     fetchBinanceListPage,
     fetchBinanceMarkPrices,
+    fetchBinanceMarkCandles,
     fetchBinanceMarketHistory
   };
 })(window);

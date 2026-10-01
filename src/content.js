@@ -462,7 +462,10 @@
           h("div", { class: "ctl-advisor-hero-label", text: t("radarRecommendedLabel") }),
           h("div", { class: "ctl-advisor-hero-val" }, [
             h("span", { class: "ctl-advisor-num", text: `${radar.recommendedRoe}%` }),
-            h("span", { class: "ctl-advisor-unit", text: t("radarRoeUnit") })
+            h("span", { class: "ctl-advisor-unit", text: t("radarRoeUnit") }),
+            !radar.isPreciseMae
+              ? h("span", { class: "ctl-streaming-badge", style: "margin-left: 8px; font-size: 13px; vertical-align: middle;", text: t("radarPreciseBadge") })
+              : null
           ]),
           h("div", { class: "ctl-advisor-sub", text: t("radarEquivalentPrice", [radar.dominantLeverage, radar.recommendedPriceDrop]) }),
           h("button", {
@@ -490,7 +493,10 @@
           h("div", { class: "ctl-pillar" }, [
             h("strong", {}, [
               h("span", { text: "🎯 " }),
-              h("span", { text: t("settingValuePropWinTitle", [radar.winRetentionRate]) })
+              h("span", { text: t("settingValuePropWinTitle", [radar.winRetentionRate]) }),
+              !radar.isPreciseMae
+                ? h("span", { class: "ctl-streaming-badge", style: "margin-left: 6px;", text: t("radarPreciseBadge") })
+                : null
             ]),
             h("p", { text: t("settingValuePropWinDesc") })
           ]),
@@ -517,7 +523,12 @@
           ])
         ]) : null,
 
-        radar && !radar.insufficientData ? h("div", { class: "ctl-advisor-range-tip", text: `💡 ${t("radarConservative")}: ${radar.conservativeRoe}% · ${t("badgeMathOptimal")}: ${radar.recommendedRoe}%` }) : null,
+        radar && !radar.insufficientData ? h("div", {
+          class: "ctl-advisor-range-tip",
+          text: radar.isPreciseMae
+            ? `💡 ${t("radarConservative")}: ${radar.conservativeRoe}% · ${t("badgeMathOptimal")}: ${radar.recommendedRoe}%`
+            : `💡 ${t("radarConservative")}: ${radar.conservativeRoe}% · ${t("badgeMathOptimal")}: ${radar.recommendedRoe}% (${t("radarPreciseBadge")})`
+        }) : null,
 
         h("div", { class: "ctl-advisor-footer" }, [
           h("button", {

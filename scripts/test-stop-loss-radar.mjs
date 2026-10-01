@@ -37,6 +37,7 @@ const analysis = sandbox.window.CopyTradingLensAnalysis;
 const providers = sandbox.window.CopyTradingLensProviders;
 assert.ok(typeof analysis.analyzeStopLossRadar === "function", "analyzeStopLossRadar is exported");
 assert.ok(typeof providers.detectLeadPage === "function", "detectLeadPage is exported");
+assert.ok(typeof providers.fetchBinanceMarkCandles === "function", "fetchBinanceMarkCandles is exported");
 
 console.log("=== RUNNING UNIT TESTS FOR STOP LOSS RADAR ===");
 
@@ -70,6 +71,7 @@ console.log("=== RUNNING UNIT TESTS FOR STOP LOSS RADAR ===");
   assert.equal(radar.lossStats.median, 500, "lossStats has median property");
   assert.equal(radar.lossStats.p50, 500, "lossStats has p50 property matching median");
   assert.equal(radar.isPreciseMae, false, "without market candles isPreciseMae is false");
+  assert.equal(radar.pendingKlines, true, "without market candles pendingKlines is true");
   assert.ok(radar.allStats !== undefined, "allStats is defined");
   console.log("PASS: synthetic controlled positions verify MAE and bag holding detection");
 }
@@ -83,7 +85,19 @@ if (fs.existsSync(path.join(cacheDir, "raw_4908633203782592768.json"))) {
   assert.equal(radarXM.dominantLeverage, 5, "玄冥二老 dominant leverage is 5x");
   assert.ok(radarXM.recommendedRoe >= 45 && radarXM.recommendedRoe <= 85, "玄冥二老 recommended stop-loss is bounded in range");
   assert.ok(radarXM.winRetentionRate >= 94, "玄冥二老 win retention rate is >= 94%");
+  assert.equal(radarXM.isPreciseMae, true, "玄冥二老 with marketHistory is precise");
   console.log(`PASS: 玄冥二老 verified (Lev: ${radarXM.dominantLeverage}x, Rec: ${radarXM.recommendedRoe}%, PriceDrop: ${radarXM.recommendedPriceDrop}%, WinRet: ${radarXM.winRetentionRate}%)`);
+}
+
+if (fs.existsSync(path.join(cacheDir, "raw_5075281354358777856.json"))) {
+  const rawAoYing = JSON.parse(fs.readFileSync(path.join(cacheDir, "raw_5075281354358777856.json"), "utf8"));
+  const radarAY = analysis.analyzeStopLossRadar(rawAoYing.positionHistory, rawAoYing.orderHistory, rawAoYing.meta, null);
+
+  assert.equal(radarAY.dominantLeverage, 10, "熬鹰资本 dominant leverage is 10x");
+  assert.equal(radarAY.hasSevereBagHolding, true, "熬鹰资本 flags severe bag holding");
+  assert.equal(radarAY.worstHistoricalRoeMae, 156.7, "熬鹰资本 worst historical drawdown is -156.7% ROE");
+  assert.ok(radarAY.lossStats.p90 > 30, "熬鹰资本 loss P90 reflects deep holding");
+  console.log(`PASS: 熬鹰资本 verified (Lev: ${radarAY.dominantLeverage}x, Rec: ${radarAY.recommendedRoe}%, BagAlert: ${radarAY.hasSevereBagHolding}, WorstDD: -${radarAY.worstHistoricalRoeMae}%)`);
 }
 
 if (fs.existsSync(path.join(cacheDir, "raw_5131925334830383361.json"))) {
