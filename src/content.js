@@ -70,6 +70,9 @@
 
   function paint() {
     if (!run) return clearRoot();
+    if (run.phase === "ready" && run.analysis?.stopLossRadar) {
+      mountInlineSettingHelper(run.analysis.stopLossRadar);
+    }
     if (collapsed) return renderLauncher(run.context);
     if (run.phase === "loading") return renderLoading(run.context);
     if (run.phase === "failed") return renderError(run.error);
@@ -210,6 +213,69 @@
     return cautions;
   }
 
+  function applyStopLossToBinanceInputs(value) {
+    const inputs = Array.from(document.querySelectorAll("input"));
+    const stopLossInputs = inputs.filter((i) => {
+      if (i.placeholder === "0-95") {
+        const p = i.closest("div")?.parentElement?.parentElement?.innerText || "";
+        return /止損|Stop Loss|損切り/i.test(p);
+      }
+      return false;
+    });
+
+    const targets = stopLossInputs.length ? stopLossInputs : inputs.filter((i) => i.placeholder === "0-95");
+    let filled = 0;
+
+    for (const input of targets) {
+      try {
+        const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+        if (nativeSetter) {
+          nativeSetter.call(input, String(value));
+        } else {
+          input.value = String(value);
+        }
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+        input.dispatchEvent(new Event("blur", { bubbles: true }));
+        filled++;
+      } catch (_err) {}
+    }
+    return filled > 0;
+  }
+
+  function mountInlineSettingHelper(radar) {
+    if (!radar || radar.insufficientData) return;
+    const inputs = Array.from(document.querySelectorAll("input"));
+    const targets = inputs.filter((i) => {
+      if (i.placeholder === "0-95") {
+        const p = i.closest("div")?.parentElement?.parentElement?.innerText || "";
+        return /止損|Stop Loss|損切り/i.test(p);
+      }
+      return false;
+    });
+
+    const target = targets[0] || inputs.find((i) => i.placeholder === "0-95");
+    if (!target) return;
+    const container = target.closest(".input") || target.parentElement;
+    if (!container || container.querySelector(".ctl-inline-helper")) return;
+
+    const chip = h("button", {
+      class: "ctl-inline-helper",
+      type: "button",
+      title: t("inlineChipTitle", [radar.recommendedRoe]),
+      onclick: (e) => {
+        e.preventDefault();
+        applyStopLossToBinanceInputs(radar.recommendedRoe);
+        chip.textContent = `✓ ${t("inlineChipApplied", [radar.recommendedRoe])}`;
+        chip.classList.add("is-applied");
+      }
+    }, [
+      h("span", { text: `⚡ CopyLens 推薦: ${radar.recommendedRoe}% (點擊填入)` })
+    ]);
+
+    container.appendChild(chip);
+  }
+
   function renderStopLossRadar(radar) {
     if (!radar || radar.insufficientData) return null;
     const hasBag = radar.hasSevereBagHolding;
@@ -227,7 +293,37 @@
             h("span", { class: "ctl-radar-number", text: `${radar.recommendedRoe}%` }),
             h("span", { class: "ctl-radar-unit", text: t("radarRoeUnit") })
           ]),
-          h("div", { class: "ctl-radar-sub", text: t("radarEquivalentPrice", [radar.dominantLeverage, radar.recommendedPriceDrop]) })
+          h("div", { class: "ctl-radar-sub", text: t("radarEquivalentPrice", [radar.dominantLeverage, radar.recommendedPriceDrop]) }),
+          h("div", { class: "ctl-radar-direct-hint", text: t("radarDirectInputHint", [radar.recommendedRoe]) }),
+          h("button", {
+            class: "ctl-radar-fill-btn",
+            type: "button",
+            onclick: (e) => {
+              const btn = e.currentTarget;
+              const filled = applyStopLossToBinanceInputs(radar.recommendedRoe);
+              if (filled) {
+                btn.textContent = `✓ ${t("inlineChipApplied", [radar.recommendedRoe])}`;
+                btn.classList.add("is-applied");
+                setTimeout(() => {
+                  btn.textContent = `⚡ ${t("btnApplyToBinanceForm", [radar.recommendedRoe])}`;
+                  btn.classList.remove("is-applied");
+                }, 2500);
+              } else {
+                navigator.clipboard?.writeText?.(String(radar.recommendedRoe));
+                btn.textContent = `✓ ${t("btnCopiedToClipboard", [radar.recommendedRoe])}`;
+                btn.classList.add("is-applied");
+                setTimeout(() => {
+                  btn.textContent = `📋 ${t("btnCopyToClipboard", [radar.recommendedRoe])}`;
+                  btn.classList.remove("is-applied");
+                }, 2500);
+              }
+            }
+          }, [
+            h("span", { text: location.href.includes("copy-setting")
+              ? `⚡ ${t("btnApplyToBinanceForm", [radar.recommendedRoe])}`
+              : `📋 ${t("btnCopyToClipboard", [radar.recommendedRoe])}`
+            })
+          ])
         ]),
         h("div", { class: "ctl-radar-grid" }, [
           h("div", { class: "ctl-radar-stat" }, [

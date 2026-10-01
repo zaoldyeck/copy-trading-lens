@@ -15,8 +15,10 @@ function loadScript(filePath, sandbox) {
 const sandbox = {
   window: {},
   document: {
-    createElement: () => ({ setAttribute: () => {}, appendChild: () => {} })
+    createElement: () => ({ setAttribute: () => {}, appendChild: () => {} }),
+    querySelectorAll: () => []
   },
+  URL: globalThis.URL,
   console
 };
 sandbox.global = sandbox.window;
@@ -29,9 +31,12 @@ loadScript("src/positions.js", sandbox);
 loadScript("src/style.js", sandbox);
 loadScript("src/equity.js", sandbox);
 loadScript("src/analysis.js", sandbox);
+loadScript("src/providers.js", sandbox);
 
 const analysis = sandbox.window.CopyTradingLensAnalysis;
+const providers = sandbox.window.CopyTradingLensProviders;
 assert.ok(typeof analysis.analyzeStopLossRadar === "function", "analyzeStopLossRadar is exported");
+assert.ok(typeof providers.detectLeadPage === "function", "detectLeadPage is exported");
 
 console.log("=== RUNNING UNIT TESTS FOR STOP LOSS RADAR ===");
 
@@ -87,6 +92,27 @@ if (fs.existsSync(path.join(cacheDir, "raw_5131925334830383361.json"))) {
   assert.ok(radarHai.recommendedRoe >= 50 && radarHai.recommendedRoe <= 75, "星辰社区-海 recommended stop loss is ~55-75% ROE");
   assert.ok(radarHai.winRetentionRate >= 93, "星辰社区-海 win retention rate >= 93%");
   console.log(`PASS: 星辰社区-海 verified (Lev: ${radarHai.dominantLeverage}x, Rec: ${radarHai.recommendedRoe}%, BagAlert: ${radarHai.hasSevereBagHolding}, WorstDD: -${radarHai.worstHistoricalRoeMae}%)`);
+}
+
+// 4. Binance copy-setting URL detection test
+{
+  // Test direct copy mode
+  const directSetting = providers.detectLeadPage("https://www.binance.com/zh-TC/copy-trading/copy-setting?portfolioId=5131925334830383361");
+  assert.equal(directSetting?.platform, "Binance");
+  assert.equal(directSetting?.id, "5131925334830383361");
+  assert.equal(directSetting?.pageType, "copy-setting");
+
+  // Test edit mode with performance entry resource mock
+  sandbox.performance = {
+    getEntriesByType: (type) => type === "resource" ? [
+      { name: "https://www.binance.com/bapi/futures/v1/private/future/copy-trade/copy-portfolio/get-limit-info?leadPortfolioId=4908633203782592768" }
+    ] : []
+  };
+  const editSetting = providers.detectLeadPage("https://www.binance.com/zh-TC/copy-trading/copy-setting?mode=edit&portfolioId=5250117517276295937");
+  assert.equal(editSetting?.platform, "Binance");
+  assert.equal(editSetting?.id, "4908633203782592768");
+  assert.equal(editSetting?.pageType, "copy-setting");
+  console.log("PASS: Binance copy-setting URL and lead portfolio detection verified for both direct and edit modes");
 }
 
 console.log("\nALL STOP LOSS RADAR UNIT TESTS PASSED SUCCESSFULLY!");

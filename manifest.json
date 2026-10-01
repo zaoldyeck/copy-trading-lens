@@ -31,6 +31,8 @@
       "matches": [
         "https://www.binance.com/copy-trading/lead-details/*",
         "https://www.binance.com/*/copy-trading/lead-details/*",
+        "https://www.binance.com/copy-trading/copy-setting*",
+        "https://www.binance.com/*/copy-trading/copy-setting*",
         "https://www.okx.com/copy-trading/account/*",
         "https://www.okx.com/*/copy-trading/account/*"
       ],

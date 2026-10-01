@@ -816,10 +816,28 @@
     "message": "推薦填入「倉位止損」"
   },
   "radarRoeUnit": {
-    "message": "保證金 ROE %"
+    "message": "(保證金虧損比率 ROE)"
   },
   "radarEquivalentPrice": {
     "message": "在 {0}x 槓桿下，相當於允許標的價格逆向波動 {1}%"
+  },
+  "radarDirectInputHint": {
+    "message": "在幣安「倉位止損」輸入框直接填入數值 {0} 即可"
+  },
+  "btnApplyToBinanceForm": {
+    "message": "一鍵填入幣安止損框 ({0}%)"
+  },
+  "btnCopyToClipboard": {
+    "message": "複製推薦止損值 ({0}%)"
+  },
+  "btnCopiedToClipboard": {
+    "message": "已複製 {0}% 至剪貼簿"
+  },
+  "inlineChipTitle": {
+    "message": "點擊自動填入 CopyLens 推薦止損值 {0}%"
+  },
+  "inlineChipApplied": {
+    "message": "已成功填入 {0}%"
   },
   "radarWinRetention": {
     "message": "贏單保留率"

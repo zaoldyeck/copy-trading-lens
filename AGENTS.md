@@ -20,3 +20,9 @@
 4. **Testing & Validation**:
    - Run `npm test` and `npm run validate` before any delivery. All 13 test suites must pass.
    - Commit locally; only execute `git push` once all tasks and tests are 100% complete and closed.
+
+5. **Binance Copy Setting Page Support & Input Injection**:
+   - URL routes `https://www.binance.com/*/copy-trading/copy-setting*` are matched in `manifest.json`.
+   - In `mode=copy`, `portfolioId` query param directly carries the lead trader ID.
+   - In `mode=edit`, `portfolioId` query param is the copier's copy portfolio ID; the true lead trader ID is resolved via network resource entries (`leadPortfolioId` or `lead-portfolio/detail?portfolioId=`) and React fiber props.
+   - Form injection must use `Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set` to trigger React's synthetic input, change, and blur handlers.

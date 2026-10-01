@@ -816,10 +816,28 @@
     "message": "推奨ポジション損切り設定"
   },
   "radarRoeUnit": {
-    "message": "証拠金 ROE %"
+    "message": "(証拠金損失率 ROE)"
   },
   "radarEquivalentPrice": {
     "message": "{0}倍レバレッジ時、原資産の逆行許容幅 {1}% に相当"
+  },
+  "radarDirectInputHint": {
+    "message": "バイナンスの「ポジション損切り」に直接 {0} を入力"
+  },
+  "btnApplyToBinanceForm": {
+    "message": "損切り枠に自動入力 ({0}%)"
+  },
+  "btnCopyToClipboard": {
+    "message": "推奨損切り値をコピー ({0}%)"
+  },
+  "btnCopiedToClipboard": {
+    "message": "{0}% をコピーしました"
+  },
+  "inlineChipTitle": {
+    "message": "クリックして CopyLens 推奨損切り値 {0}% を自動入力"
+  },
+  "inlineChipApplied": {
+    "message": "{0}% を入力しました"
   },
   "radarWinRetention": {
     "message": "勝トレード保持率"

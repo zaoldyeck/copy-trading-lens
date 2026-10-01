@@ -671,15 +671,64 @@
     };
   }
 
+  function findLeadPortfolioIdOnSettingPage(parsed = new URL(location.href)) {
+    const mode = parsed.searchParams.get("mode");
+    const paramId = parsed.searchParams.get("portfolioId");
+
+    // In copy mode (not edit), searchParams portfolioId is the lead trader's portfolio ID directly
+    if (mode !== "edit" && paramId) {
+      return paramId;
+    }
+
+    // In edit mode (or fallback), check performance resource entries for leadPortfolioId or lead-portfolio/detail
+    try {
+      if (typeof performance !== "undefined" && typeof performance.getEntriesByType === "function") {
+        const resources = performance.getEntriesByType("resource");
+        for (let i = resources.length - 1; i >= 0; i--) {
+          const entryUrl = resources[i].name || "";
+          const match1 = entryUrl.match(/[?&]leadPortfolioId=(\d+)/);
+          if (match1) return match1[1];
+          const match2 = entryUrl.match(/\/lead-portfolio\/detail\?portfolioId=(\d+)/);
+          if (match2) return match2[1];
+        }
+      }
+    } catch (_e) {}
+
+    // Check React fibers in DOM if available
+    try {
+      if (typeof document !== "undefined") {
+        const all = document.querySelectorAll("*");
+        for (const el of all) {
+          const fiberKey = Object.keys(el).find((k) => k.startsWith("__reactFiber"));
+          if (fiberKey) {
+            let fiber = el[fiberKey];
+            let depth = 0;
+            while (fiber && depth < 20) {
+              if (fiber.memoizedProps?.leadPortfolioId) return String(fiber.memoizedProps.leadPortfolioId);
+              fiber = fiber.return;
+              depth++;
+            }
+          }
+        }
+      }
+    } catch (_e) {}
+
+    return paramId;
+  }
+
   function detectLeadPage(url = location.href) {
     const parsed = new URL(url);
     if (parsed.hostname === "www.binance.com") {
       const match = parsed.pathname.match(/\/copy-trading\/lead-details\/(\d+)/);
-      if (match) return { platform: "Binance", id: match[1] };
+      if (match) return { platform: "Binance", id: match[1], pageType: "lead-details" };
+      if (parsed.pathname.includes("/copy-trading/copy-setting")) {
+        const id = findLeadPortfolioIdOnSettingPage(parsed);
+        if (id) return { platform: "Binance", id, pageType: "copy-setting" };
+      }
     }
     if (parsed.hostname === "www.okx.com") {
       const match = parsed.pathname.match(/\/copy-trading\/account\/([A-Za-z0-9_-]+)/);
-      if (match) return { platform: "OKX", id: match[1] };
+      if (match) return { platform: "OKX", id: match[1], pageType: "lead-details" };
     }
     return null;
   }

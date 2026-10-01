@@ -816,10 +816,28 @@
     "message": "推荐填入「仓位止损」"
   },
   "radarRoeUnit": {
-    "message": "保证金 ROE %"
+    "message": "(保证金亏损比率 ROE)"
   },
   "radarEquivalentPrice": {
     "message": "在 {0}x 杠杆下，相当于允许标的价格逆向波动 {1}%"
+  },
+  "radarDirectInputHint": {
+    "message": "在币安「仓位止损」输入框直接填入数值 {0} 即可"
+  },
+  "btnApplyToBinanceForm": {
+    "message": "一键填入币安止损框 ({0}%)"
+  },
+  "btnCopyToClipboard": {
+    "message": "复制推荐止损值 ({0}%)"
+  },
+  "btnCopiedToClipboard": {
+    "message": "已复制 {0}% 至剪贴板"
+  },
+  "inlineChipTitle": {
+    "message": "点击自动填入 CopyLens 推荐止损值 {0}%"
+  },
+  "inlineChipApplied": {
+    "message": "已成功填入 {0}%"
   },
   "radarWinRetention": {
     "message": "赢单保留率"
