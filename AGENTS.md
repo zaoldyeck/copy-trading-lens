@@ -31,10 +31,16 @@
    - Network reads must never force users to wait for the entire depth (65+ pages of order history) before rendering.
    - `fetchBinanceLead` emits staged events via `onProgressive`:
      - Stage 1 (~150ms): `detail` metadata & live exposure.
-     - Stage 2 (~300-500ms): `positionHistory` returns, immediately enabling Stop-Loss Radar calculation and win/loss stats in under 1 second.
-     - Stage 3 (~1-10s): background `orderHistory`, `transferHistory`, and `marketHistory` finish and seamlessly update strategy classification (Martingale/Grid), adverse add rate, and biggest bet without blocking the UI.
+     - Stage 2 (~300-500ms): `positionHistory` returns AND concurrently triggers `fetchBinanceMarkCandles` across position symbols. This provides true empirical 1-hour K-line Maximum Adverse Excursion (MAE) in under 600ms without blocking on order history or using static 50% fallbacks.
+     - Stage 3 (~1-10s): background `orderHistory`, `transferHistory`, and funding rates finish and seamlessly update strategy classification (Martingale/Grid), adverse add rate, and biggest bet without blocking the UI.
 
 7. **Dedicated Copy Setting Advisor View (`src/content.js`)**:
    - On `copy-setting` pages (`context.pageType === "copy-setting"`), the overlay defaults to a compact, non-intrusive **Stop-Loss Advisor Card** (`ctl-setting-card`) instead of the full dashboard.
    - Provides instant decision value: Recommended ROE %, Equivalent underlying price drop %, Win retention %, Worst historical drawdown cut-off, and 1-Click React input injection.
    - Preserves an explicit toggle button `[🔍 查看帶單員完整分析報告 ▾]` so users can expand to the full report on demand, and return at will.
+
+8. **Scale-in & Martingale Mechanics in Binance Copy Stop-Loss**:
+   - Binance's position risk stop-loss is evaluated on **aggregate position margin ROE %**, NOT initial placement price.
+   - When a trader scales in / averages down (e.g. DCA / Martingale like 玄冥二老), the position's break-even price moves closer to market price, which **dilutes and improves** current floating ROE % ($|\Delta P| / \text{Margin}$).
+   - This mathematically **widens / pushes out** the stop-loss price threshold (allowing more room for mean reversion) rather than triggering early stop-outs.
+   - Stop-Loss Radar calculates MAE across the entire position life cycle ($[t_{\text{opened}}, t_{\text{closed}}]$) over real mark candles to ensure $L^*$ accommodates historical scale-in excursions without premature liquidation.
