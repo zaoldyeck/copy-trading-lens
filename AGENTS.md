@@ -44,3 +44,8 @@
    - When a trader scales in / averages down (e.g. DCA / Martingale like 玄冥二老), the position's break-even price moves closer to market price, which **dilutes and improves** current floating ROE % ($|\Delta P| / \text{Margin}$).
    - This mathematically **widens / pushes out** the stop-loss price threshold (allowing more room for mean reversion) rather than triggering early stop-outs.
    - Stop-Loss Radar calculates MAE across the entire position life cycle ($[t_{\text{opened}}, t_{\text{closed}}]$) over real mark candles to ensure $L^*$ accommodates historical scale-in excursions without premature liquidation.
+
+9. **Binance Copy-Trading Stop-Loss Execution & UI Invariants**:
+   - **Backend Daemon vs Exchange Book**: Setting 「倉位止損 (0-95%)」 (`stopLostRate`) is handled by Binance's copy-trade risk daemon, NOT by submitting a Stop-Market conditional order to the futures matching engine. Thus, `/order/open-orders` returns empty and the position table `止盈/止損` column displays `-- / --`.
+   - **「平倉價格」UI Misleading Translation**: In Binance's Traditional Chinese UI, the column titled 「平倉價格」 maps directly to `liqPrice` (Liquidation Price), not stop-loss trigger price. On cross margin with large balances, this remains virtually static and far from spot price.
+   - **Continuous ROE Evaluation**: The risk daemon continuously checks floating $\text{ROE} = \text{Unrealized PnL} / \text{Margin}$ against the dynamic weighted average entry price (`entryPrice`). As the lead trader scales in, `entryPrice` updates dynamically. No static dollar price is ever anchored or displayed on screen.

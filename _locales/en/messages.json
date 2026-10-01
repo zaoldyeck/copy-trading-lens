@@ -855,7 +855,7 @@
     "message": "⚠️ Warning: Trader had historical position drawdown reaching -{0}%! Strictly recommend stop-loss to avoid blowups."
   },
   "radarBinanceRoeNotice": {
-    "message": "💡 Binance Tip: 'Position Stop-Loss (0-95%)' input is Margin ROE %, NOT price change %. Setting 5-10% kills 50%+ of wins prematurely due to normal volatility! Follow the radar recommendation above."
+    "message": "💡 Binance Tip: 'Position Stop-Loss (0-95%)' input is Margin ROE %, NOT price change %. Setting 5-10% kills 50%+ of wins prematurely due to normal volatility! Follow the radar recommendation above. (Note: Stop-loss is triggered by Binance's backend ROE daemon rather than exchange book orders; table shows --/--, and blended entry price updates dynamically on scale-ins.)"
   },
   "settingAdvisorTitle": {
     "message": "CopyLens Smart Stop-Loss Advisor"
