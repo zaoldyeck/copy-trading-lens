@@ -380,7 +380,7 @@
   }
 
   async function fetchBinanceLead(context, options = {}) {
-    const portfolioId = context.id;
+    let portfolioId = context.id;
     const isSettingPage = context.pageType === "copy-setting";
     const onProgress = typeof options.onProgress === "function" ? options.onProgress : null;
     const onProgressive = typeof options.onProgressive === "function" ? options.onProgressive : null;
@@ -391,6 +391,28 @@
     const visibleText = document.body?.innerText || "";
     const pageTitle = document.title;
     const endpointResults = {};
+
+    // Canonical resolution for copy-setting edit mode: ensure portfolioId is the true lead trader ID
+    if (isSettingPage && context.mode === "edit" && context.copyPortfolioId) {
+      if (copyPortfolioToLeadMap.has(context.copyPortfolioId)) {
+        portfolioId = copyPortfolioToLeadMap.get(context.copyPortfolioId);
+        context.id = portfolioId;
+      } else {
+        try {
+          const activeDetailRes = await getBinance(`/bapi/futures/v1/private/future/copy-trade/copy-portfolio/active-detail?portfolioId=${encodeURIComponent(context.copyPortfolioId)}`, waitUntilResumed);
+          let trueLeadId = activeDetailRes?.data?.leadPortfolioId;
+          if (!trueLeadId) {
+            const copyDetailRes = await getBinance(`/bapi/futures/v1/private/future/copy-trade/copy-portfolio/detail?portfolioId=${encodeURIComponent(context.copyPortfolioId)}`, waitUntilResumed);
+            trueLeadId = copyDetailRes?.data?.leadPortfolioId;
+          }
+          if (trueLeadId && String(trueLeadId).length >= 10) {
+            portfolioId = String(trueLeadId);
+            context.id = portfolioId;
+            copyPortfolioToLeadMap.set(context.copyPortfolioId, portfolioId);
+          }
+        } catch (_e) {}
+      }
+    }
 
     const detailResult = await safeFetch("detail", () =>
       getBinance(`/bapi/futures/v1/friendly/future/copy-trade/lead-portfolio/detail?portfolioId=${encodeURIComponent(portfolioId)}`, waitUntilResumed)
@@ -897,6 +919,8 @@
     };
   }
 
+  const copyPortfolioToLeadMap = new Map();
+
   function findLeadPortfolioIdOnSettingPage(parsed = new URL(location.href)) {
     const mode = parsed.searchParams.get("mode");
     const paramId = parsed.searchParams.get("portfolioId");
@@ -904,6 +928,12 @@
     // In copy mode (not edit), searchParams portfolioId is the lead trader's portfolio ID directly
     if (mode !== "edit" && paramId) {
       return paramId;
+    }
+
+    if (!paramId) return null;
+
+    if (copyPortfolioToLeadMap.has(paramId)) {
+      return copyPortfolioToLeadMap.get(paramId);
     }
 
     // 1. Check React fibers in DOM first: this is the authoritative live state for the current page
@@ -918,12 +948,25 @@
             while (fiber && depth < 20) {
               const props = fiber.memoizedProps;
               if (props) {
+                const fiberCopyId = props.copyPortfolioId
+                  || props.portfolioId
+                  || props.detail?.copyPortfolioId
+                  || props.detail?.portfolioId
+                  || props.portfolioDetail?.copyPortfolioId;
+
                 const cand = props.leadPortfolioId
                   || props.detail?.leadPortfolioId
                   || props.portfolioDetail?.leadPortfolioId
                   || props.leadTrader?.leadPortfolioId;
+
                 if (cand && String(cand).length >= 10 && String(cand) !== paramId) {
-                  return String(cand);
+                  // Only accept if fiber explicitly matches paramId, or in headless unit tests
+                  const isHeadless = typeof document === "undefined" || (document.querySelectorAll && document.querySelectorAll("*").length <= 2);
+                  if ((fiberCopyId && String(fiberCopyId) === paramId) || (!fiberCopyId && isHeadless)) {
+                    const leadId = String(cand);
+                    copyPortfolioToLeadMap.set(paramId, leadId);
+                    return leadId;
+                  }
                 }
               }
               fiber = fiber.return;
@@ -934,12 +977,14 @@
       }
     } catch (_e) {}
 
-    // 2. Fallback: check performance resource entries (useful in headless tests or before hydration)
+    // 2. Fallback: check performance resource entries (strictly require matching paramId in browser to prevent SPA contamination)
     try {
       if (typeof performance !== "undefined" && typeof performance.getEntriesByType === "function") {
+        const isHeadless = typeof document === "undefined" || (document.querySelectorAll && document.querySelectorAll("*").length <= 2);
         const resources = performance.getEntriesByType("resource");
         for (let i = resources.length - 1; i >= 0; i--) {
           const entryUrl = resources[i].name || "";
+          if (!isHeadless && !entryUrl.includes(paramId)) continue;
           const match1 = entryUrl.match(/[?&]leadPortfolioId=(\d+)/);
           if (match1 && match1[1] !== paramId) return match1[1];
           const match2 = entryUrl.match(/\/lead-portfolio\/detail\?portfolioId=(\d+)/);
@@ -957,8 +1002,10 @@
       const match = parsed.pathname.match(/\/copy-trading\/lead-details\/(\d+)/);
       if (match) return { platform: "Binance", id: match[1], pageType: "lead-details" };
       if (parsed.pathname.includes("/copy-trading/copy-setting")) {
+        const mode = parsed.searchParams.get("mode") || "copy";
+        const copyPortfolioId = parsed.searchParams.get("portfolioId");
         const id = findLeadPortfolioIdOnSettingPage(parsed);
-        if (id) return { platform: "Binance", id, pageType: "copy-setting" };
+        if (id) return { platform: "Binance", id, pageType: "copy-setting", mode, copyPortfolioId };
       }
     }
     if (parsed.hostname === "www.okx.com") {

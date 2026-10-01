@@ -158,7 +158,10 @@
   function metricLoadingCard(label, hint = "") {
     return h("div", { class: "ctl-metric is-streaming-metric" }, [
       h("span", { text: label }),
-      h("strong", { class: "ctl-loading-text", text: t("metricLoadingText") }),
+      h("strong", { class: "ctl-loading-text" }, [
+        h("span", { class: "ctl-mini-spinner" }),
+        h("span", { text: t("metricLoadingText") })
+      ]),
       hint ? h("small", { text: hint }) : null
     ]);
   }
@@ -299,7 +302,10 @@
       h("div", { class: "ctl-radar-header" }, [
         h("h3", { text: t("sectionStopLossRadar") }),
         !radar.isPreciseMae
-          ? h("span", { class: "ctl-radar-badge ctl-streaming-badge", text: t("radarPreciseBadge") })
+          ? h("span", { class: "ctl-radar-badge ctl-streaming-badge" }, [
+              h("span", { class: "ctl-spin-icon", style: "margin-right: 4px;", text: "↻" }),
+              h("span", { text: t("radarPreciseBadge").replace(/\s*↻\s*/, "") })
+            ])
           : null,
         hasBag
           ? h("span", { class: "ctl-radar-badge is-danger", text: t("badgeBagHoldingAlert") })
@@ -421,17 +427,21 @@
     return t("payoffNoLosses", [summary.closedTrades]);
   }
 
-  function stageBannerContent(stage) {
-    if (stage === "detail") {
-      return t("streamingBanner", [t("stageLoadedDetail"), t("stageLoadingPositions")]);
-    }
+  function renderStreamingBanner(stage) {
+    let loaded = t("stageLoadedDetail");
+    let loading = t("stageLoadingPositions");
     if (stage === "positions") {
-      return t("streamingBanner", [t("stageLoadedPositions"), t("stageLoadingOrders")]);
+      loaded = t("stageLoadedPositions");
+      loading = t("stageLoadingOrders");
+    } else if (stage === "orders") {
+      loaded = t("stageLoadedOrders");
+      loading = t("stageLoadingMarket");
     }
-    if (stage === "orders") {
-      return t("streamingBanner", [t("stageLoadedOrders"), t("stageLoadingMarket")]);
-    }
-    return t("streamingBanner", [t("stageLoadedDetail"), t("stageLoadingPositions")]);
+    return h("div", { class: "ctl-streaming-banner", title: t("streamingBanner", [loaded, loading]) }, [
+      h("span", { text: `⚡ ${loaded} ｜ ` }),
+      h("span", { class: "ctl-spin-icon", style: "margin-right: 4px;", text: "↻" }),
+      h("span", { text: `${loading}...` })
+    ]);
   }
 
   function renderSettingAdvisor(context, raw, analysis, isStreaming) {
@@ -455,7 +465,7 @@
         ]),
 
         isStreaming
-          ? h("div", { class: "ctl-streaming-banner", text: stageBannerContent(run?.streamingStage) })
+          ? renderStreamingBanner(run?.streamingStage)
           : null,
 
         radar && !radar.insufficientData ? h("div", { class: "ctl-advisor-hero" }, [
@@ -464,7 +474,10 @@
             h("span", { class: "ctl-advisor-num", text: `${radar.recommendedRoe}%` }),
             h("span", { class: "ctl-advisor-unit", text: t("radarRoeUnit") }),
             !radar.isPreciseMae
-              ? h("span", { class: "ctl-streaming-badge", style: "margin-left: 8px; font-size: 13px; vertical-align: middle;", text: t("radarPreciseBadge") })
+              ? h("span", { class: "ctl-streaming-badge", style: "margin-left: 8px; font-size: 13px; vertical-align: middle;" }, [
+                  h("span", { class: "ctl-spin-icon", style: "margin-right: 4px;", text: "↻" }),
+                  h("span", { text: t("radarPreciseBadge").replace(/\s*↻\s*/, "") })
+                ])
               : null
           ]),
           h("div", { class: "ctl-advisor-sub", text: t("radarEquivalentPrice", [radar.dominantLeverage, radar.recommendedPriceDrop]) }),
@@ -495,7 +508,10 @@
               h("span", { text: "🎯 " }),
               h("span", { text: t("settingValuePropWinTitle", [radar.winRetentionRate]) }),
               !radar.isPreciseMae
-                ? h("span", { class: "ctl-streaming-badge", style: "margin-left: 6px;", text: t("radarPreciseBadge") })
+                ? h("span", { class: "ctl-streaming-badge", style: "margin-left: 6px;" }, [
+                    h("span", { class: "ctl-spin-icon", style: "margin-right: 4px;", text: "↻" }),
+                    h("span", { text: t("radarPreciseBadge").replace(/\s*↻\s*/, "") })
+                  ])
                 : null
             ]),
             h("p", { text: t("settingValuePropWinDesc") })
@@ -512,7 +528,10 @@
               h("span", { text: "📊 " }),
               h("span", { text: t("settingValuePropStatsTitle") }),
               !radar.isPreciseMae
-                ? h("span", { class: "ctl-streaming-badge", style: "margin-left: 6px;", text: t("radarPreciseBadge") })
+                ? h("span", { class: "ctl-streaming-badge", style: "margin-left: 6px;" }, [
+                    h("span", { class: "ctl-spin-icon", style: "margin-right: 4px;", text: "↻" }),
+                    h("span", { text: t("radarPreciseBadge").replace(/\s*↻\s*/, "") })
+                  ])
                 : null
             ]),
             h("p", {
@@ -524,11 +543,14 @@
         ]) : null,
 
         radar && !radar.insufficientData ? h("div", {
-          class: "ctl-advisor-range-tip",
-          text: radar.isPreciseMae
-            ? `💡 ${t("radarConservative")}: ${radar.conservativeRoe}% · ${t("badgeMathOptimal")}: ${radar.recommendedRoe}%`
-            : `💡 ${t("radarConservative")}: ${radar.conservativeRoe}% · ${t("badgeMathOptimal")}: ${radar.recommendedRoe}% (${t("radarPreciseBadge")})`
-        }) : null,
+          class: "ctl-advisor-range-tip"
+        }, radar.isPreciseMae ? [
+          h("span", { text: `💡 ${t("radarConservative")}: ${radar.conservativeRoe}% · ${t("badgeMathOptimal")}: ${radar.recommendedRoe}%` })
+        ] : [
+          h("span", { text: `💡 ${t("radarConservative")}: ${radar.conservativeRoe}% · ${t("badgeMathOptimal")}: ${radar.recommendedRoe}% (` }),
+          h("span", { class: "ctl-spin-icon", style: "margin-right: 2px;", text: "↻" }),
+          h("span", { text: `${t("radarPreciseBadge").replace(/\s*↻\s*/, "")})` })
+        ]) : null,
 
         h("div", { class: "ctl-advisor-footer" }, [
           h("button", {
@@ -565,7 +587,7 @@
           }
         }, t("btnReturnToAdvisor")) : null,
         isStreaming
-          ? h("div", { class: "ctl-streaming-banner", text: stageBannerContent(run?.streamingStage) })
+          ? renderStreamingBanner(run?.streamingStage)
           : null,
         h("header", { class: "ctl-header" }, [
           h("div", {}, [
@@ -585,7 +607,10 @@
           h("span", { text: strategy.family })
         ]),
         (strategy.labels?.length || verdict.momentumStatus || (isStreaming && !orders.openOrders)) ? h("div", { class: "ctl-tags" }, [
-          ...(isStreaming && !orders.openOrders ? [h("span", { class: "ctl-tag ctl-streaming-badge", text: `↻ ${t("streamingStrategyLoading")}` })] : []),
+          ...(isStreaming && !orders.openOrders ? [h("span", { class: "ctl-tag ctl-streaming-badge" }, [
+            h("span", { class: "ctl-spin-icon", style: "margin-right: 4px;", text: "↻" }),
+            h("span", { text: t("streamingStrategyLoading").replace(/\s*↻\s*/, "") })
+          ])] : []),
           ...(verdict.momentumStatus === "active" ? [h("span", { class: "ctl-tag is-active-momentum", text: t("badgeActiveMomentum") })] : []),
           ...(verdict.momentumStatus === "stagnant" ? [h("span", { class: "ctl-tag is-stagnant", text: t("badgeStagnant") })] : []),
           ...(verdict.momentumStatus === "drawdown" ? [h("span", { class: "ctl-tag is-drawdown", text: t("badgeInDrawdown") })] : []),
@@ -741,10 +766,41 @@
     }
   }
 
-  function scheduleRouteCheck() {
+  let lastKnownHref = location.href;
+
+  function scheduleRouteCheck(delay = 80) {
     clearTimeout(routeTimer);
-    routeTimer = setTimeout(() => runAnalysis(false), 350);
+    routeTimer = setTimeout(() => {
+      runAnalysis(false);
+    }, delay);
   }
+
+  // Intercept Next.js / SPA client-side routing via pushState & replaceState
+  try {
+    const originalPushState = history.pushState;
+    if (typeof originalPushState === "function") {
+      history.pushState = function (...args) {
+        const result = originalPushState.apply(this, args);
+        if (location.href !== lastKnownHref) {
+          lastKnownHref = location.href;
+          scheduleRouteCheck(50);
+        }
+        return result;
+      };
+    }
+
+    const originalReplaceState = history.replaceState;
+    if (typeof originalReplaceState === "function") {
+      history.replaceState = function (...args) {
+        const result = originalReplaceState.apply(this, args);
+        if (location.href !== lastKnownHref) {
+          lastKnownHref = location.href;
+          scheduleRouteCheck(50);
+        }
+        return result;
+      };
+    }
+  } catch (_e) {}
 
   // Tell the service worker a content script just loaded. In an unpacked build
   // that is what triggers the stale-build check (see src/background.js); in a
@@ -755,7 +811,22 @@
     // Extension context can be invalidated mid-reload; nothing to recover.
   }
 
-  window.addEventListener("popstate", scheduleRouteCheck);
-  setInterval(scheduleRouteCheck, 1500);
+  window.addEventListener("popstate", () => {
+    lastKnownHref = location.href;
+    scheduleRouteCheck(50);
+  });
+  window.addEventListener("hashchange", () => {
+    lastKnownHref = location.href;
+    scheduleRouteCheck(50);
+  });
+
+  // Fast background polling ticker to detect URL changes that might bypass pushState
+  setInterval(() => {
+    if (location.href !== lastKnownHref) {
+      lastKnownHref = location.href;
+      scheduleRouteCheck(50);
+    }
+  }, 250);
+
   runAnalysis(false);
 })();

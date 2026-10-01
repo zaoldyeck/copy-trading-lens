@@ -419,7 +419,10 @@
           h("p", { class: "ctl-pos-subtitle-note", text: t("posLoadingHint") })
         ]),
         h("div", { class: "ctl-pos-actions" }, [
-          h("span", { class: "ctl-pos-stamp ctl-pos-breathing", text: progressLine() }),
+          h("span", { class: "ctl-pos-stamp ctl-pos-breathing" }, [
+            h("span", { class: "ctl-spin-icon", style: "margin-right: 5px;", text: "↻" }),
+            h("span", { text: progressLine() })
+          ]),
           h("button", { class: "ctl-pos-btn is-ghost", type: "button", onclick: restoreOriginal }, t("posRestoreOriginal"))
         ])
       ]),

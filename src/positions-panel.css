@@ -384,9 +384,21 @@
   50% { opacity: 0.9; }
 }
 
+.ctl-spin-icon {
+  display: inline-block;
+  animation: ctl-pos-spin 1s linear infinite;
+  transform-origin: center center;
+  line-height: 1;
+}
+
+@keyframes ctl-pos-spin {
+  to { transform: rotate(360deg); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ctl-pos-skeleton-row,
-  .ctl-pos-breathing {
+  .ctl-pos-breathing,
+  .ctl-spin-icon {
     animation: none;
     opacity: 0.6;
   }

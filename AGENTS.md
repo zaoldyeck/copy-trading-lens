@@ -22,9 +22,9 @@
    - Commit locally; only execute `git push` once all tasks and tests are 100% complete and closed.
 
 5. **Binance Copy Setting Page Support & Input Injection**:
-   - URL routes `https://www.binance.com/*/copy-trading/copy-setting*` are matched in `manifest.json`.
+   - URL routes `https://www.binance.com/*/copy-trading/*` and `https://www.binance.com/copy-trading/*` are matched in `manifest.json` to ensure content script injects on `copy-management` and initial SPA landing pages.
    - In `mode=copy`, `portfolioId` query param directly carries the lead trader ID.
-   - In `mode=edit`, `portfolioId` query param is the copier's copy portfolio ID; the true lead trader ID MUST ALWAYS be resolved via **living DOM React fiber props (`memoizedProps.leadPortfolioId`) FIRST**, strictly preceding `performance.getEntriesByType('resource')` to eliminate cross-trader cache contamination during SPA navigation.
+   - In `mode=edit`, `portfolioId` query param is the copier's copy portfolio ID; the true lead trader ID MUST ALWAYS be resolved via **authoritative BAPI (`/copy-portfolio/active-detail`)** and strictly verified DOM React fiber props (`props.copyPortfolioId === paramId`). Never match unverified cross-route performance resource entries to prevent cross-trader contamination in SPAs.
    - Form injection must use `Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set` to trigger React's synthetic input, change, and blur handlers.
 
 6. **Progressive Incremental Streaming Pipeline (`src/providers.js` & `src/content.js`)**:
@@ -49,3 +49,17 @@
    - **Backend Daemon vs Exchange Book**: Setting 「倉位止損 (0-95%)」 (`stopLostRate`) is handled by Binance's copy-trade risk daemon, NOT by submitting a Stop-Market conditional order to the futures matching engine. Thus, `/order/open-orders` returns empty and the position table `止盈/止損` column displays `-- / --`.
    - **「平倉價格」UI Misleading Translation**: In Binance's Traditional Chinese UI, the column titled 「平倉價格」 maps directly to `liqPrice` (Liquidation Price), not stop-loss trigger price. On cross margin with large balances, this remains virtually static and far from spot price.
    - **Continuous ROE Evaluation**: The risk daemon continuously checks floating $\text{ROE} = \text{Unrealized PnL} / \text{Margin}$ against the dynamic weighted average entry price (`entryPrice`). As the lead trader scales in, `entryPrice` updates dynamically. No static dollar price is ever anchored or displayed on screen.
+
+10. **Multi-Locale Detection & Synchronization Invariant (`src/i18n.js` & `scripts/sync-i18n-dictionary.mjs`)**:
+   - Chrome's `chrome.i18n.getMessage` binds only to the browser OS locale, ignoring webpage language (e.g. `/zh-TC/`).
+   - Dictionaries are embedded directly into `src/i18n.js` (synced via `scripts/sync-i18n-dictionary.mjs` from `_locales/`).
+   - Language resolution strictly prioritizes:
+     1. URL pathname (`/zh-TC/`, `/zh-CN/`, `/ja/`, `/en/`)
+     2. `document.documentElement.lang`
+     3. `document.cookie` `lang` parameter
+     4. Browser OS language fallback (`navigator.language` / `chrome.i18n.getUILanguage()`)
+   - Regex matches MUST accept both hyphen and underscore separators (`/^zh[-_](?:TW|HK|MO|Hant|TC)/i`).
+
+11. **SPA Route Interception & Visual Spin Animation Invariants**:
+   - Next.js client-side navigation (`history.pushState` and `history.replaceState`) is intercepted in `src/content.js` to dispatch `ctl:locationchange` and trigger `scheduleRouteCheck(50)`. A 250ms polling loop serves as a resilient safety net for any missed events.
+   - All loading badges, streaming tags, and cards MUST display active rotation animations (`.ctl-spin-icon`, `.ctl-mini-spinner`, `@keyframes ctl-spin`) instead of static unicode icons to provide unmistakable visual feedback.

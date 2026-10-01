@@ -29,12 +29,10 @@
   "content_scripts": [
     {
       "matches": [
-        "https://www.binance.com/copy-trading/lead-details/*",
-        "https://www.binance.com/*/copy-trading/lead-details/*",
-        "https://www.binance.com/copy-trading/copy-setting*",
-        "https://www.binance.com/*/copy-trading/copy-setting*",
-        "https://www.okx.com/copy-trading/account/*",
-        "https://www.okx.com/*/copy-trading/account/*"
+        "https://www.binance.com/copy-trading/*",
+        "https://www.binance.com/*/copy-trading/*",
+        "https://www.okx.com/copy-trading/*",
+        "https://www.okx.com/*/copy-trading/*"
       ],
       "js": [
         "src/i18n.js",
