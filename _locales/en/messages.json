@@ -888,15 +888,48 @@
     "message": "⚡ Back to Stop-Loss Advisor ▴"
   },
   "streamingBanner": {
-    "message": "↻ Fetching remaining deep history ({0})... Core metrics and stop-loss radar ready"
+    "message": "⚡ Loaded: {0} ｜ ↻ Background loading: {1}..."
   },
-  "stageDetail": {
-    "message": "Profile & Live"
+  "stageLoadedDetail": {
+    "message": "Profile & Live Exposure"
   },
-  "stagePositions": {
-    "message": "Positions & Stop-Loss Radar"
+  "stageLoadingPositions": {
+    "message": "Position History & Stop-Loss Radar"
   },
-  "stageOrders": {
-    "message": "Order Flow & Trading Style"
+  "stageLoadedPositions": {
+    "message": "Core Win-Rate & Stop-Loss Radar"
+  },
+  "stageLoadingOrders": {
+    "message": "Deep Order Flow, Style Classification & Market Trends"
+  },
+  "stageLoadedOrders": {
+    "message": "Order Flow & Strategy Style"
+  },
+  "stageLoadingMarket": {
+    "message": "Mark Price K-Lines & Precise MAE Excursions"
+  },
+  "metricLoadingText": {
+    "message": "↻ Loading..."
+  },
+  "streamingHintOrders": {
+    "message": "Analyzing deep order flow..."
+  },
+  "streamingHintTransfers": {
+    "message": "Verifying transfer deposits..."
+  },
+  "streamingHintEquity": {
+    "message": "Reconstructing equity & leverage..."
+  },
+  "streamingHintPositions": {
+    "message": "Calculating closed PnL & holds..."
+  },
+  "streamingStrategyLoading": {
+    "message": "Classifying style ↻"
+  },
+  "radarPreciseBadge": {
+    "message": "K-lines calculating ↻"
+  },
+  "settingValuePropStatsDescLoss": {
+    "message": "Losing Trades Median P50: -{0}% · 90th percentile P90: -{1}%"
   }
 }

@@ -532,16 +532,36 @@
       }
     });
 
-    // Funding and mark prices for every symbol the fills touched, from the
-    // oldest fill to now: what the account earned or paid between a fill and
-    // today beyond the fills themselves (src/equity.js).
+    // Funding and mark prices for every symbol the fills and positions touched, from the
+    // oldest fill/position to now: what the account earned or paid between a fill and
+    // today beyond the fills themselves (src/equity.js), and exact candle MAE for stop-loss radar.
     const orderRows = asArray(orderData.rows);
+    const positionRows = asArray(positionData.rows);
     const fillTimes = orderRows.map(global.CopyTradingLensPositions.fillTimeOf).filter((time) => time > 0);
+    const positionTimes = positionRows.map((row) => Number(row.opened || row.openTime)).filter((time) => time > 0);
+    const allTimes = [...fillTimes, ...positionTimes];
     const nowMs = Date.now();
     // Symbols held open with no fill in the history are priced too.
-    const openSymbols = asArray(positionData.rows).filter((row) => !(Number(row.closed) > 0)).map((row) => row.symbol);
-    const marketHistory = fillTimes.length
-      ? { nowMs, ...(await fetchBinanceMarketHistory([...orderRows.map((order) => order.symbol), ...openSymbols], Math.min(...fillTimes), nowMs, { waitUntilResumed })) }
+    const openSymbols = positionRows.filter((row) => !(Number(row.closed) > 0)).map((row) => row.symbol);
+
+    const symCounts = new Map();
+    for (const r of positionRows) {
+      if (r.symbol) symCounts.set(r.symbol, (symCounts.get(r.symbol) || 0) + 1);
+    }
+    for (const o of orderRows) {
+      if (o.symbol) symCounts.set(o.symbol, (symCounts.get(o.symbol) || 0) + 1);
+    }
+    for (const s of openSymbols) {
+      symCounts.set(s, 9999);
+    }
+    const prioritizedSymbols = [...symCounts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 20)
+      .map(([sym]) => sym);
+
+    const startMs = allTimes.length ? Math.min(...allTimes) : nowMs;
+    const marketHistory = (prioritizedSymbols.length && startMs < nowMs)
+      ? { nowMs, ...(await fetchBinanceMarketHistory(prioritizedSymbols, startMs, nowMs, { waitUntilResumed })) }
       : { nowMs, startMs: nowMs, endMs: nowMs, symbols: {}, failed: [] };
 
     return {

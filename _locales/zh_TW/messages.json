@@ -888,15 +888,48 @@
     "message": "⚡ 返回精簡止損設定助手 ▴"
   },
   "streamingBanner": {
-    "message": "↻ 正在深度載入剩餘數據（{0}）... 已優先呈現核心數據與止損雷達"
+    "message": "⚡ 已優先呈現：{0} ｜ ↻ 背景載入中：{1}..."
   },
-  "stageDetail": {
-    "message": "基本資料"
+  "stageLoadedDetail": {
+    "message": "基本資料與即時曝險"
   },
-  "stagePositions": {
+  "stageLoadingPositions": {
     "message": "倉位歷史與止損雷達"
   },
-  "stageOrders": {
-    "message": "深度訂單流與交易風格"
+  "stageLoadedPositions": {
+    "message": "核心勝率與止損雷達"
+  },
+  "stageLoadingOrders": {
+    "message": "深度訂單流、交易風格分類與標的走勢"
+  },
+  "stageLoadedOrders": {
+    "message": "訂單流與風格分類"
+  },
+  "stageLoadingMarket": {
+    "message": "歷史標的 K 線與逐筆浮虧精算"
+  },
+  "metricLoadingText": {
+    "message": "↻ 載入中..."
+  },
+  "streamingHintOrders": {
+    "message": "深度訂單流分析中..."
+  },
+  "streamingHintTransfers": {
+    "message": "比對轉帳入金紀錄..."
+  },
+  "streamingHintEquity": {
+    "message": "回溯帳戶淨值與槓桿..."
+  },
+  "streamingHintPositions": {
+    "message": "統計平倉損益與持倉時間..."
+  },
+  "streamingStrategyLoading": {
+    "message": "交易風格分析中 ↻"
+  },
+  "radarPreciseBadge": {
+    "message": "K線精算中 ↻"
+  },
+  "settingValuePropStatsDescLoss": {
+    "message": "輸單中位 P50: -{0}% · 90分位 P90: -{1}%"
   }
 }

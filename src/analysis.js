@@ -921,8 +921,10 @@
         savedDisastersCount: 0,
         hasSevereBagHolding: false,
         worstHistoricalRoeMae: 0,
-        winStats: { median: 0, p75: 0, p90: 0, p95: 0, max: 0 },
-        lossStats: { median: 0, p90: 0, max: 0 },
+        allStats: { median: 0, p50: 0, p75: 0, p90: 0, p95: 0, max: 0 },
+        winStats: { median: 0, p50: 0, p75: 0, p90: 0, p95: 0, max: 0 },
+        lossStats: { median: 0, p50: 0, p90: 0, max: 0 },
+        isPreciseMae: false,
         simResults: []
       };
     }
@@ -1040,8 +1042,19 @@
 
     const winRoeMae = wins.map((w) => w.roeMaePct);
     const lossRoeMae = losses.map((l) => l.roeMaePct);
+    const allRoeMae = evaluated.map((e) => e.roeMaePct);
+
+    const allStats = {
+      median: percentile(allRoeMae, 50),
+      p50: percentile(allRoeMae, 50),
+      p75: percentile(allRoeMae, 75),
+      p90: percentile(allRoeMae, 90),
+      p95: percentile(allRoeMae, 95),
+      max: allRoeMae.length ? Math.max(...allRoeMae) : 0
+    };
 
     const winStats = {
+      median: percentile(winRoeMae, 50),
       p50: percentile(winRoeMae, 50),
       p75: percentile(winRoeMae, 75),
       p90: percentile(winRoeMae, 90),
@@ -1050,10 +1063,15 @@
     };
 
     const lossStats = {
+      median: percentile(lossRoeMae, 50),
       p50: percentile(lossRoeMae, 50),
+      p75: percentile(lossRoeMae, 75),
       p90: percentile(lossRoeMae, 90),
+      p95: percentile(lossRoeMae, 95),
       max: lossRoeMae.length ? Math.max(...lossRoeMae) : 0
     };
+
+    const isPreciseMae = Boolean(marketHistory && Object.keys(marketHistory.symbols || {}).length > 0);
 
     const hasSevereBagHolding = lossStats.max >= 100 || losses.some((l) => l.roiPct <= -100);
 
@@ -1106,8 +1124,18 @@
       savedDisastersCount: recSim.savedDisasters,
       hasSevereBagHolding,
       worstHistoricalRoeMae: Number(lossStats.max.toFixed(1)),
+      isPreciseMae,
+      allStats: {
+        median: Number(allStats.p50.toFixed(1)),
+        p50: Number(allStats.p50.toFixed(1)),
+        p75: Number(allStats.p75.toFixed(1)),
+        p90: Number(allStats.p90.toFixed(1)),
+        p95: Number(allStats.p95.toFixed(1)),
+        max: Number(allStats.max.toFixed(1))
+      },
       winStats: {
         median: Number(winStats.p50.toFixed(1)),
+        p50: Number(winStats.p50.toFixed(1)),
         p75: Number(winStats.p75.toFixed(1)),
         p90: Number(winStats.p90.toFixed(1)),
         p95: Number(winStats.p95.toFixed(1)),
@@ -1115,7 +1143,10 @@
       },
       lossStats: {
         median: Number(lossStats.p50.toFixed(1)),
+        p50: Number(lossStats.p50.toFixed(1)),
+        p75: Number(lossStats.p75.toFixed(1)),
         p90: Number(lossStats.p90.toFixed(1)),
+        p95: Number(lossStats.p95.toFixed(1)),
         max: Number(lossStats.max.toFixed(1))
       },
       simResults: simResults.filter((s) => [20, 35, 50, 75, 90].includes(s.threshold))

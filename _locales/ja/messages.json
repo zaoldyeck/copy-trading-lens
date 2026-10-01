@@ -888,15 +888,48 @@
     "message": "⚡ 損切りアドバイザーに戻る ▴"
   },
   "streamingBanner": {
-    "message": "↻ 詳細履歴を読み込み中（{0}）... 基本データと損切りレーダーを優先表示中"
+    "message": "⚡ 表示中：{0} ｜ ↻ バックグラウンド読み込み中：{1}..."
   },
-  "stageDetail": {
-    "message": "プロフィール・現在ポジション"
+  "stageLoadedDetail": {
+    "message": "基本情報とリアルタイム建玉"
   },
-  "stagePositions": {
-    "message": "ポジション履歴・損切りレーダー"
+  "stageLoadingPositions": {
+    "message": "ポジション履歴と損切りレーダー"
   },
-  "stageOrders": {
-    "message": "注文フロー・取引スタイル"
+  "stageLoadedPositions": {
+    "message": "コア勝率と損切りレーダー"
+  },
+  "stageLoadingOrders": {
+    "message": "注文履歴、スタイル分類、相場推移"
+  },
+  "stageLoadedOrders": {
+    "message": "注文フローと取引スタイル"
+  },
+  "stageLoadingMarket": {
+    "message": "マーク価格ローソク足と詳細な含み損精算"
+  },
+  "metricLoadingText": {
+    "message": "↻ 読み込み中..."
+  },
+  "streamingHintOrders": {
+    "message": "注文フローを分析中..."
+  },
+  "streamingHintTransfers": {
+    "message": "入出金履歴を確認中..."
+  },
+  "streamingHintEquity": {
+    "message": "資産残高とレバレッジを再計算中..."
+  },
+  "streamingHintPositions": {
+    "message": "決済損益と保有時間を集計中..."
+  },
+  "streamingStrategyLoading": {
+    "message": "取引スタイル分析中 ↻"
+  },
+  "radarPreciseBadge": {
+    "message": "ローソク足計算中 ↻"
+  },
+  "settingValuePropStatsDescLoss": {
+    "message": "負けトレード中央値 P50: -{0}% · 90パーセンタイル P90: -{1}%"
   }
 }

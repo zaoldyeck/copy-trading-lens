@@ -67,6 +67,10 @@ console.log("=== RUNNING UNIT TESTS FOR STOP LOSS RADAR ===");
   assert.ok(radar.recommendedRoe >= 30 && radar.recommendedRoe <= 85, "recommendedRoe is bounded between 30 and 85");
   assert.equal(radar.recommendedPriceDrop, Number((radar.recommendedRoe / 10).toFixed(1)));
   assert.ok(radar.winRetentionRate >= 90, "preserves at least 90% of winning trades");
+  assert.equal(radar.lossStats.median, 500, "lossStats has median property");
+  assert.equal(radar.lossStats.p50, 500, "lossStats has p50 property matching median");
+  assert.equal(radar.isPreciseMae, false, "without market candles isPreciseMae is false");
+  assert.ok(radar.allStats !== undefined, "allStats is defined");
   console.log("PASS: synthetic controlled positions verify MAE and bag holding detection");
 }
 

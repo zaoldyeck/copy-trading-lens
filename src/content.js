@@ -155,6 +155,14 @@
     ]);
   }
 
+  function metricLoadingCard(label, hint = "") {
+    return h("div", { class: "ctl-metric is-streaming-metric" }, [
+      h("span", { text: label }),
+      h("strong", { class: "ctl-loading-text", text: t("metricLoadingText") }),
+      hint ? h("small", { text: hint }) : null
+    ]);
+  }
+
   function bullets(items, emptyText) {
     const list = Array.isArray(items) ? items.filter(Boolean) : [];
     if (!list.length) return h("p", { class: "ctl-muted", text: emptyText });
@@ -290,6 +298,9 @@
     return h("section", { class: "ctl-section ctl-radar-section" }, [
       h("div", { class: "ctl-radar-header" }, [
         h("h3", { text: t("sectionStopLossRadar") }),
+        !radar.isPreciseMae
+          ? h("span", { class: "ctl-radar-badge ctl-streaming-badge", text: t("radarPreciseBadge") })
+          : null,
         hasBag
           ? h("span", { class: "ctl-radar-badge is-danger", text: t("badgeBagHoldingAlert") })
           : h("span", { class: "ctl-radar-badge is-safe", text: t("badgeMathOptimal") })
@@ -410,10 +421,17 @@
     return t("payoffNoLosses", [summary.closedTrades]);
   }
 
-  function stageLabel(stage) {
-    if (stage === "positions") return t("stagePositions");
-    if (stage === "orders") return t("stageOrders");
-    return t("stageDetail");
+  function stageBannerContent(stage) {
+    if (stage === "detail") {
+      return t("streamingBanner", [t("stageLoadedDetail"), t("stageLoadingPositions")]);
+    }
+    if (stage === "positions") {
+      return t("streamingBanner", [t("stageLoadedPositions"), t("stageLoadingOrders")]);
+    }
+    if (stage === "orders") {
+      return t("streamingBanner", [t("stageLoadedOrders"), t("stageLoadingMarket")]);
+    }
+    return t("streamingBanner", [t("stageLoadedDetail"), t("stageLoadingPositions")]);
   }
 
   function renderSettingAdvisor(context, raw, analysis, isStreaming) {
@@ -437,7 +455,7 @@
         ]),
 
         isStreaming
-          ? h("div", { class: "ctl-streaming-banner", text: t("streamingBanner", [stageLabel(run?.streamingStage)]) })
+          ? h("div", { class: "ctl-streaming-banner", text: stageBannerContent(run?.streamingStage) })
           : null,
 
         radar && !radar.insufficientData ? h("div", { class: "ctl-advisor-hero" }, [
@@ -486,9 +504,16 @@
           h("div", { class: "ctl-pillar" }, [
             h("strong", {}, [
               h("span", { text: "📊 " }),
-              h("span", { text: t("settingValuePropStatsTitle") })
+              h("span", { text: t("settingValuePropStatsTitle") }),
+              !radar.isPreciseMae
+                ? h("span", { class: "ctl-streaming-badge", style: "margin-left: 6px;", text: t("radarPreciseBadge") })
+                : null
             ]),
-            h("p", { text: t("settingValuePropStatsDesc", [radar.winStats?.median?.toFixed(1) || "0", radar.winStats?.p90?.toFixed(1) || "0"]) })
+            h("p", {
+              text: radar.isPreciseMae
+                ? t("settingValuePropStatsDesc", [radar.allStats?.p50?.toFixed(1) || "0.0", radar.allStats?.p90?.toFixed(1) || "0.0"])
+                : t("settingValuePropStatsDescLoss", [radar.lossStats?.p50?.toFixed(1) || "0.0", radar.lossStats?.p90?.toFixed(1) || "0.0"])
+            })
           ])
         ]) : null,
 
@@ -529,7 +554,7 @@
           }
         }, t("btnReturnToAdvisor")) : null,
         isStreaming
-          ? h("div", { class: "ctl-streaming-banner", text: t("streamingBanner", [stageLabel(run?.streamingStage)]) })
+          ? h("div", { class: "ctl-streaming-banner", text: stageBannerContent(run?.streamingStage) })
           : null,
         h("header", { class: "ctl-header" }, [
           h("div", {}, [
@@ -548,7 +573,8 @@
           h("strong", { text: verdict.title }),
           h("span", { text: strategy.family })
         ]),
-        (strategy.labels?.length || verdict.momentumStatus) ? h("div", { class: "ctl-tags" }, [
+        (strategy.labels?.length || verdict.momentumStatus || (isStreaming && !orders.openOrders)) ? h("div", { class: "ctl-tags" }, [
+          ...(isStreaming && !orders.openOrders ? [h("span", { class: "ctl-tag ctl-streaming-badge", text: `↻ ${t("streamingStrategyLoading")}` })] : []),
           ...(verdict.momentumStatus === "active" ? [h("span", { class: "ctl-tag is-active-momentum", text: t("badgeActiveMomentum") })] : []),
           ...(verdict.momentumStatus === "stagnant" ? [h("span", { class: "ctl-tag is-stagnant", text: t("badgeStagnant") })] : []),
           ...(verdict.momentumStatus === "drawdown" ? [h("span", { class: "ctl-tag is-drawdown", text: t("badgeInDrawdown") })] : []),
@@ -561,41 +587,53 @@
           metricCard(t("metricAllPeriodPnl"), fmt.formatMoney(meta.pnl), t("hintCurrentCapitalFormula")),
           metricCard(t("metricTradingDays"), meta.days ? t("daysValue", [meta.days.toFixed(0)]) : "N/A"),
           metricCard(t("metricCopierPnlAum"), meta.aum ? `${(meta.copierPnl / meta.aum * 100).toFixed(1)}%` : "N/A"),
-          metricCard(
-            t("metricWinRate"),
-            fmt.formatPct(summary.winRate * 100),
-            summary.openPositionsExcluded
-              ? t("closedTradesOpenExcluded", [summary.closedTrades, summary.openPositionsExcluded])
-              : t("closedTrades", [summary.closedTrades])
-          ),
-          metricCard(
-            t("metricPayoffRatio"),
-            summary.payoffRatio === null ? "N/A" : summary.payoffRatio.toFixed(2),
-            payoffUnavailableReason(summary)
-          ),
-          metricCard(t("metricLossHold"), fmt.formatHours(summary.avgLossHoldHours), t("longestHold", [fmt.formatHours(summary.maxLossHoldHours)])),
-          metricCard(t("metricAdverseAdd"), fmt.formatPct(orders.adverseAddRate * 100), `${orders.adverseAdds}/${orders.openOrders}`),
+          isStreaming && !summary.closedTrades && !raw.historyStatus?.positionHistory?.complete
+            ? metricLoadingCard(t("metricWinRate"), t("streamingHintPositions"))
+            : metricCard(
+              t("metricWinRate"),
+              fmt.formatPct(summary.winRate * 100),
+              summary.openPositionsExcluded
+                ? t("closedTradesOpenExcluded", [summary.closedTrades, summary.openPositionsExcluded])
+                : t("closedTrades", [summary.closedTrades])
+            ),
+          isStreaming && !summary.closedTrades && !raw.historyStatus?.positionHistory?.complete
+            ? metricLoadingCard(t("metricPayoffRatio"), t("streamingHintPositions"))
+            : metricCard(
+              t("metricPayoffRatio"),
+              summary.payoffRatio === null ? "N/A" : summary.payoffRatio.toFixed(2),
+              payoffUnavailableReason(summary)
+            ),
+          isStreaming && !summary.closedTrades && !raw.historyStatus?.positionHistory?.complete
+            ? metricLoadingCard(t("metricLossHold"), t("streamingHintPositions"))
+            : metricCard(t("metricLossHold"), fmt.formatHours(summary.avgLossHoldHours), t("longestHold", [fmt.formatHours(summary.maxLossHoldHours)])),
+          isStreaming && !orders.openOrders
+            ? metricLoadingCard(t("metricAdverseAdd"), t("streamingHintOrders"))
+            : metricCard(t("metricAdverseAdd"), fmt.formatPct(orders.adverseAddRate * 100), `${orders.adverseAdds}/${orders.openOrders}`),
           metricCard(t("metricFloatingLoss"), fmt.formatMoney(live.openUnrealizedLoss), t("marginPct", [(live.openUnrealizedLossToMargin * 100).toFixed(1)])),
-          metricCard(
-            t("metricLossPeriodDeposit"),
-            t("lossPeriodDepositCount", [transfers.lossPeriodDepositCount]),
-            transfers.lossPeriodDepositCount > 0
-              ? t("lossPeriodDepositHint", [fmt.formatMoney(transfers.lossPeriodDepositTotal), fmt.formatDateTime(transfers.lastLossPeriodDepositAt)])
-              : t("lossPeriodDepositNone"),
-            transfers.lossPeriodDepositCount > 0 ? "is-danger" : ""
-          ),
+          isStreaming && !raw.endpointResults?.transferHistory?.ok
+            ? metricLoadingCard(t("metricLossPeriodDeposit"), t("streamingHintTransfers"))
+            : metricCard(
+              t("metricLossPeriodDeposit"),
+              t("lossPeriodDepositCount", [transfers.lossPeriodDepositCount]),
+              transfers.lossPeriodDepositCount > 0
+                ? t("lossPeriodDepositHint", [fmt.formatMoney(transfers.lossPeriodDepositTotal), fmt.formatDateTime(transfers.lastLossPeriodDepositAt)])
+                : t("lossPeriodDepositNone"),
+              transfers.lossPeriodDepositCount > 0 ? "is-danger" : ""
+            ),
           metricCard(t("metricRestartCount"), String(meta.closeLeadCount || 0), t("portfolioRestart")),
-          analysis.biggestBet
-            ? metricCard(
-              t("metricBiggestBet"),
-              t("biggestBetValue", [analysis.biggestBet.leverage.toFixed(1)]),
-              t(analysis.biggestBet.boundByLeverage ? "biggestBetHintBound" : "biggestBetHint", [
-                t("biggestBetPosition", [analysis.biggestBet.symbol, t(analysis.biggestBet.side === "SHORT" ? "posShort" : "posLong")]),
-                fmt.formatDateTime(analysis.biggestBet.at),
-                analysis.biggestBet.wipeOutMovePct.toFixed(1)
-              ])
-            )
-            : metricCard(t("metricBiggestBet"), "N/A")
+          isStreaming && !orders.openOrders
+            ? metricLoadingCard(t("metricBiggestBet"), t("streamingHintEquity"))
+            : (analysis.biggestBet
+              ? metricCard(
+                t("metricBiggestBet"),
+                t("biggestBetValue", [analysis.biggestBet.leverage.toFixed(1)]),
+                t(analysis.biggestBet.boundByLeverage ? "biggestBetHintBound" : "biggestBetHint", [
+                  t("biggestBetPosition", [analysis.biggestBet.symbol, t(analysis.biggestBet.side === "SHORT" ? "posShort" : "posLong")]),
+                  fmt.formatDateTime(analysis.biggestBet.at),
+                  analysis.biggestBet.wipeOutMovePct.toFixed(1)
+                ])
+              )
+              : metricCard(t("metricBiggestBet"), "N/A"))
         ]),
         h("section", { class: "ctl-section" }, [
           h("h3", { text: t("sectionRisks") }),

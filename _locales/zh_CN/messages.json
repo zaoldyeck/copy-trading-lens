@@ -888,15 +888,48 @@
     "message": "⚡ 返回精简止损设置助手 ▴"
   },
   "streamingBanner": {
-    "message": "↻ 正在深度载入剩余数据（{0}）... 已优先呈现核心数据与止损雷达"
+    "message": "⚡ 已优先呈现：{0} ｜ ↻ 背景载入中：{1}..."
   },
-  "stageDetail": {
-    "message": "基本资料"
+  "stageLoadedDetail": {
+    "message": "基本资料与即时敞口"
   },
-  "stagePositions": {
+  "stageLoadingPositions": {
     "message": "仓位历史与止损雷达"
   },
-  "stageOrders": {
-    "message": "深度订单流与交易风格"
+  "stageLoadedPositions": {
+    "message": "核心胜率与止损雷达"
+  },
+  "stageLoadingOrders": {
+    "message": "深度订单流、交易风格分类与标的走势"
+  },
+  "stageLoadedOrders": {
+    "message": "订单流与风格分类"
+  },
+  "stageLoadingMarket": {
+    "message": "历史标的 K 线与逐笔浮亏精算"
+  },
+  "metricLoadingText": {
+    "message": "↻ 载入中..."
+  },
+  "streamingHintOrders": {
+    "message": "深度订单流分析中..."
+  },
+  "streamingHintTransfers": {
+    "message": "比对转账入金记录..."
+  },
+  "streamingHintEquity": {
+    "message": "回溯账户净值与杠杆..."
+  },
+  "streamingHintPositions": {
+    "message": "统计平仓损益与持仓时间..."
+  },
+  "streamingStrategyLoading": {
+    "message": "交易风格分析中 ↻"
+  },
+  "radarPreciseBadge": {
+    "message": "K线精算中 ↻"
+  },
+  "settingValuePropStatsDescLoss": {
+    "message": "输单中位 P50: -{0}% · 90分位 P90: -{1}%"
   }
 }
