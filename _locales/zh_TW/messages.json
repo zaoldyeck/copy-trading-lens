@@ -856,5 +856,47 @@
   },
   "radarBinanceRoeNotice": {
     "message": "💡 幣安提示：幣安跟單的「倉位止損 (0-95%)」欄位是計算保證金虧損比率（ROE%），非標的跌幅。若設 5~10% 會因微小雜訊誤砍大批贏單！請按上述推薦值設定。"
+  },
+  "settingAdvisorTitle": {
+    "message": "CopyLens 智能跟單止損顧問"
+  },
+  "settingAdvisorSubtitle": {
+    "message": "帶單員：{0} · 主導槓桿：{1}x"
+  },
+  "settingValuePropWinTitle": {
+    "message": "保留 {0}% 歷史獲利單"
+  },
+  "settingValuePropWinDesc": {
+    "message": "實證避免誤設 5%~10% 在常規價格波動中被提前誤殺，確保正向期望值。"
+  },
+  "settingValuePropBagTitle": {
+    "message": "阻斷致命扛單黑天鵝"
+  },
+  "settingValuePropBagDesc": {
+    "message": "歷史曾出現 -{0}% 極限浮虧；在趨勢結構破位前果斷離場，防止本金歸零。"
+  },
+  "settingValuePropStatsTitle": {
+    "message": "浮虧實證分佈"
+  },
+  "settingValuePropStatsDesc": {
+    "message": "中位數浮虧 P50: -{0}% · 90分位 P90: -{1}%"
+  },
+  "btnViewFullAnalysis": {
+    "message": "🔍 查看帶單員完整分析報告 ▾"
+  },
+  "btnReturnToAdvisor": {
+    "message": "⚡ 返回精簡止損設定助手 ▴"
+  },
+  "streamingBanner": {
+    "message": "↻ 正在深度載入剩餘數據（{0}）... 已優先呈現核心數據與止損雷達"
+  },
+  "stageDetail": {
+    "message": "基本資料"
+  },
+  "stagePositions": {
+    "message": "倉位歷史與止損雷達"
+  },
+  "stageOrders": {
+    "message": "深度訂單流與交易風格"
   }
 }

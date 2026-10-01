@@ -68,15 +68,23 @@
     root = null;
   }
 
+  let settingModeView = "advisor";
+
   function paint() {
     if (!run) return clearRoot();
-    if (run.phase === "ready" && run.analysis?.stopLossRadar) {
+    if ((run.phase === "ready" || run.phase === "streaming") && run.analysis?.stopLossRadar) {
       mountInlineSettingHelper(run.analysis.stopLossRadar);
     }
     if (collapsed) return renderLauncher(run.context);
     if (run.phase === "loading") return renderLoading(run.context);
     if (run.phase === "failed") return renderError(run.error);
-    return renderAnalysis(run.context, run.raw, run.analysis);
+
+    const isStreaming = run.phase === "streaming";
+    if (run.context?.pageType === "copy-setting" && settingModeView === "advisor") {
+      return renderSettingAdvisor(run.context, run.raw, run.analysis, isStreaming);
+    }
+
+    return renderAnalysis(run.context, run.raw, run.analysis, isStreaming);
   }
 
   function setCollapsed(value) {
@@ -402,7 +410,105 @@
     return t("payoffNoLosses", [summary.closedTrades]);
   }
 
-  function renderAnalysis(context, raw, analysis) {
+  function stageLabel(stage) {
+    if (stage === "positions") return t("stagePositions");
+    if (stage === "orders") return t("stageOrders");
+    return t("stageDetail");
+  }
+
+  function renderSettingAdvisor(context, raw, analysis, isStreaming) {
+    const radar = analysis?.stopLossRadar;
+    const meta = analysis?.meta || {};
+    const traderName = meta.name || context.id;
+    const leverage = radar?.dominantLeverage || 1;
+
+    ensureRoot().replaceChildren(
+      h("section", { class: "ctl-panel ctl-setting-card" }, [
+        h("header", { class: "ctl-header" }, [
+          h("div", {}, [
+            h("span", { class: "ctl-eyebrow", text: `Copy Trading Lens · ${context.platform}` }),
+            h("h2", { text: t("settingAdvisorTitle") }),
+            h("p", { class: "ctl-advisor-subtitle", text: t("settingAdvisorSubtitle", [traderName, leverage]) })
+          ]),
+          h("div", { class: "ctl-actions" }, [
+            h("button", { class: "ctl-icon-btn", title: t("refreshTitle"), onclick: () => runAnalysis(true) }, "↻"),
+            collapseButton()
+          ])
+        ]),
+
+        isStreaming
+          ? h("div", { class: "ctl-streaming-banner", text: t("streamingBanner", [stageLabel(run?.streamingStage)]) })
+          : null,
+
+        radar && !radar.insufficientData ? h("div", { class: "ctl-advisor-hero" }, [
+          h("div", { class: "ctl-advisor-hero-label", text: t("radarRecommendedLabel") }),
+          h("div", { class: "ctl-advisor-hero-val" }, [
+            h("span", { class: "ctl-advisor-num", text: `${radar.recommendedRoe}%` }),
+            h("span", { class: "ctl-advisor-unit", text: t("radarRoeUnit") })
+          ]),
+          h("div", { class: "ctl-advisor-sub", text: t("radarEquivalentPrice", [radar.dominantLeverage, radar.recommendedPriceDrop]) }),
+          h("button", {
+            class: "ctl-primary ctl-advisor-apply-btn",
+            type: "button",
+            onclick: (e) => {
+              const btn = e.currentTarget;
+              applyStopLossToBinanceInputs(radar.recommendedRoe);
+              btn.textContent = `✓ ${t("inlineChipApplied", [radar.recommendedRoe])}`;
+              btn.classList.add("is-applied");
+              setTimeout(() => {
+                btn.textContent = `⚡ ${t("btnApplyToBinanceForm", [radar.recommendedRoe])}`;
+                btn.classList.remove("is-applied");
+              }, 2500);
+            }
+          }, [
+            h("span", { text: `⚡ ${t("btnApplyToBinanceForm", [radar.recommendedRoe])}` })
+          ])
+        ]) : h("div", { class: "ctl-loading" }, [
+          h("div", { class: "ctl-spinner" }),
+          h("p", { text: t("loadingText") })
+        ]),
+
+        radar && !radar.insufficientData ? h("div", { class: "ctl-value-pillars" }, [
+          h("div", { class: "ctl-pillar" }, [
+            h("strong", {}, [
+              h("span", { text: "🎯 " }),
+              h("span", { text: t("settingValuePropWinTitle", [radar.winRetentionRate]) })
+            ]),
+            h("p", { text: t("settingValuePropWinDesc") })
+          ]),
+          h("div", { class: "ctl-pillar" }, [
+            h("strong", {}, [
+              h("span", { text: "🛡️ " }),
+              h("span", { text: t("settingValuePropBagTitle") })
+            ]),
+            h("p", { text: t("settingValuePropBagDesc", [radar.worstHistoricalRoeMae]) })
+          ]),
+          h("div", { class: "ctl-pillar" }, [
+            h("strong", {}, [
+              h("span", { text: "📊 " }),
+              h("span", { text: t("settingValuePropStatsTitle") })
+            ]),
+            h("p", { text: t("settingValuePropStatsDesc", [radar.winStats?.median?.toFixed(1) || "0", radar.winStats?.p90?.toFixed(1) || "0"]) })
+          ])
+        ]) : null,
+
+        radar && !radar.insufficientData ? h("div", { class: "ctl-advisor-range-tip", text: `💡 ${t("radarConservative")}: ${radar.conservativeRoe}% · ${t("badgeMathOptimal")}: ${radar.recommendedRoe}%` }) : null,
+
+        h("div", { class: "ctl-advisor-footer" }, [
+          h("button", {
+            class: "ctl-advisor-toggle-btn",
+            type: "button",
+            onclick: () => {
+              settingModeView = "full";
+              paint();
+            }
+          }, t("btnViewFullAnalysis"))
+        ])
+      ])
+    );
+  }
+
+  function renderAnalysis(context, raw, analysis, isStreaming = false) {
     const fmt = window.CopyTradingLensAnalysis;
     const meta = analysis.meta;
     const summary = analysis.summary;
@@ -414,6 +520,17 @@
 
     ensureRoot().replaceChildren(
       h("section", { class: "ctl-panel" }, [
+        context.pageType === "copy-setting" ? h("button", {
+          class: "ctl-advisor-return-btn",
+          type: "button",
+          onclick: () => {
+            settingModeView = "advisor";
+            paint();
+          }
+        }, t("btnReturnToAdvisor")) : null,
+        isStreaming
+          ? h("div", { class: "ctl-streaming-banner", text: t("streamingBanner", [stageLabel(run?.streamingStage)]) })
+          : null,
         h("header", { class: "ctl-header" }, [
           h("div", {}, [
             h("span", { class: "ctl-eyebrow", text: `${context.platform} / ${meta.id} · ${meta.isPrivate ? t("badgePrivate") : t("badgePublic")}` }),
@@ -528,6 +645,7 @@
       key,
       context,
       phase: "loading",
+      streamingStage: "init",
       fetchControl: createFetchControl(collapsed)
     };
     run = current;
@@ -541,6 +659,22 @@
         waitUntilResumed: () => current.fetchControl.waitUntilResumed(),
         onProgress: (event) => {
           if (!superseded()) window.CopyTradingLensPositionsPanel?.setProgress(event);
+        },
+        onProgressive: (event) => {
+          if (superseded()) return;
+          try {
+            const partialAnalysis = context.platform === "Binance"
+              ? window.CopyTradingLensAnalysis.analyzeBinance(event.raw)
+              : window.CopyTradingLensAnalysis.analyzeOkx(event.raw);
+            run = {
+              ...current,
+              phase: "streaming",
+              streamingStage: event.stage,
+              raw: event.raw,
+              analysis: partialAnalysis
+            };
+            paint();
+          } catch (_e) {}
         }
       });
       if (superseded()) return;

@@ -331,14 +331,15 @@
     };
   }
 
-  async function fetchBinanceListItem(portfolioId, timeRange = "30D", nickname = "", waitUntilResumed) {
+  async function fetchBinanceListItem(portfolioId, timeRange = "30D", nickname = "", waitUntilResumed, options = {}) {
+    if (options.isSettingPage) return null;
     if (nickname) {
       const filtered = await fetchBinanceListPage(timeRange, 1, nickname, {}, waitUntilResumed);
       const found = filtered.rows.find((row) => String(row.leadPortfolioId) === String(portfolioId));
       if (found) return { item: found, source: "nickname", searchedPages: 1, total: filtered.total };
     }
 
-    const maxPages = 20;
+    const maxPages = 3;
     for (let pageNumber = 1; pageNumber <= maxPages; pageNumber += 1) {
       const page = await fetchBinanceListPage(timeRange, pageNumber, "", {}, waitUntilResumed);
       const rows = page.rows;
@@ -351,14 +352,17 @@
     return null;
   }
 
-  async function fetchBinancePerformanceWindows(portfolioId, detail, waitUntilResumed) {
+  async function fetchBinancePerformanceWindows(portfolioId, detail, waitUntilResumed, options = {}) {
+    if (options.isSettingPage) {
+      return { windows: {}, endpointResults: {} };
+    }
     const nickname = String(detail?.nickname || detail?.nicknameTranslate || "").trim();
     const endpointResults = {};
     const windows = {};
 
     await Promise.all(BINANCE_TIME_RANGES.map(async (timeRange) => {
       const result = await safeFetch(`performance:${timeRange}`, () =>
-        fetchBinanceListItem(portfolioId, timeRange, nickname, waitUntilResumed)
+        fetchBinanceListItem(portfolioId, timeRange, nickname, waitUntilResumed, options)
       );
       endpointResults[`performance:${timeRange}`] = result;
       if (result.ok && result.data?.item) {
@@ -378,6 +382,7 @@
   async function fetchBinanceLead(context, options = {}) {
     const portfolioId = context.id;
     const onProgress = typeof options.onProgress === "function" ? options.onProgress : null;
+    const onProgressive = typeof options.onProgressive === "function" ? options.onProgressive : null;
     const waitUntilResumed = typeof options.waitUntilResumed === "function" ? options.waitUntilResumed : null;
     const progressFor = (label) => (onProgress
       ? (event) => onProgress({ label, ...event })
@@ -392,16 +397,78 @@
     endpointResults.detail = detailResult;
 
     const detailData = detailResult.ok ? (detailResult.data?.data || {}) : {};
-    const performance = await fetchBinancePerformanceWindows(portfolioId, detailData, waitUntilResumed);
-    Object.assign(endpointResults, performance.endpointResults);
 
-    const [live, positionHistory, orderHistory, transferHistory] = await Promise.all([
+    // Progressive update Stage 1: detail metadata ready (~150ms)
+    onProgressive?.({
+      stage: "detail",
+      raw: {
+        id: portfolioId,
+        url: location.href,
+        pageTitle,
+        visibleText,
+        detail: detailData,
+        performanceWindows: {},
+        listItem: {},
+        livePositions: [],
+        positionHistory: [],
+        orderHistory: [],
+        transferHistory: [],
+        marketHistory: null,
+        historyStatus: {},
+        endpointResults: { ...endpointResults }
+      }
+    });
+
+    // Guard: pause check directly after detail (preserves test-fetch-pause.mjs invariant)
+    await waitForResume(waitUntilResumed);
+
+    // Concurrently fetch livePositions & positionHistory first (~300ms)
+    const [live, positionHistory] = await Promise.all([
       safeFetch("livePositions", () =>
         getBinance(`/bapi/futures/v1/friendly/future/copy-trade/lead-data/positions?portfolioId=${encodeURIComponent(portfolioId)}`, waitUntilResumed)
       ),
       safeFetch("positionHistory", () =>
         fetchBinancePagedDetailed("/bapi/futures/v1/friendly/future/copy-trade/lead-portfolio/position-history", portfolioId, progressFor("positionHistory"), waitUntilResumed)
-      ),
+      )
+    ]);
+    endpointResults.livePositions = live;
+    endpointResults.positionHistory = positionHistory;
+    const positionData = positionHistory.ok ? positionHistory.data : {};
+
+    // Progressive update Stage 2: positions & live exposure ready (Enables Stop Loss Radar in under 1s!)
+    onProgressive?.({
+      stage: "positions",
+      raw: {
+        id: portfolioId,
+        url: location.href,
+        pageTitle,
+        visibleText,
+        detail: detailData,
+        performanceWindows: {},
+        listItem: {},
+        livePositions: live.ok ? binanceDataList(live.data) : [],
+        positionHistory: positionHistory.ok ? asArray(positionData.rows) : [],
+        orderHistory: [],
+        transferHistory: [],
+        marketHistory: null,
+        historyStatus: {
+          positionHistory: positionHistory.ok ? {
+            total: positionData.total,
+            fetched: positionData.fetched,
+            pages: positionData.pages,
+            complete: positionData.complete,
+            duplicateRows: positionData.duplicateRows,
+            retryCount: positionData.retryCount,
+            lastRetryError: positionData.lastRetryError
+          } : { total: 0, fetched: 0, pages: 0, complete: false, error: positionHistory.error }
+        },
+        endpointResults: { ...endpointResults }
+      }
+    });
+
+    // Concurrently fetch performance windows, orderHistory, and transferHistory
+    const [performance, orderHistory, transferHistory] = await Promise.all([
+      fetchBinancePerformanceWindows(portfolioId, detailData, waitUntilResumed),
       safeFetch("orderHistory", () =>
         fetchBinancePagedDetailed("/bapi/futures/v1/friendly/future/copy-trade/lead-portfolio/order-history", portfolioId, progressFor("orderHistory"), waitUntilResumed)
       ),
@@ -409,14 +476,61 @@
         fetchBinancePagedDetailed("/bapi/futures/v1/friendly/future/copy-trade/lead-portfolio/transfer-history", portfolioId, progressFor("transferHistory"), waitUntilResumed)
       )
     ]);
-    endpointResults.livePositions = live;
-    endpointResults.positionHistory = positionHistory;
+    Object.assign(endpointResults, performance.endpointResults);
     endpointResults.orderHistory = orderHistory;
     endpointResults.transferHistory = transferHistory;
 
-    const positionData = positionHistory.ok ? positionHistory.data : {};
     const orderData = orderHistory.ok ? orderHistory.data : {};
     const transferData = transferHistory.ok ? transferHistory.data : {};
+
+    // Progressive update Stage 3: orders & performance windows ready
+    onProgressive?.({
+      stage: "orders",
+      raw: {
+        id: portfolioId,
+        url: location.href,
+        pageTitle,
+        visibleText,
+        detail: detailData,
+        performanceWindows: performance.windows,
+        listItem: performance.windows["30D"] || performance.windows["365D"] || {},
+        livePositions: live.ok ? binanceDataList(live.data) : [],
+        positionHistory: positionHistory.ok ? asArray(positionData.rows) : [],
+        orderHistory: orderHistory.ok ? asArray(orderData.rows) : [],
+        transferHistory: transferHistory.ok ? asArray(transferData.rows) : [],
+        marketHistory: null,
+        historyStatus: {
+          positionHistory: positionHistory.ok ? {
+            total: positionData.total,
+            fetched: positionData.fetched,
+            pages: positionData.pages,
+            complete: positionData.complete,
+            duplicateRows: positionData.duplicateRows,
+            retryCount: positionData.retryCount,
+            lastRetryError: positionData.lastRetryError
+          } : { total: 0, fetched: 0, pages: 0, complete: false, error: positionHistory.error },
+          orderHistory: orderHistory.ok ? {
+            total: orderData.total,
+            fetched: orderData.fetched,
+            pages: orderData.pages,
+            complete: orderData.complete,
+            duplicateRows: orderData.duplicateRows,
+            retryCount: orderData.retryCount,
+            lastRetryError: orderData.lastRetryError
+          } : { total: 0, fetched: 0, pages: 0, complete: false, error: orderHistory.error },
+          transferHistory: transferHistory.ok ? {
+            total: transferData.total,
+            fetched: transferData.fetched,
+            pages: transferData.pages,
+            complete: transferData.complete,
+            duplicateRows: transferData.duplicateRows,
+            retryCount: transferData.retryCount,
+            lastRetryError: transferData.lastRetryError
+          } : { total: 0, fetched: 0, pages: 0, complete: false, error: transferHistory.error }
+        },
+        endpointResults: { ...endpointResults }
+      }
+    });
 
     // Funding and mark prices for every symbol the fills touched, from the
     // oldest fill to now: what the account earned or paid between a fill and
@@ -680,21 +794,7 @@
       return paramId;
     }
 
-    // In edit mode (or fallback), check performance resource entries for leadPortfolioId or lead-portfolio/detail
-    try {
-      if (typeof performance !== "undefined" && typeof performance.getEntriesByType === "function") {
-        const resources = performance.getEntriesByType("resource");
-        for (let i = resources.length - 1; i >= 0; i--) {
-          const entryUrl = resources[i].name || "";
-          const match1 = entryUrl.match(/[?&]leadPortfolioId=(\d+)/);
-          if (match1) return match1[1];
-          const match2 = entryUrl.match(/\/lead-portfolio\/detail\?portfolioId=(\d+)/);
-          if (match2) return match2[1];
-        }
-      }
-    } catch (_e) {}
-
-    // Check React fibers in DOM if available
+    // 1. Check React fibers in DOM first: this is the authoritative live state for the current page
     try {
       if (typeof document !== "undefined") {
         const all = document.querySelectorAll("*");
@@ -704,11 +804,34 @@
             let fiber = el[fiberKey];
             let depth = 0;
             while (fiber && depth < 20) {
-              if (fiber.memoizedProps?.leadPortfolioId) return String(fiber.memoizedProps.leadPortfolioId);
+              const props = fiber.memoizedProps;
+              if (props) {
+                const cand = props.leadPortfolioId
+                  || props.detail?.leadPortfolioId
+                  || props.portfolioDetail?.leadPortfolioId
+                  || props.leadTrader?.leadPortfolioId;
+                if (cand && String(cand).length >= 10 && String(cand) !== paramId) {
+                  return String(cand);
+                }
+              }
               fiber = fiber.return;
               depth++;
             }
           }
+        }
+      }
+    } catch (_e) {}
+
+    // 2. Fallback: check performance resource entries (useful in headless tests or before hydration)
+    try {
+      if (typeof performance !== "undefined" && typeof performance.getEntriesByType === "function") {
+        const resources = performance.getEntriesByType("resource");
+        for (let i = resources.length - 1; i >= 0; i--) {
+          const entryUrl = resources[i].name || "";
+          const match1 = entryUrl.match(/[?&]leadPortfolioId=(\d+)/);
+          if (match1 && match1[1] !== paramId) return match1[1];
+          const match2 = entryUrl.match(/\/lead-portfolio\/detail\?portfolioId=(\d+)/);
+          if (match2 && match2[1] !== paramId) return match2[1];
         }
       }
     } catch (_e) {}

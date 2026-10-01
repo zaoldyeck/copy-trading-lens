@@ -856,5 +856,47 @@
   },
   "radarBinanceRoeNotice": {
     "message": "💡 Binance Tip: 'Position Stop-Loss (0-95%)' input is Margin ROE %, NOT price change %. Setting 5-10% kills 50%+ of wins prematurely due to normal volatility! Follow the radar recommendation above."
+  },
+  "settingAdvisorTitle": {
+    "message": "CopyLens Smart Stop-Loss Advisor"
+  },
+  "settingAdvisorSubtitle": {
+    "message": "Trader: {0} · Dominant Leverage: {1}x"
+  },
+  "settingValuePropWinTitle": {
+    "message": "Preserves {0}% Historical Wins"
+  },
+  "settingValuePropWinDesc": {
+    "message": "Prevents prematurely cutting profitable trades during normal market volatility, ensuring positive expectancy."
+  },
+  "settingValuePropBagTitle": {
+    "message": "Cuts Off Catastrophic Drawdowns"
+  },
+  "settingValuePropBagDesc": {
+    "message": "Historical worst drawdown reached -{0}%; cuts losses at trend breakdowns to prevent total wipeout."
+  },
+  "settingValuePropStatsTitle": {
+    "message": "Empirical Excursion Distribution"
+  },
+  "settingValuePropStatsDesc": {
+    "message": "Median P50: -{0}% · 90th Percentile P90: -{1}%"
+  },
+  "btnViewFullAnalysis": {
+    "message": "🔍 View Full Trader Analysis Report ▾"
+  },
+  "btnReturnToAdvisor": {
+    "message": "⚡ Back to Stop-Loss Advisor ▴"
+  },
+  "streamingBanner": {
+    "message": "↻ Fetching remaining deep history ({0})... Core metrics and stop-loss radar ready"
+  },
+  "stageDetail": {
+    "message": "Profile & Live"
+  },
+  "stagePositions": {
+    "message": "Positions & Stop-Loss Radar"
+  },
+  "stageOrders": {
+    "message": "Order Flow & Trading Style"
   }
 }

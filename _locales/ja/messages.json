@@ -856,5 +856,47 @@
   },
   "radarBinanceRoeNotice": {
     "message": "💡 バイナンス注意事項：コピートレードの「ポジション損切り(0-95%)」は証拠金損失率(ROE%)であり、現物価格変動%ではありません。5〜10%にするとノイズで多くの利益ポジションが早期誤決済されます。上記推奨値をご利用ください。"
+  },
+  "settingAdvisorTitle": {
+    "message": "CopyLens 損切りアドバイザー"
+  },
+  "settingAdvisorSubtitle": {
+    "message": "トレーダー：{0} · 主なレバレッジ：{1}x"
+  },
+  "settingValuePropWinTitle": {
+    "message": "過去の利益トレードの {0}% を維持"
+  },
+  "settingValuePropWinDesc": {
+    "message": "通常の価格ノイズで利益トレードを早期に誤損切りするのを防ぎ、正の期待値を守ります。"
+  },
+  "settingValuePropBagTitle": {
+    "message": "致命的な塩漬け暴落を遮断"
+  },
+  "settingValuePropBagDesc": {
+    "message": "過去に最大 -{0}% の含み損を記録。トレンド崩壊時に果断に損切りし、資産ゼロを防ぎます。"
+  },
+  "settingValuePropStatsTitle": {
+    "message": "含み損の実証分布"
+  },
+  "settingValuePropStatsDesc": {
+    "message": "中央値 P50: -{0}% · 90パーセンタイル P90: -{1}%"
+  },
+  "btnViewFullAnalysis": {
+    "message": "🔍 詳細な分析レポートを表示 ▾"
+  },
+  "btnReturnToAdvisor": {
+    "message": "⚡ 損切りアドバイザーに戻る ▴"
+  },
+  "streamingBanner": {
+    "message": "↻ 詳細履歴を読み込み中（{0}）... 基本データと損切りレーダーを優先表示中"
+  },
+  "stageDetail": {
+    "message": "プロフィール・現在ポジション"
+  },
+  "stagePositions": {
+    "message": "ポジション履歴・損切りレーダー"
+  },
+  "stageOrders": {
+    "message": "注文フロー・取引スタイル"
   }
 }

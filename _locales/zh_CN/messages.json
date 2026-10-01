@@ -856,5 +856,47 @@
   },
   "radarBinanceRoeNotice": {
     "message": "💡 币安提示：币安跟单的「仓位止损 (0-95%)」栏位是计算保证金亏损比率（ROE%），非标的跌幅。若设 5~10% 会因微小杂讯误砍大批赢单！请按上述推荐值设置。"
+  },
+  "settingAdvisorTitle": {
+    "message": "CopyLens 智能跟单止损顾问"
+  },
+  "settingAdvisorSubtitle": {
+    "message": "带单员：{0} · 主导杠杆：{1}x"
+  },
+  "settingValuePropWinTitle": {
+    "message": "保留 {0}% 历史获利单"
+  },
+  "settingValuePropWinDesc": {
+    "message": "实证避免误设 5%~10% 在常规价格波动中被提前误杀，确保正向期望值。"
+  },
+  "settingValuePropBagTitle": {
+    "message": "阻断致命扛单黑天鹅"
+  },
+  "settingValuePropBagDesc": {
+    "message": "历史曾出现 -{0}% 极限浮亏；在趋势结构破位前果断离场，防止本金归零。"
+  },
+  "settingValuePropStatsTitle": {
+    "message": "浮亏实证分布"
+  },
+  "settingValuePropStatsDesc": {
+    "message": "中位数浮亏 P50: -{0}% · 90分位 P90: -{1}%"
+  },
+  "btnViewFullAnalysis": {
+    "message": "🔍 查看带单员完整分析报告 ▾"
+  },
+  "btnReturnToAdvisor": {
+    "message": "⚡ 返回精简止损设置助手 ▴"
+  },
+  "streamingBanner": {
+    "message": "↻ 正在深度载入剩余数据（{0}）... 已优先呈现核心数据与止损雷达"
+  },
+  "stageDetail": {
+    "message": "基本资料"
+  },
+  "stagePositions": {
+    "message": "仓位历史与止损雷达"
+  },
+  "stageOrders": {
+    "message": "深度订单流与交易风格"
   }
 }
