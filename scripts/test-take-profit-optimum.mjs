@@ -363,6 +363,8 @@ const interiorRows = [
   })))
 ];
 const interior = checkFullDomain(interiorRows, "SL37/TP20 interior control", { capital: 1000 });
+assert.equal(interior.objective, "pricePnl", "fixed capital does not change the optimisation objective");
+assert.equal(interior.scope, "historicalPricePnl");
 assert.equal(interior.optimal.stop, 37);
 assert.equal(interior.optimal.takeProfit, 20);
 near(interior.baselinePnl, -41, "interior baseline");
@@ -370,12 +372,20 @@ near(interior.optimalPnlMin, 68.9, "interior optimum price PnL");
 near(interior.roiMin, 6.89, "fixed capital ROI denominator");
 near(interior.baselineRoi, -4.1, "baseline uses same fixed capital");
 const differentCapital = S.selectExit(interiorRows, null, { capital: 1000000, bootstrap: false });
+assert.equal(differentCapital.objective, "pricePnl");
+near(differentCapital.optimalPnlMin, interior.optimalPnlMin, "capital rescaling cannot change monetary scores");
+assert.deepEqual(differentCapital.optima, interior.optima, "capital rescaling preserves every optimal pair");
 assert.equal(differentCapital.optimal.stop, interior.optimal.stop);
 assert.equal(differentCapital.optimal.takeProfit, interior.optimal.takeProfit);
 near(differentCapital.roiMin, 0.00689, "rescaling fixed capital changes ROI but not optimal pair");
 const unknownCapital = S.selectExit(interiorRows, null, { bootstrap: false });
+assert.equal(unknownCapital.objective, "pricePnl", "missing capital must not label the objective as measured ROI");
+assert.deepEqual(unknownCapital.optima, interior.optima, "missing capital preserves the fixed-entry optimum");
+near(unknownCapital.optimalPnlMin, interior.optimalPnlMin, "missing capital does not substitute another utility");
 assert.equal(unknownCapital.capital, null);
 assert.equal(unknownCapital.roiMin, null, "unknown capital cannot invent an account ROI");
+assert.equal(unknownCapital.roiMax, null);
+assert.equal(unknownCapital.baselineRoi, null);
 
 // Deterministic unlabeled controls cover directions, sizes, leverage and three successive bars without a
 // chosen optimum. Every full-domain score is compared with the independent first-cross calculation.

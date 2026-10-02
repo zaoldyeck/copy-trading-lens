@@ -810,16 +810,16 @@
     "message": "深追含み損警告"
   },
   "radarRecommendedLabel": {
-    "message": "過去データでの最適値（1%刻み）"
+    "message": "過去の収益が最も高い損切り値"
   },
   "radarInsuranceLabel": {
-    "message": "それでも設定するなら、推奨は"
+    "message": "保険として損切りを必ず設定するなら："
   },
   "radarDecisionOptional": {
-    "message": "過去データでの最適値：損切りなし"
+    "message": "過去の収益が最も高い設定：損切りなし"
   },
   "radarDecisionStop": {
-    "message": "過去データでの最適値：{0}% ROE"
+    "message": "過去の収益が最も高い設定：損切り {0}% ROE"
   },
   "radarWhyOptional": {
     "message": "完全に再現できる{0}件では損切りなしの過去スコアが最高です。損切りなしの価格損益は{2} USDT、{1}%の保険的損切りでは{3} USDTです。金額が最も低いシナリオでは{4}件で発動し、{5}件が合計{6} USDT改善、{7}件が早期決済により合計{8} USDT悪化します。"
@@ -834,7 +834,7 @@
     "message": "再現可能な最悪の価格結果は{0}（{1}倍）で、最大証拠金の{2}%を失いました。保険を選ぶ場合、{3}%が有効な損切り候補中で過去スコア最高です。発動時のコピー保有分のみを閉じ、再エントリーで再度損失が出る場合があります。実損失は約定と費用にも左右されます。"
   },
   "radarApplyOptional": {
-    "message": "それでも設定する：{0}% を入力"
+    "message": "保険の損切りを選ぶ：{0}% を入力"
   },
   "radarBandSentence": {
     "message": "再標本化による代替候補（同点最適値を含む）：{0}。標本感度の結果であり、信頼区間や将来の最適値の証明ではありません。"
@@ -957,10 +957,10 @@
     "message": "保険を選ぶ場合、{0}%が有効な損切り候補中で過去スコア最高です。再エントリー、執行遅延、費用により実損失の上限は保証されません。"
   },
   "radarPriceListTitle": {
-    "message": "1%〜95%の全過去結果を表示（損切りなしの価格損益{0} USDT）"
+    "message": "1% 刻みのモデル詳細（1%～95%；損切りなしの合計 {0} USDT）"
   },
   "radarPriceListRow": {
-    "message": "{0}%：最大{1}件で発動、価格損益{2} USDT"
+    "message": "損切り {0}% → 過去の合計 {2} USDT；{3}；最大 {1} 件で発動する可能性"
   },
   "radarObjectivePnl": {
     "message": "無効と1%～95%の全整数の損切りを比較し、各条件で低い方の合計価格損益を最大化します。開始資金と期間が同じなら価格 ROI の最大化と等価です。取引ごとの平均 ROE や費用控除後の口座収益ではありません。"
@@ -1072,5 +1072,92 @@
   },
   "radarOutsideInsurance": {
     "message": "再現可能なこれらの取引の全モデル時系列で発動しないためには、少なくとも{0}% ROEが必要です。Binanceの上限{1}%を超え直接入力できません。欠けた履歴や将来の結果は保証しません。"
+  },
+  "radarPriceListMeaning": {
+    "message": "過去の合計は、今回採用した完全再生可能な全取引の損益合計です。正数は利益、負数は損失。損切りなしとの利益の増減は合計収益の差であり、損切り時に失う金額ではありません。上下限は足内の順序と再エントリーの仮定による違いで、将来予測や口座の最大損失ではありません。"
+  },
+  "radarTotalProfit": {
+    "message": "利益合計 {0} USDT"
+  },
+  "radarTotalLoss": {
+    "message": "損失合計 {0} USDT"
+  },
+  "radarTotalMixed": {
+    "message": "損失 {0} USDT から利益 {1} USDT までの合計"
+  },
+  "radarRelativeEqual": {
+    "message": "損切りなしと合計損益が同じ"
+  },
+  "radarRelativeLessProfit": {
+    "message": "損切りなしより利益が {0} USDT 少ない"
+  },
+  "radarRelativeMoreProfit": {
+    "message": "損切りなしより利益が {0} USDT 多い"
+  },
+  "radarRelativeLowerPnl": {
+    "message": "損切りなしより合計損益が {0} USDT 低い"
+  },
+  "radarRelativeHigherPnl": {
+    "message": "損切りなしより合計損益が {0} USDT 高い"
+  },
+  "radarRelativeMixedProfit": {
+    "message": "損切りなしより利益が {0} USDT 少ない場合から {1} USDT 多い場合まで"
+  },
+  "radarRelativeMixedPnl": {
+    "message": "損切りなしより合計損益が {0} USDT 低い場合と {1} USDT 高い場合がある"
+  },
+  "radarBaselineSummary": {
+    "message": "損切りなし：{0}。"
+  },
+  "radarCandidateSummary": {
+    "message": "{0}% に設定：{1}；{2}。"
+  },
+  "radarTriggerSummary": {
+    "message": "モデルでは最大 {0} 件のポジションで損切りが発動する可能性があります。ローソク足では全発動順序を確認できないため、実際の約定件数を確定した値ではありません。"
+  },
+  "radarNoTriggerSummary": {
+    "message": "今回採用した完全な過去データでは、どのモデル解釈でもこの損切りは発動しません。将来の未発動を保証するものではありません。"
+  },
+  "radarTotalsMeaning": {
+    "message": "上記は完全再生可能な {0} 件すべての合計で、リードトレーダーの元のポジション数量で計算しています。手数料、資金調達料、スリッページを引く前の価格損益であり、あなたのコピー損益や口座 ROI とは異なります。"
+  },
+  "radarInsuranceCostMeaning": {
+    "message": "これは損切りを必ず有効にする場合に、保守的な収益が最も高い候補です。過去の収益を犠牲にする保険で、無料ではなく、実際の最大損失も保証しません。"
+  },
+  "radarModelRangeMeaning": {
+    "message": "範囲は、同じ過去データについて足内の順序や損切り後の追加エントリーへの追随を変えた場合の合計損益の下限／上限です。順位は下限で比較するため、楽観的な上限が高くても優れた設定とは限りません。将来予測ではありません。"
+  },
+  "radarModelDetailsTitle": {
+    "message": "計算目標、採用データの範囲とモデルの限界"
+  },
+  "radarOptionalInputHint": {
+    "message": "過去の収益を優先するなら損切りを無効のままにします。保険の損切りを選ぶ場合のみ {0}% を入力します。"
+  },
+  "advisorOptimalBadge": {
+    "message": "最適設定"
+  },
+  "advisorDisabledBadge": {
+    "message": "リーダーに追従"
+  },
+  "advisorInsuranceNote": {
+    "message": "🛡️ 代替保険設定：{0}% 推奨（極端な清算を防御、勝率 {1}% 保持）"
+  },
+  "advisorDetailsSummary": {
+    "message": "📊 詳細なバックテスト根拠と損益内訳を表示 ▾"
+  },
+  "advisorKpiWinRate": {
+    "message": "勝率維持率"
+  },
+  "advisorKpiDrawdown": {
+    "message": "最大DD阻止"
+  },
+  "advisorKpiGain": {
+    "message": "バックテスト損益改善"
+  },
+  "advisorKpiGainNone": {
+    "message": "過去の最大利益を維持"
+  },
+  "advisorBtnApply": {
+    "message": "1クリックでバイナンスに設定を適用"
   }
 }

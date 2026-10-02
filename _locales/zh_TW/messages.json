@@ -810,16 +810,16 @@
     "message": "高危死扛警告"
   },
   "radarRecommendedLabel": {
-    "message": "歷史最佳止損（每 1% 比較）"
+    "message": "歷史收益最佳止損"
   },
   "radarInsuranceLabel": {
-    "message": "若仍要設止損，建議設"
+    "message": "若一定要設保險止損："
   },
   "radarDecisionOptional": {
-    "message": "歷史最佳設定：不設止損"
+    "message": "歷史收益最佳：不設止損"
   },
   "radarDecisionStop": {
-    "message": "歷史最佳設定：{0}% ROE"
+    "message": "歷史收益最佳：止損 {0}% ROE"
   },
   "radarWhyOptional": {
     "message": "這 {0} 筆可完整回放的交易中，不設止損的歷史分數最高。不設止損的價格損益為 {2} USDT；設 {1}% 保險止損則為 {3} USDT（不同情境）。在金額最差的情境中，止損觸發 {4} 筆：{5} 筆改善損益，共增加 {6} USDT；{7} 筆因提前砍倉而惡化，共減少 {8} USDT。"
@@ -834,7 +834,7 @@
     "message": "可回放交易中最差的價格結果是 {0}（{1}x 槓桿），虧損為峰值保證金的 {2}%。若仍要買保險，{3}% 是啟用止損的候選中歷史分數最高者。模型每次觸發時只平掉當時跟單倉位，後續重新入場可能再次虧損；實際損失還受成交與成本影響。"
   },
   "radarApplyOptional": {
-    "message": "仍要設止損：填入 {0}%"
+    "message": "選擇保險止損：填入 {0}%"
   },
   "radarBandSentence": {
     "message": "重抽樣的替代候選（含並列最佳解）：{0}。這是抽樣敏感度，不是信賴區間或未來最佳值的證明。"
@@ -957,10 +957,10 @@
     "message": "若仍要買保險，{0}% 是啟用止損的候選中歷史分數最高者；它不保證實際損失上限，尤其重新入場、執行延遲與交易成本都會改變結果。"
   },
   "radarPriceListTitle": {
-    "message": "展開全部 1%～95% 歷史結果（不設止損的價格損益 {0} USDT）"
+    "message": "逐 1% 模型明細（1%～95%；不設止損合計 {0} USDT）"
   },
   "radarPriceListRow": {
-    "message": "設 {0}%：最多觸發 {1} 筆，價格損益 {2} USDT"
+    "message": "止損 {0}% → 歷史合計 {2} USDT；{3}；最多 {1} 筆可能觸發"
   },
   "radarObjectivePnl": {
     "message": "完整比較不設止損與 1%～95% 的每個整數，以各情境中較低的「總價格損益」最高者為最佳值。在相同固定起始本金與期間下，等同價格 ROI 最大化；不是逐筆 ROE 平均，也不是扣成本後的帳戶收益。"
@@ -1072,5 +1072,92 @@
   },
   "radarOutsideInsurance": {
     "message": "要在這些可完整回放交易的所有模型時序都不觸發，需要至少 {0}% ROE；超出幣安 {1}% 上限，不能直接填入。這不涵蓋缺失歷史，也不保證未來表現。"
+  },
+  "radarPriceListMeaning": {
+    "message": "「歷史合計」加總本次可完整回放的全部交易：正數是獲利、負數是虧損。與不設止損比較的少賺／多賺是收益差額，不是止損時會虧掉的錢。上下界是模型時序與重新跟單假設的不同結果，不是未來預測，也不是最大帳戶虧損。"
+  },
+  "radarTotalProfit": {
+    "message": "合計賺 {0} USDT"
+  },
+  "radarTotalLoss": {
+    "message": "合計虧 {0} USDT"
+  },
+  "radarTotalMixed": {
+    "message": "合計介於虧 {0} 至賺 {1} USDT"
+  },
+  "radarRelativeEqual": {
+    "message": "與不設止損的總損益相同"
+  },
+  "radarRelativeLessProfit": {
+    "message": "比不設止損少賺 {0} USDT"
+  },
+  "radarRelativeMoreProfit": {
+    "message": "比不設止損多賺 {0} USDT"
+  },
+  "radarRelativeLowerPnl": {
+    "message": "比不設止損的總損益減少 {0} USDT"
+  },
+  "radarRelativeHigherPnl": {
+    "message": "比不設止損的總損益增加 {0} USDT"
+  },
+  "radarRelativeMixedProfit": {
+    "message": "比不設止損少賺 {0}～多賺 {1} USDT"
+  },
+  "radarRelativeMixedPnl": {
+    "message": "相較不設止損，總損益可能減少 {0}，也可能增加 {1} USDT"
+  },
+  "radarBaselineSummary": {
+    "message": "不設止損：{0}。"
+  },
+  "radarCandidateSummary": {
+    "message": "設 {0}%：{1}；{2}。"
+  },
+  "radarTriggerSummary": {
+    "message": "模型最多有 {0} 筆倉位可能觸發止損；K 線無法確認所有觸發時序，因此這不是實際確定會觸發的筆數。"
+  },
+  "radarNoTriggerSummary": {
+    "message": "這次採用的完整歷史樣本在所有模型情境都未觸發此止損；這不保證未來也不觸發。"
+  },
+  "radarTotalsMeaning": {
+    "message": "上述金額是這 {0} 筆可完整回放交易的全段合計，按帶單員原倉位大小計算。這是未扣手續費、資金費與滑價的價格損益，不能直接當成你的跟單損益或帳戶 ROI。"
+  },
+  "radarInsuranceCostMeaning": {
+    "message": "這個保險值是「一定要啟用止損」時保守收益最高的候選；它有歷史收益代價，並非免費保險，也不保證實際最大虧損。"
+  },
+  "radarModelRangeMeaning": {
+    "message": "範圍是同一段歷史在 K 線內未知時序、止損後是否跟後續加碼等假設下的較低／較高總損益。排名比較較低結果；樂觀上限更高，不代表設定較好。這不是未來收益預測。"
+  },
+  "radarModelDetailsTitle": {
+    "message": "計算目標、樣本覆蓋與模型限制"
+  },
+  "radarOptionalInputHint": {
+    "message": "以歷史收益為先就維持不啟用；只有選擇保險止損時才填入 {0}%。"
+  },
+  "advisorOptimalBadge": {
+    "message": "歷史最佳"
+  },
+  "advisorDisabledBadge": {
+    "message": "隨帶單員平倉"
+  },
+  "advisorInsuranceNote": {
+    "message": "🛡️ 替代防守保險：建議設 {0}%（防極端穿倉，勝率保留 {1}%）"
+  },
+  "advisorDetailsSummary": {
+    "message": "📊 查看詳細回測依據與盈虧明細 ▾"
+  },
+  "advisorKpiWinRate": {
+    "message": "勝率保留率"
+  },
+  "advisorKpiDrawdown": {
+    "message": "歷史最深回撤"
+  },
+  "advisorKpiGain": {
+    "message": "回測盈虧改善"
+  },
+  "advisorKpiGainNone": {
+    "message": "維持歷史最大獲利"
+  },
+  "advisorBtnApply": {
+    "message": "一鍵套用推薦設置至幣安"
   }
 }

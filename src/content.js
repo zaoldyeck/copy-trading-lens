@@ -78,15 +78,24 @@
     if (run.phase === "ready" && run.analysis?.stopLossRadar) mountInlineSettingHelper(run.analysis.stopLossRadar);
     if (collapsed) return renderLauncher(run.context);
     if (run.phase === "failed") return renderError(run.error);
+
+    const prevPanel = typeof root !== "undefined" && root && typeof root.querySelector === "function" ? root.querySelector(".ctl-panel") : null;
+    const prevScrollTop = prevPanel ? prevPanel.scrollTop : 0;
+
     // Nothing has landed yet: only the loading view. Once something has, the card fills in piece by piece, and each
     // value waits for its own inputs (see landed()) instead of showing a default.
-    if (!run.analysis) return renderLoading(run.context);
-
-    if (run.context?.pageType === "copy-setting" && settingModeView === "advisor") {
-      return renderSettingAdvisor(run.context, run.raw, run.analysis);
+    if (!run.analysis) {
+      renderLoading(run.context);
+    } else if (run.context?.pageType === "copy-setting" && settingModeView === "advisor") {
+      renderSettingAdvisor(run.context, run.raw, run.analysis);
+    } else {
+      renderAnalysis(run.context, run.raw, run.analysis);
     }
 
-    return renderAnalysis(run.context, run.raw, run.analysis);
+    if (prevScrollTop > 0 && typeof root !== "undefined" && root && typeof root.querySelector === "function") {
+      const newPanel = root.querySelector(".ctl-panel");
+      if (newPanel) newPanel.scrollTop = prevScrollTop;
+    }
   }
 
   function setCollapsed(value) {
@@ -389,8 +398,53 @@
     return ranges.map(([lo, hi]) => lo === hi ? `${lo}%` : `${lo}–${hi}%`).join(", ");
   }
 
+  function noStopOptimal(radar) {
+    // The historical selector is authoritative; bootstrap alternatives cannot turn a positive-stop optimum off.
+    return Object.prototype.hasOwnProperty.call(radar.stopSelection || {}, "optimal")
+      ? radar.stopSelection.optimal === null : radar.stopOptional;
+  }
+
   function stopDecision(radar) {
-    return radar.stopOptional ? t("radarDecisionOptional") : t("radarDecisionStop", [radar.recommendedRoe]);
+    return noStopOptimal(radar) ? t("radarDecisionOptional") : t("radarDecisionStop", [radar.recommendedRoe]);
+  }
+
+  // Compare total PnL with the same no-stop history. A lower positive profit is not an actual money loss, and
+  // a range crossing the baseline must retain both its downside and upside rather than being called a cost.
+  function relativePnl(low, high, baseline) {
+    const deltaLow = low - baseline;
+    const deltaHigh = high - baseline;
+    if (deltaLow === 0 && deltaHigh === 0) return t("radarRelativeEqual");
+    if (deltaHigh <= 0) return t(low >= 0 && baseline >= 0 ? "radarRelativeLessProfit" : "radarRelativeLowerPnl", [exitMoneyRange(-deltaHigh, -deltaLow)]);
+    if (deltaLow >= 0) return t(baseline >= 0 ? "radarRelativeMoreProfit" : "radarRelativeHigherPnl", [exitMoneyRange(deltaLow, deltaHigh)]);
+    return t(low >= 0 && baseline >= 0 ? "radarRelativeMixedProfit" : "radarRelativeMixedPnl", [exitMoneyRange(-deltaLow, -deltaLow), exitMoneyRange(deltaHigh, deltaHigh)]);
+  }
+
+  function historicalPnl(low, high) {
+    if (low >= 0) return t("radarTotalProfit", [exitMoneyRange(low, high)]);
+    if (high <= 0) return t("radarTotalLoss", [exitMoneyRange(-high, -low)]);
+    return t("radarTotalMixed", [exitMoneyRange(-low, -low), exitMoneyRange(high, high)]);
+  }
+
+  function stopSummaryLines(radar) {
+    const tradeoff = radar.tradeoff;
+    const low = Math.min(tradeoff.pnlStopWorse, tradeoff.pnlStopBetter);
+    const high = Math.max(tradeoff.pnlStopWorse, tradeoff.pnlStopBetter);
+    const lines = [
+      t("radarBaselineSummary", [historicalPnl(tradeoff.pnlNone, tradeoff.pnlNone)]),
+      t("radarCandidateSummary", [radar.recommendedRoe, historicalPnl(low, high), relativePnl(low, high, tradeoff.pnlNone)]),
+      t(tradeoff.triggeredAny > 0 ? "radarTriggerSummary" : "radarNoTriggerSummary", [tradeoff.triggeredAny]),
+      t("radarTotalsMeaning", [tradeoff.positions])
+    ];
+    if (noStopOptimal(radar) && low < tradeoff.pnlNone) lines.push(t("radarInsuranceCostMeaning"));
+    if (low !== high) lines.push(t("radarModelRangeMeaning"));
+    return lines;
+  }
+
+  function stopModelDetails(radar) {
+    return h("details", { class: "ctl-radar-pricelist" }, [
+      h("summary", { text: t("radarModelDetailsTitle") }),
+      h("div", { class: "ctl-radar-why" }, stopExplanation(radar).map((text) => h("p", { text })))
+    ]);
   }
 
   // Why this answer, in the trader's own numbers: what the stop would have done to a copier on this trader's own
@@ -408,7 +462,7 @@
     const paragraphs = [];
     paragraphs.push(t("radarObjectivePnl"));
     paragraphs.push(t("radarCoverage", [radar.simulatedPositions, radar.positionCount]));
-    if (radar.stopOptional) {
+    if (noStopOptimal(radar)) {
       paragraphs.push(tradeoff.triggeredAny > 0 ? t("radarWhyOptional", effects) : t("radarWhyNoCost", [tradeoff.positions, stop, usdt(tradeoff.pnlNone)]));
       const worst = tradeoff.worstLoss;
       paragraphs.push(worst && worst.returnPct < -stop
@@ -422,7 +476,7 @@
       paragraphs.push(t(radar.stopSelection.neverTriggeredEquivalentToOptimal
         ? "radarFreeInsurance" : "radarFreeBaselineOnly", [neverTriggered]));
     } else if (neverTriggered === null) {
-      if (radar.stopOptional) paragraphs.push(t("radarNoFreeInsurance", [stop]));
+      if (noStopOptimal(radar)) paragraphs.push(t("radarNoFreeInsurance", [stop]));
       const historicalNeverTrigger = radar.stopSelection.historicalNeverTriggerRoe;
       if (Number.isFinite(historicalNeverTrigger) && historicalNeverTrigger > 95) {
         paragraphs.push(t("radarOutsideInsurance", [historicalNeverTrigger, 95]));
@@ -443,13 +497,14 @@
       h("ul", {}, rows.map((point) => {
         const low = point.pnlMin;
         const high = point.pnlMax;
-        return h("li", { text: t("radarPriceListRow", [point.stop, point.triggered, Math.round(low) === Math.round(high) ? usdt(low) : `${usdt(low)}～${usdt(high)}`]) });
-      }))
+        return h("li", { text: t("radarPriceListRow", [point.stop, point.triggered, Math.round(low) === Math.round(high) ? usdt(low) : `${usdt(low)}～${usdt(high)}`, relativePnl(low, high, radar.tradeoff.pnlNone)]) });
+      })),
+      h("p", { text: t("radarPriceListMeaning") })
     ]);
   }
 
   function applyLabel(radar) {
-    return radar.stopOptional ? t("radarApplyOptional", [radar.recommendedRoe]) : t("btnApplyToBinanceForm", [radar.recommendedRoe]);
+    return noStopOptimal(radar) ? t("radarApplyOptional", [radar.recommendedRoe]) : t("btnApplyToBinanceForm", [radar.recommendedRoe]);
   }
 
   function exitOptionLabel(value) {
@@ -565,13 +620,13 @@
       h("div", { class: "ctl-radar-box" }, [
         h("div", { class: "ctl-radar-primary" }, [
           h("div", { class: "ctl-radar-decision", text: stopDecision(radar) }),
-          h("div", { class: "ctl-radar-label", text: t(radar.stopOptional ? "radarInsuranceLabel" : "radarRecommendedLabel") }),
+          h("div", { class: "ctl-radar-label", text: t(noStopOptimal(radar) ? "radarInsuranceLabel" : "radarRecommendedLabel") }),
           h("div", { class: "ctl-radar-value" }, [
             h("span", { class: "ctl-radar-number", text: `${radar.recommendedRoe}%` }),
             h("span", { class: "ctl-radar-unit", text: t("radarRoeUnit") })
           ]),
           h("div", { class: "ctl-radar-sub", text: t("radarEquivalentPrice", [radar.dominantLeverage, radar.recommendedPriceDrop]) }),
-          h("div", { class: "ctl-radar-direct-hint", text: t("radarDirectInputHint", [radar.recommendedRoe]) }),
+          h("div", { class: "ctl-radar-direct-hint", text: t(noStopOptimal(radar) ? "radarOptionalInputHint" : "radarDirectInputHint", [radar.recommendedRoe]) }),
           h("button", {
             class: "ctl-radar-fill-btn",
             type: "button",
@@ -602,7 +657,8 @@
             })
           ])
         ]),
-        h("div", { class: "ctl-radar-why" }, stopExplanation(radar).map((text) => h("p", { text }))),
+        h("div", { class: "ctl-radar-why" }, stopSummaryLines(radar).map((text) => h("p", { text }))),
+        stopModelDetails(radar),
         stopPriceList(radar),
         h("div", { class: "ctl-radar-grid" }, [
           h("div", { class: "ctl-radar-stat" }, [
@@ -719,6 +775,20 @@
     return Math.min(99, Math.round(sum));
   }
 
+  function updateProgressBannerOnly() {
+    if (typeof root?.querySelector !== "function") return false;
+    const banner = root.querySelector(".ctl-streaming-banner");
+    if (!banner || typeof banner.querySelector !== "function") return false;
+    const fill = banner.querySelector(".ctl-progress-fill");
+    const percent = loadPercent(run);
+    if (fill) {
+      fill.style.width = `${percent}%`;
+      const bar = banner.querySelector(".ctl-progress");
+      if (bar) bar.setAttribute("aria-valuenow", String(percent));
+    }
+    return true;
+  }
+
   function renderStreamingBanner(stage) {
     let loaded = t("stageLoadedDetail");
     let loading = t("stageLoadingPositions");
@@ -738,10 +808,138 @@
         h("div", { class: "ctl-progress-fill", style: `width: ${percent}%` })
       ]),
       h("div", { class: "ctl-progress-text" }, [
-        h("strong", { text: `${percent}%` }),
-        h("span", { text: ` ｜ ⚡ ${loaded} ｜ ` }),
-        h("span", { class: "ctl-mini-spinner", style: "border-top-color: #60a5fa; margin-right: 5px;" }),
+        h("span", { class: "ctl-mini-spinner", style: "border-top-color: #f0b90b; margin-right: 6px;" }),
+        h("span", { text: `⚡ ${loaded} ｜ ` }),
         h("span", { text: `${loading}...` })
+      ])
+    ]);
+  }
+
+  function renderAdvisorEmpty(raw) {
+    return h("div", { class: "ctl-advisor-hero ctl-advisor-empty" }, [
+      h("div", { class: "ctl-advisor-hero-label", text: t("sectionStopLossRadar") }),
+      h("p", { class: "ctl-muted", style: "margin: 12px 0 16px; font-size: 13px; line-height: 1.5;", text: t("cautionThinClosedTrades", [raw?.positionHistory?.length || 0]) || t("payoffNoClosedTrades") }),
+      h("button", {
+        class: "ctl-primary ctl-advisor-apply-btn",
+        type: "button",
+        onclick: () => {
+          settingModeView = "full";
+          paint();
+        }
+      }, [
+        h("span", { text: t("btnViewFullAnalysis") })
+      ])
+    ]);
+  }
+
+  function renderAdvisorContent(radar, raw, pending) {
+    if (pending) {
+      return loadingBlock("ctl-advisor-hero ctl-advisor-empty", typeof pending === "object"
+        ? t(pending.scope === "holdout" ? "exitValidatingProgress" : "exitOptimizingProgress", [pending.done.toLocaleString("en-US"), pending.total.toLocaleString("en-US"), pending.percent])
+        : t("exitOptimizing"));
+    }
+    const selection = radar.exitSelection;
+    const optimal = selection?.optimal || { stop: (noStopOptimal(radar) ? null : radar.recommendedRoe), takeProfit: null };
+    const stopValText = exitOptionLabel(optimal.stop);
+    const tpValText = exitOptionLabel(optimal.takeProfit);
+    const stopSub = optimal.stop === null ? t("radarDecisionOptional") : t("radarEquivalentPrice", [radar.dominantLeverage, (optimal.stop / radar.dominantLeverage).toFixed(2)]);
+    const tpSub = optimal.takeProfit === null ? t("advisorDisabledBadge") : `+${(optimal.takeProfit / radar.dominantLeverage).toFixed(2)}%`;
+
+    const deltaMin = selection?.deltaMin ?? (radar.tradeoff?.helpedUsdt ? (radar.tradeoff.helpedUsdt + radar.tradeoff.hurtUsdt) : 0);
+    const deltaMax = selection?.deltaMax ?? deltaMin;
+    const gainText = deltaMin > 0 ? `+${exitMoneyRange(deltaMin, deltaMax)} USDT` : (deltaMin === 0 && deltaMax === 0 ? t("advisorKpiGainNone") : `${exitMoneyRange(deltaMin, deltaMax)} USDT`);
+
+    const hasInsuranceNote = optimal.stop === null && Number.isInteger(radar.recommendedRoe);
+
+    return h("div", {}, [
+      // Hero Setting Card
+      h("div", { class: "ctl-advisor-hero-card" }, [
+        h("div", { class: "ctl-advisor-card-title" }, [
+          h("span", { text: t("exitHistoricalLabel") }),
+          h("span", { class: "ctl-advisor-badge", text: t("advisorOptimalBadge") })
+        ]),
+        h("div", { class: "ctl-advisor-pair-grid" }, [
+          h("div", { class: "ctl-advisor-cell" }, [
+            h("span", { class: "ctl-advisor-cell-label", text: t("exitStopLabel") }),
+            h("strong", { class: "ctl-advisor-val-large", text: stopValText }),
+            h("span", { class: "ctl-advisor-val-sub", text: stopSub })
+          ]),
+          h("div", { class: "ctl-advisor-cell" }, [
+            h("span", { class: "ctl-advisor-cell-label", text: t("exitTakeProfitLabel") }),
+            h("strong", { class: "ctl-advisor-val-large", text: tpValText }),
+            h("span", { class: "ctl-advisor-val-sub", text: tpSub })
+          ])
+        ]),
+        hasInsuranceNote ? h("div", { class: "ctl-advisor-insurance-tip", text: t("advisorInsuranceNote", [radar.recommendedRoe, radar.winRetentionRate]) }) : null,
+        h("button", {
+          class: "ctl-primary ctl-advisor-apply-btn",
+          type: "button",
+          onclick: (e) => {
+            const btn = e.currentTarget;
+            const filled = selection ? applyJointExitsToBinanceInputs(selection) : applyStopLossToBinanceInputs(radar.recommendedRoe);
+            btn.textContent = filled ? `✓ ${t("exitApplied")}` : t("exitInputUnavailable");
+            btn.classList.toggle("is-applied", filled);
+            setTimeout(() => {
+              btn.textContent = `⚡ ${t("advisorBtnApply")}`;
+              btn.classList.remove("is-applied");
+            }, 2500);
+          }
+        }, [
+          h("span", { text: `⚡ ${t("advisorBtnApply")}` })
+        ])
+      ]),
+
+      // 2x2 Key Decision Metrics
+      h("div", { class: "ctl-advisor-kpi-grid" }, [
+        h("div", { class: "ctl-advisor-kpi-card" }, [
+          h("span", { class: "ctl-advisor-kpi-label", text: `🎯 ${t("advisorKpiWinRate")}` }),
+          h("strong", { class: "ctl-advisor-kpi-val", text: `${radar.winRetentionRate}%` })
+        ]),
+        h("div", { class: "ctl-advisor-kpi-card" }, [
+          h("span", { class: "ctl-advisor-kpi-label", text: `🛡️ ${t("advisorKpiDrawdown")}` }),
+          h("strong", { class: `ctl-advisor-kpi-val ${radar.hasSevereBagHolding ? "is-danger" : ""}`, text: `-${radar.worstHistoricalRoeMae}%` })
+        ]),
+        h("div", { class: "ctl-advisor-kpi-card" }, [
+          h("span", { class: "ctl-advisor-kpi-label", text: `💰 ${t("advisorKpiGain")}` }),
+          h("strong", { class: "ctl-advisor-kpi-val is-green", text: gainText })
+        ]),
+        h("div", { class: "ctl-advisor-kpi-card" }, [
+          h("span", { class: "ctl-advisor-kpi-label", text: `⚡ ${t("radarDominantLev")}` }),
+          h("strong", { class: "ctl-advisor-kpi-val is-gold", text: `${radar.dominantLeverage}x` })
+        ])
+      ]),
+
+      // Expandable Technical Backtest Details
+      h("details", { class: "ctl-advisor-details" }, [
+        h("summary", { class: "ctl-advisor-details-summary", text: t("advisorDetailsSummary") }),
+        h("div", { class: "ctl-advisor-details-content" }, [
+          h("div", { class: "ctl-value-pillars" }, [
+            h("div", { class: "ctl-pillar" }, [
+              h("strong", {}, [
+                h("span", { text: "🎯 " }),
+                h("span", { text: t("settingValuePropWinTitle", [radar.winRetentionRate]) })
+              ]),
+              h("p", { text: t("settingValuePropWinDesc") })
+            ]),
+            h("div", { class: "ctl-pillar" }, [
+              h("strong", {}, [
+                h("span", { text: "🛡️ " }),
+                h("span", { text: t("settingValuePropBagTitle") })
+              ]),
+              h("p", { text: t("settingValuePropBagDesc", [radar.worstHistoricalRoeMae]) })
+            ]),
+            h("div", { class: "ctl-pillar" }, [
+              h("strong", {}, [
+                h("span", { text: "📊 " }),
+                h("span", { text: t("settingValuePropStatsTitle") })
+              ]),
+              h("p", { text: t("settingValuePropStatsDesc", [radar.allStats.p50.toFixed(1), radar.allStats.p90.toFixed(1)]) })
+            ])
+          ]),
+          h("div", { class: "ctl-radar-why" }, (selection ? jointExitExplanation(radar) : stopSummaryLines(radar)).map((text) => h("p", { text }))),
+          ...(selection ? jointExitProfiles(selection) : [stopPriceList(radar)]),
+          h("p", { class: "ctl-muted", style: "font-size: 11px; margin-top: 8px;", text: t("radarBinanceRoeNotice") })
+        ])
       ])
     ]);
   }
@@ -751,6 +949,7 @@
     const meta = analysis?.meta || {};
     const traderName = meta.name || context.id;
     const radarReady = landed("positions", "marks", "orders", "market");
+    const exitsPending = run.phase !== "ready" && run.streamingStage === "exits" && (run.exitProgress || true);
 
     ensureRoot().replaceChildren(
       h("section", { class: "ctl-panel ctl-setting-card" }, [
@@ -769,76 +968,7 @@
 
         !radarReady
           ? loadingBlock("ctl-advisor-hero ctl-advisor-empty", t("streamingRadarLoading"))
-          : (radar && !radar.insufficientData ? h("div", {}, [
-            renderJointExits(radar, true, run.phase !== "ready" && run.streamingStage === "exits" && (run.exitProgress || true)),
-            h("details", { open: radar.exitSelection ? null : "" }, [
-              h("summary", { class: "ctl-radar-label", text: t("exitStopOnlyTitle") }),
-              h("div", { class: "ctl-advisor-hero" }, [
-                h("div", { class: "ctl-advisor-decision", text: stopDecision(radar) }),
-                h("div", { class: "ctl-advisor-hero-label", text: t(radar.stopOptional ? "radarInsuranceLabel" : "radarRecommendedLabel") }),
-                h("div", { class: "ctl-advisor-hero-val" }, [
-                  h("span", { class: "ctl-advisor-num", text: `${radar.recommendedRoe}%` }),
-                  h("span", { class: "ctl-advisor-unit", text: t("radarRoeUnit") })
-                ]),
-                h("div", { class: "ctl-advisor-sub", text: t("radarEquivalentPrice", [radar.dominantLeverage, radar.recommendedPriceDrop]) }),
-                h("div", { class: "ctl-radar-why" }, stopExplanation(radar).map((text) => h("p", { text }))),
-                stopPriceList(radar),
-                h("button", {
-                  class: "ctl-primary ctl-advisor-apply-btn",
-                  type: "button",
-                  onclick: (e) => {
-                    const btn = e.currentTarget;
-                    const filled = applyStopLossToBinanceInputs(radar.recommendedRoe);
-                    btn.textContent = filled ? `✓ ${t("exitApplied")}` : t("exitInputUnavailable");
-                    btn.classList.toggle("is-applied", filled);
-                    setTimeout(() => {
-                      btn.textContent = `⚡ ${applyLabel(radar)}`;
-                      btn.classList.remove("is-applied");
-                    }, 2500);
-                  }
-                }, [
-                  h("span", { text: `⚡ ${applyLabel(radar)}` })
-                ])
-              ])
-            ])
-          ]) : h("div", { class: "ctl-advisor-hero ctl-advisor-empty" }, [
-            h("div", { class: "ctl-advisor-hero-label", text: t("sectionStopLossRadar") }),
-            h("p", { class: "ctl-muted", style: "margin: 12px 0 16px; font-size: 13px; line-height: 1.5;", text: t("cautionThinClosedTrades", [raw?.positionHistory?.length || 0]) || t("payoffNoClosedTrades") }),
-            h("button", {
-              class: "ctl-primary ctl-advisor-apply-btn",
-              type: "button",
-              onclick: () => {
-                settingModeView = "full";
-                paint();
-              }
-            }, [
-              h("span", { text: t("btnViewFullAnalysis") })
-            ])
-          ])),
-
-        radarReady && radar && !radar.insufficientData ? h("div", { class: "ctl-value-pillars" }, [
-          h("div", { class: "ctl-pillar" }, [
-            h("strong", {}, [
-              h("span", { text: "🎯 " }),
-              h("span", { text: t("settingValuePropWinTitle", [radar.winRetentionRate]) })
-            ]),
-            h("p", { text: t("settingValuePropWinDesc") })
-          ]),
-          h("div", { class: "ctl-pillar" }, [
-            h("strong", {}, [
-              h("span", { text: "🛡️ " }),
-              h("span", { text: t("settingValuePropBagTitle") })
-            ]),
-            h("p", { text: t("settingValuePropBagDesc", [radar.worstHistoricalRoeMae]) })
-          ]),
-          h("div", { class: "ctl-pillar" }, [
-            h("strong", {}, [
-              h("span", { text: "📊 " }),
-              h("span", { text: t("settingValuePropStatsTitle") })
-            ]),
-            h("p", { text: t("settingValuePropStatsDesc", [radar.allStats.p50.toFixed(1), radar.allStats.p90.toFixed(1)]) })
-          ])
-        ]) : null,
+          : (radar && !radar.insufficientData ? renderAdvisorContent(radar, raw, exitsPending) : renderAdvisorEmpty(raw)),
 
         h("div", { class: "ctl-advisor-footer" }, [
           h("button", {
@@ -1015,7 +1145,9 @@
           if (HISTORY_LABELS.has(event.label)) window.CopyTradingLensPositionsPanel?.setProgress(event);
           const before = loadPercent(run);
           run = { ...run, progress: { ...run.progress, [event.label]: { done: event.done ?? event.fetched, total: event.total } } };
-          if (loadPercent(run) !== before) paint();
+          if (loadPercent(run) !== before) {
+            if (!updateProgressBannerOnly()) paint();
+          }
         },
         // The read lands in pieces and the card fills in as each does. Marks can land after orders: keep the furthest
         // stage reached. A partial analysis can fail on what has not landed; then nothing is drawn yet.

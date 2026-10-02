@@ -561,7 +561,7 @@
     }
     return {
       objective,
-      scope: "historicalPriceROI",
+      scope: "historicalPricePnl",
       executionModel: "static",
       candidateStep: 1,
       candidateMin: 1,
@@ -690,7 +690,8 @@
     const deltas = outcomes[worse].map((r, i) => r.pnl - baseline[i].pnl);
     const capital = Number.isFinite(options.capital) && options.capital > 0 ? options.capital : null;
     const result = {
-      objective: "priceROI", scope: "historicalPriceROI", executionModel, candidateStep: 1,
+      // Scores always use aggregate price PnL. ROI is a report derived only from a supplied fixed capital.
+      objective: "pricePnl", scope: "historicalPricePnl", executionModel, candidateStep: 1,
       stopMax, takeProfitMax, simulatedPositions: sims.length, optimal, optima,
       baselinePnl, optimalPnlMin: best.pnlMin, optimalPnlMax: best.pnlMax,
       deltaMin: best.pnlMin - baselinePnl, deltaMax: best.pnlMax - baselinePnl,
@@ -870,7 +871,7 @@
       dominantLeverage,
       recommendedRoe,
       recommendedPriceDrop: Number((recommendedRoe / dominantLeverage).toPrecision(4)),
-      // the data cannot tell a stop from no stop: the optimum is "none", or "none" sits in the stable band
+      // Only an actual no-stop optimum is optional; bootstrap alternatives cannot change the selected policy.
       stopOptional: selection.optimal === null,
       winRetentionRate: Number((winIndices.length ? (keptWins / winIndices.length) * 100 : 100).toFixed(1)),
       tradeoff,

@@ -810,16 +810,16 @@
     "message": "Deep Bag-Holding Warning"
   },
   "radarRecommendedLabel": {
-    "message": "Best historical setting (1% steps)"
+    "message": "Stop loss with the highest historical return"
   },
   "radarInsuranceLabel": {
-    "message": "If you still want a stop, set"
+    "message": "If you require an insurance stop:"
   },
   "radarDecisionOptional": {
-    "message": "Historical optimum: no stop loss"
+    "message": "Highest historical return: no stop loss"
   },
   "radarDecisionStop": {
-    "message": "Historical optimum: {0}% ROE"
+    "message": "Highest historical return: {0}% ROE stop loss"
   },
   "radarWhyOptional": {
     "message": "Across {0} fully replayable positions, no stop has the highest historical score. No-stop price PnL was {2} USDT; a {1}% insurance stop gives {3} USDT across the model readings. In the least profitable reading it triggers on {4} positions: {5} improve by {6} USDT in total; {7} worsen by {8} USDT."
@@ -834,7 +834,7 @@
     "message": "The worst replayable price outcome was {0} ({1}x), losing {2}% of peak margin. If you choose insurance, {3}% is the stop with the highest historical score among enabled stops. Each trigger closes the then-current copier position in this model; later reentries can lose again. Actual losses also depend on execution and costs."
   },
   "radarApplyOptional": {
-    "message": "Set one anyway: fill in {0}%"
+    "message": "Choose insurance stop: enter {0}%"
   },
   "radarBandSentence": {
     "message": "Bootstrap alternatives (including exact ties): {0}. These are resampling sensitivity results, not a confidence interval or proof of future optimality."
@@ -957,10 +957,10 @@
     "message": "If you choose insurance, {0}% has the highest historical score among enabled stops. It does not guarantee a cap on realised losses, especially after reentry, execution delay or costs."
   },
   "radarPriceListTitle": {
-    "message": "Expand all 1%–95% historical outcomes (no-stop price PnL {0} USDT)"
+    "message": "Model details in 1% steps (1%–95%; no-stop total {0} USDT)"
   },
   "radarPriceListRow": {
-    "message": "{0}%: up to {1} positions triggered; price PnL {2} USDT"
+    "message": "SL {0}% → historical total {2} USDT; {3}; up to {1} positions may trigger"
   },
   "radarObjectivePnl": {
     "message": "Every integer stop from 1% to 95% and no stop is compared using the lower total price PnL across scenarios. For the same fixed starting capital and period, this is equivalent to maximising price ROI. It is not average trade ROE or net account return."
@@ -1072,5 +1072,92 @@
   },
   "radarOutsideInsurance": {
     "message": "To avoid triggering in every model timing of these replayable trades requires at least {0}% ROE. This exceeds Binance’s {1}% limit and cannot be entered directly. It does not cover missing history or guarantee future results."
+  },
+  "radarPriceListMeaning": {
+    "message": "Historical total adds every fully replayable trade admitted to this analysis: positive means profit, negative means loss. Earning less or more than no stop is a difference in total return, not money lost at a stop. Bounds reflect different intrabar timing and reentry assumptions, not a future forecast or a maximum account loss."
+  },
+  "radarTotalProfit": {
+    "message": "total profit of {0} USDT"
+  },
+  "radarTotalLoss": {
+    "message": "total loss of {0} USDT"
+  },
+  "radarTotalMixed": {
+    "message": "a total ranging from a {0} USDT loss to a {1} USDT profit"
+  },
+  "radarRelativeEqual": {
+    "message": "the same total PnL as no stop"
+  },
+  "radarRelativeLessProfit": {
+    "message": "{0} USDT less profit than no stop"
+  },
+  "radarRelativeMoreProfit": {
+    "message": "{0} USDT more profit than no stop"
+  },
+  "radarRelativeLowerPnl": {
+    "message": "total PnL {0} USDT lower than no stop"
+  },
+  "radarRelativeHigherPnl": {
+    "message": "total PnL {0} USDT higher than no stop"
+  },
+  "radarRelativeMixedProfit": {
+    "message": "from {0} USDT less profit to {1} USDT more profit than no stop"
+  },
+  "radarRelativeMixedPnl": {
+    "message": "total PnL may be {0} USDT lower or {1} USDT higher than no stop"
+  },
+  "radarBaselineSummary": {
+    "message": "No stop loss: {0}."
+  },
+  "radarCandidateSummary": {
+    "message": "With a {0}% stop: {1}; {2}."
+  },
+  "radarTriggerSummary": {
+    "message": "At most {0} positions may trigger in the model. Candles cannot establish every trigger sequence, so this is not a confirmed count of actual executions."
+  },
+  "radarNoTriggerSummary": {
+    "message": "This stop never triggers in any model reading of the admitted, complete history; it can still trigger in the future."
+  },
+  "radarTotalsMeaning": {
+    "message": "These amounts total all {0} fully replayable trades, using the lead trader’s original position sizes. They are price PnL before fees, funding and slippage, and cannot be treated as your copy PnL or account ROI."
+  },
+  "radarInsuranceCostMeaning": {
+    "message": "This is the candidate with the highest conservative return among enabled stops. It costs historical return, is not free insurance, and does not guarantee a maximum realized loss."
+  },
+  "radarModelRangeMeaning": {
+    "message": "The range is the lower/upper total PnL for the same history under different intrabar timing and post-stop reentry assumptions. Settings are ranked by the lower result; a higher optimistic upper bound does not make a setting better. This is not a forecast."
+  },
+  "radarModelDetailsTitle": {
+    "message": "Objective, sample coverage and model limits"
+  },
+  "radarOptionalInputHint": {
+    "message": "For the highest historical return, leave SL disabled. Enter {0}% only if you choose the insurance stop."
+  },
+  "advisorOptimalBadge": {
+    "message": "Optimal"
+  },
+  "advisorDisabledBadge": {
+    "message": "Follow lead"
+  },
+  "advisorInsuranceNote": {
+    "message": "🛡️ Defensive fallback: set {0}% (safeguards catastrophic liquidation, retains {1}% win rate)"
+  },
+  "advisorDetailsSummary": {
+    "message": "📊 View detailed backtest evidence & PnL breakdown ▾"
+  },
+  "advisorKpiWinRate": {
+    "message": "Win Retention"
+  },
+  "advisorKpiDrawdown": {
+    "message": "Deepest Drawdown"
+  },
+  "advisorKpiGain": {
+    "message": "Backtest Delta"
+  },
+  "advisorKpiGainNone": {
+    "message": "Retains Full Profit"
+  },
+  "advisorBtnApply": {
+    "message": "1-Click Apply Settings to Binance"
   }
 }

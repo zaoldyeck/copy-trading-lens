@@ -10,10 +10,15 @@ const end = source.indexOf("  function renderStopLossRadar(", begin);
 assert.ok(begin > 0 && end > begin);
 const context = vm.createContext({
   t: (key, args = []) => ({ key, args }),
+  run: { phase: "ready" },
+  location: { href: "https://www.binance.com/en/copy-trading/copy-setting" },
   loadingBlock: (className, text) => ({ className, text }),
   h: (tag, props = {}, children = []) => ({ tag, props, children, replaceChildren(...next) { this.children = next; } })
 });
-vm.runInContext(`${source.slice(begin, end)}\nthis.ui = {stableBand,stopExplanation,stopPriceList,jointExitExplanation,jointProfileRows,jointExitProfiles,renderJointExits};`, context);
+vm.runInContext(`${source.slice(begin, end)}\nthis.ui = {stableBand,noStopOptimal,stopDecision,relativePnl,historicalPnl,stopSummaryLines,stopExplanation,stopPriceList,jointExitExplanation,jointProfileRows,jointExitProfiles,renderJointExits};`, context);
+const radarEnd = source.indexOf("  function renderRadarLoading(", end);
+assert.ok(radarEnd > end);
+vm.runInContext(`${source.slice(end, radarEnd)}\nthis.ui.renderStopLossRadar = renderStopLossRadar;`, context);
 const radar = {
   recommendedRoe: 1, stopOptional: true, simulatedPositions: 10, positionCount: 20,
   tradeoff: { positions: 10, triggered: 0, triggeredAny: 1, pnlNone: -15, pnlStopWorse: -15, pnlStopBetter: -0.1,
@@ -32,6 +37,55 @@ const list = context.ui.stopPriceList(radar);
 assert.equal(list.tag, "details");
 assert.equal(list.children[1].children.length, 95, "every integer stop outcome must be inspectable");
 assert.equal(list.children[1].children[0].props.text.args[2], "-15～0", "render the conservative model range");
+
+// User-reported ambiguity: these are aggregate profits, while their difference
+// from the disabled control is foregone profit. Neither is a stop-loss bill.
+const reported = {
+  ...radar, recommendedRoe: 90, simulatedPositions: 100, positionCount: 120,
+  tradeoff: { ...radar.tradeoff, positions: 100, triggeredAny: 13, pnlNone: 2328, pnlStopWorse: 656, pnlStopBetter: 2221 },
+  stopSelection: { ...radar.stopSelection, optimal: null, curve: radar.stopSelection.curve.map((point) => point.stop === 90
+    ? { ...point, triggered: 13, pnlMin: 656, pnlMax: 2221 }
+    : point.stop === 1 ? { ...point, triggered: 97, pnlMin: 134, pnlMax: 4145 } : point) }
+};
+assert.equal(context.ui.stopDecision(reported).key, "radarDecisionOptional");
+const summary = context.ui.stopSummaryLines(reported);
+assert.equal(summary[0].args[0].key, "radarTotalProfit");
+assert.equal(summary[0].args[0].args[0], "2,328");
+assert.equal(summary[1].args[0], 90);
+assert.equal(summary[1].args[1].key, "radarTotalProfit");
+assert.equal(summary[1].args[1].args[0], "656～2,221");
+assert.equal(summary[1].args[2].key, "radarRelativeLessProfit");
+assert.equal(summary[1].args[2].args[0], "107～1,672");
+assert.equal(summary[2].args[0], 13);
+assert.ok(summary.some((line) => line.key === "radarInsuranceCostMeaning"));
+assert.ok(summary.some((line) => line.key === "radarModelRangeMeaning"));
+const reportedList = context.ui.stopPriceList(reported).children[1].children;
+assert.equal(reportedList.length, 95);
+assert.equal(reportedList[0].props.text.args[3].key, "radarRelativeMixedProfit", "optimistic upside cannot hide conservative foregone profit");
+assert.deepEqual(Array.from(reportedList[0].props.text.args[3].args), ["2,194", "1,817"]);
+assert.equal(reportedList[89].props.text.args[3].args[0], "107～1,672");
+const zh = JSON.parse(fs.readFileSync(new URL("../_locales/zh_TW/messages.json", import.meta.url), "utf8"));
+const translated = (value) => typeof value !== "object" ? String(value)
+  : zh[value.key].message.replace(/\{(\d+)\}/g, (_, index) => translated(value.args[Number(index)]));
+assert.equal(translated(context.ui.stopDecision(reported)), "歷史收益最佳：不設止損");
+assert.equal(translated(summary[1]), "設 90%：合計賺 656～2,221 USDT；比不設止損少賺 107～1,672 USDT。");
+const primary = context.ui.renderStopLossRadar(reported).children[2];
+assert.equal(primary.children[0].children[0].props.text.key, "radarDecisionOptional", "the answer must precede the conditional insurance number");
+assert.equal(primary.children[1].props.class, "ctl-radar-why", "money meaning and cost are visible before model details");
+assert.equal(primary.children[2].tag, "details");
+assert.equal(primary.children[3].tag, "details", "95 raw rows are secondary to the decision");
+const positiveStop = { ...reported, stopOptional: true, stopSelection: { ...reported.stopSelection, optimal: 90 } };
+assert.equal(context.ui.stopDecision(positiveStop).key, "radarDecisionStop", "bootstrap optionality cannot erase an actual positive-stop optimum");
+assert.ok(!context.ui.stopSummaryLines(positiveStop).some((line) => line.key === "radarInsuranceCostMeaning"));
+const tied = { ...reported, tradeoff: { ...reported.tradeoff, pnlStopWorse: 2328, pnlStopBetter: 2328 } };
+assert.equal(context.ui.stopSummaryLines(tied)[1].args[2].key, "radarRelativeEqual");
+assert.ok(!context.ui.stopSummaryLines(tied).some((line) => line.key === "radarInsuranceCostMeaning"), "possible triggers with an exact PnL tie do not establish an insurance cost");
+assert.equal(context.ui.historicalPnl(-120, -40).key, "radarTotalLoss");
+assert.deepEqual(Array.from(context.ui.historicalPnl(-120, -40).args), ["40～120"]);
+assert.equal(context.ui.historicalPnl(-56, 3345).key, "radarTotalMixed");
+assert.deepEqual(Array.from(context.ui.historicalPnl(-56, 3345).args), ["56", "3,345"]);
+assert.equal(context.ui.relativePnl(-120, -40, -200).key, "radarRelativeHigherPnl", "a reduced loss is an improvement, not a positive profit claim");
+assert.equal(context.ui.relativePnl(-1200, -800, -1000).key, "radarRelativeMixedPnl");
 
 radar.stopSelection.neverTriggeredStop = null;
 radar.stopSelection.neverTriggeredEquivalentToOptimal = false;
@@ -57,7 +111,7 @@ assert.ok(!insuranceExplanation.some((line) => line.key === "radarFreeInsurance"
 radar.stopOptional = true;
 
 radar.exitSelection = {
-  objective: "priceROI", optimal: { stop: null, takeProfit: 125 },
+  objective: "pricePnl", optimal: { stop: null, takeProfit: 125 },
   simulatedPositions: 10, baselinePnl: 123, optimalPnlMin: 140, optimalPnlMax: 145,
   deltaMin: 17, deltaMax: 22, capital: null, roiMin: null, roiMax: null,
   optima: [{ stop: null, takeProfit: 125 }, { stop: 95, takeProfit: 125 }],

@@ -810,16 +810,16 @@
     "message": "高危死扛警告"
   },
   "radarRecommendedLabel": {
-    "message": "历史最佳止损（每 1% 比较）"
+    "message": "历史收益最佳止损"
   },
   "radarInsuranceLabel": {
-    "message": "若仍要设止损，建议设"
+    "message": "若一定要设保险止损："
   },
   "radarDecisionOptional": {
-    "message": "历史最佳设置：不设止损"
+    "message": "历史收益最佳：不设止损"
   },
   "radarDecisionStop": {
-    "message": "历史最佳设置：{0}% ROE"
+    "message": "历史收益最佳：止损 {0}% ROE"
   },
   "radarWhyOptional": {
     "message": "这 {0} 笔可完整回放的交易中，不设止损的历史分数最高。不设止损的价格损益为 {2} USDT；设置 {1}% 保险止损为 {3} USDT（不同情境）。在金额最差的情境中触发 {4} 笔：{5} 笔改善损益，共增加 {6} USDT；{7} 笔因提前平仓而恶化，共减少 {8} USDT。"
@@ -834,7 +834,7 @@
     "message": "可回放交易中最差的价格结果为 {0}（{1}x），亏损为峰值保证金的 {2}%。若仍要保险，{3}% 是启用止损候选中历史分数最高者。每次触发只平掉当时跟单仓位，后续重新入场可能再次亏损；实际损失受成交和成本影响。"
   },
   "radarApplyOptional": {
-    "message": "仍要设止损：填入 {0}%"
+    "message": "选择保险止损：填入 {0}%"
   },
   "radarBandSentence": {
     "message": "重抽样替代候选（含并列最佳解）：{0}。这是抽样敏感度，不是置信区间或未来最佳值的证明。"
@@ -957,10 +957,10 @@
     "message": "若仍要保险，{0}% 是启用止损候选中历史分数最高者；它不保证实际损失上限，重新入场、执行延迟和交易成本都会改变结果。"
   },
   "radarPriceListTitle": {
-    "message": "展开全部 1%～95% 历史结果（不设止损的价格损益 {0} USDT）"
+    "message": "逐 1% 模型明细（1%～95%；不设止损合计 {0} USDT）"
   },
   "radarPriceListRow": {
-    "message": "设 {0}%：最多触发 {1} 笔，价格损益 {2} USDT"
+    "message": "止损 {0}% → 历史合计 {2} USDT；{3}；最多 {1} 笔可能触发"
   },
   "radarObjectivePnl": {
     "message": "完整比较不设止损与 1%～95% 的每个整数，以各情境中较低的“总价格损益”最高者为最佳值。在相同固定起始本金与期间下，等同价格 ROI 最大化；不是逐笔 ROE 平均，也不是扣成本后的账户收益。"
@@ -1072,5 +1072,92 @@
   },
   "radarOutsideInsurance": {
     "message": "要在这些可完整回放交易的所有模型时序都不触发，需要至少 {0}% ROE；超出币安 {1}% 上限，不能直接填入。这不涵盖缺失历史，也不保证未来表现。"
+  },
+  "radarPriceListMeaning": {
+    "message": "“历史合计”加总本次可完整回放的全部交易：正数是盈利、负数是亏损。与不设止损比较的少赚／多赚是收益差额，不是止损时会亏掉的钱。上下界是模型时序与重新跟单假设的不同结果，不是未来预测，也不是最大账户亏损。"
+  },
+  "radarTotalProfit": {
+    "message": "合计赚 {0} USDT"
+  },
+  "radarTotalLoss": {
+    "message": "合计亏 {0} USDT"
+  },
+  "radarTotalMixed": {
+    "message": "合计介于亏 {0} 至赚 {1} USDT"
+  },
+  "radarRelativeEqual": {
+    "message": "与不设止损的总损益相同"
+  },
+  "radarRelativeLessProfit": {
+    "message": "比不设止损少赚 {0} USDT"
+  },
+  "radarRelativeMoreProfit": {
+    "message": "比不设止损多赚 {0} USDT"
+  },
+  "radarRelativeLowerPnl": {
+    "message": "比不设止损的总损益减少 {0} USDT"
+  },
+  "radarRelativeHigherPnl": {
+    "message": "比不设止损的总损益增加 {0} USDT"
+  },
+  "radarRelativeMixedProfit": {
+    "message": "比不设止损少赚 {0}～多赚 {1} USDT"
+  },
+  "radarRelativeMixedPnl": {
+    "message": "相较不设止损，总损益可能减少 {0}，也可能增加 {1} USDT"
+  },
+  "radarBaselineSummary": {
+    "message": "不设止损：{0}。"
+  },
+  "radarCandidateSummary": {
+    "message": "设 {0}%：{1}；{2}。"
+  },
+  "radarTriggerSummary": {
+    "message": "模型最多有 {0} 笔仓位可能触发止损；K 线无法确认所有触发时序，因此这不是实际确定会触发的笔数。"
+  },
+  "radarNoTriggerSummary": {
+    "message": "这次采用的完整历史样本在所有模型情境都未触发此止损；这不保证未来也不触发。"
+  },
+  "radarTotalsMeaning": {
+    "message": "上述金额是这 {0} 笔可完整回放交易的全段合计，按带单员原仓位大小计算。这是未扣手续费、资金费与滑价的价格损益，不能直接当成你的跟单损益或账户 ROI。"
+  },
+  "radarInsuranceCostMeaning": {
+    "message": "这个保险值是“一定要启用止损”时保守收益最高的候选；它有历史收益代价，并非免费保险，也不保证实际最大亏损。"
+  },
+  "radarModelRangeMeaning": {
+    "message": "范围是同一段历史在 K 线内未知时序、止损后是否跟后续加仓等假设下的较低／较高总损益。排名比较较低结果；乐观上限更高，不代表设置较好。这不是未来收益预测。"
+  },
+  "radarModelDetailsTitle": {
+    "message": "计算目标、样本覆盖与模型限制"
+  },
+  "radarOptionalInputHint": {
+    "message": "以历史收益为先就保持不启用；只有选择保险止损时才填入 {0}%。"
+  },
+  "advisorOptimalBadge": {
+    "message": "历史最佳"
+  },
+  "advisorDisabledBadge": {
+    "message": "随带单员平仓"
+  },
+  "advisorInsuranceNote": {
+    "message": "🛡️ 替代防守保险：建议设 {0}%（防极端穿仓，胜率保留 {1}%）"
+  },
+  "advisorDetailsSummary": {
+    "message": "📊 查看详细回测依据与盈亏明细 ▾"
+  },
+  "advisorKpiWinRate": {
+    "message": "胜率保留率"
+  },
+  "advisorKpiDrawdown": {
+    "message": "历史最深回撤"
+  },
+  "advisorKpiGain": {
+    "message": "回测盈亏改善"
+  },
+  "advisorKpiGainNone": {
+    "message": "维持历史最大获利"
+  },
+  "advisorBtnApply": {
+    "message": "一键套用推荐设置至币安"
   }
 }
