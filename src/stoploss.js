@@ -325,24 +325,23 @@
   });
   const rounded = (s) => Object.fromEntries(Object.entries(s).map(([key, value]) => [key, Number(value.toFixed(1))]));
 
+  // Nothing in it may pass for a result: the UI shows an explanation, never these numbers.
   function emptyRadar() {
-    const zero = { median: 0, p50: 0, p75: 0, p90: 0, p95: 0, max: 0 };
     return {
       insufficientData: true,
       positionCount: 0,
-      dominantLeverage: 1,
-      recommendedRoe: 50,
-      recommendedPriceDrop: 50,
+      dominantLeverage: null,
+      recommendedRoe: null,
+      recommendedPriceDrop: null,
       stopOptional: false,
-      winRetentionRate: 100,
-      killedWinsCount: 0,
-      stoppedLossesCount: 0,
+      winRetentionRate: null,
+      killedWinsCount: null,
+      stoppedLossesCount: null,
       hasSevereBagHolding: false,
-      worstHistoricalRoeMae: 0,
-      allStats: zero,
-      winStats: zero,
-      lossStats: zero,
-      isPreciseMae: false,
+      worstHistoricalRoeMae: null,
+      allStats: null,
+      winStats: null,
+      lossStats: null,
       marksCoverage: 0,
       entryPathPositions: 0,
       stopSelection: null
@@ -384,8 +383,6 @@
       allStats: rounded(stats(rows.map((row) => row.maeRoe))),
       winStats: rounded(stats(wins.map((row) => row.maeRoe))),
       lossStats: rounded(lossStats),
-      // marks were read; a symbol the exchange refuses (a delisted one) is a gap shown in `marksCoverage`, not "still loading"
-      isPreciseMae: Boolean(positionMarks),
       marksCoverage,
       entryPathPositions: rows.filter((row) => row.entryPathUsed).length,
       stopSelection: selection

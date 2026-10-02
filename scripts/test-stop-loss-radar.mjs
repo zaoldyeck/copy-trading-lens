@@ -155,14 +155,17 @@ const position = (extra) => ({ symbol: "XUSDT", side: "LONG", leverage: 10, avgC
   console.log("PASS: hedge books and flipping fills are replayed by positions.js, not guessed from BUY/SELL");
 }
 
-// 4d. marks that were read are precise even when the exchange refused a symbol (a delisted one fails on every request)
+// 4d. a symbol the exchange refuses (a delisted one fails on every request) is a coverage gap, nothing more
 {
   const rows = [position({ symbol: "AUSDT" }), position({ symbol: "BUSDT" }), position({ symbol: "DEADUSDT" })];
   const radar = stoploss.analyzeStopLossRadar(rows, [], { symbols: { AUSDT: { minutes: [[T0, 101, 99]], hours: [] } }, failed: [{ symbol: "DEADUSDT", error: "-1121" }] }, null);
-  assert.equal(radar.isPreciseMae, true, "a refused symbol must not keep the 'still calculating' state forever");
-  assert.ok(radar.marksCoverage < 1, "the gap shows in coverage instead");
-  assert.equal(stoploss.analyzeStopLossRadar(rows, [], null, null).isPreciseMae, false, "no marks yet: still calculating");
-  console.log("PASS: isPreciseMae means the marks were read; refused symbols show as coverage");
+  near(radar.marksCoverage, 1 / 3, 0.001, "one of three positions has candles");
+  assert.ok(!("isPreciseMae" in radar), "there is no provisional state to report: the UI draws nothing until the whole read is done");
+  // too little to select from: no number in it can pass for a result
+  const empty = stoploss.analyzeStopLossRadar([position()], [], null, null);
+  assert.equal(empty.insufficientData, true);
+  for (const field of ["recommendedRoe", "recommendedPriceDrop", "winRetentionRate", "worstHistoricalRoeMae", "dominantLeverage"]) assert.equal(empty[field], null, `${field} must not default to a number`);
+  console.log("PASS: refused symbols show as coverage; an insufficient radar carries no default numbers");
 }
 
 // 5. synthetic traders whose best stop is known by construction
@@ -228,7 +231,7 @@ for (const trader of realTraders) {
   near(radar.winStats.p95, trader.winnersP95, 0.5, `${trader.name} winners' MAE p95`);
   near(radar.lossStats.max, trader.worstLoss, 0.5, `${trader.name} worst loss MAE`);
   assert.equal(radar.stopSelection.objective, "meanRoe");
-  assert.equal(radar.isPreciseMae, true);
+  assert.equal(radar.marksCoverage, 1, `${trader.name}: every position has candles`);
   assert.ok(radar.recommendedRoe >= 10 && radar.recommendedRoe <= 95);
   if (trader.name !== "熬鹰资本") assert.equal(radar.stopSelection.optimal, null, `${trader.name}: no stop beats every stop in-sample`);
   console.log(`PASS: ${trader.name} (winners p95 ${radar.winStats.p95}, worst loss ${radar.lossStats.max}, optimal ${radar.stopSelection.optimal ?? "none"}, best stop ${radar.stopSelection.bestStop}, entry path ${radar.entryPathPositions}/${radar.positionCount})`);

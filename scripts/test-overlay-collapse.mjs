@@ -289,6 +289,23 @@ test("a late marks event does not move the streaming banner back", async () => {
   assert.ok(text.includes("stageLoadedOrders"), `banner after orders then marks: ${text}`);
 });
 
+// A number worked out from half the history looks as true as one from all of it (a stop level of 10% shown while
+// the candles were still loading), so nothing but the loading view is drawn until the whole read is done.
+test("nothing computed from an unfinished read is drawn", async () => {
+  const page = loadPage();
+  for (const stage of ["detail", "positions", "marks", "orders"]) {
+    page.fetchOptions[0].onProgressive({ stage, raw: { name: "Trader" } });
+    assert.ok(page.find("ctl-loading"), `${stage}: the loading view stays up`);
+    for (const drawn of ["ctl-verdict", "ctl-radar-box", "ctl-advisor-hero", "ctl-grid"]) {
+      assert.equal(page.find(drawn), null, `${stage}: ${drawn} must not be drawn before the read is complete`);
+    }
+  }
+  page.fetches[0].resolve({ name: "Trader" });
+  await tick();
+  assert.ok(page.find("ctl-verdict"), "the finished read is drawn");
+  assert.equal(page.find("ctl-loading"), null);
+});
+
 let failed = 0;
 for (const [name, fn] of tests) {
   try {

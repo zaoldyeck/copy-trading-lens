@@ -129,13 +129,6 @@
   box-sizing: border-box;
 }
 
-.ctl-spin-icon {
-  display: inline-block;
-  animation: ctl-spin 1s linear infinite;
-  transform-origin: center center;
-  line-height: 1;
-}
-
 .ctl-mini-spinner {
   display: inline-block;
   width: 12px;
@@ -793,26 +786,6 @@
   0% { opacity: 0.85; }
   50% { opacity: 1; }
   100% { opacity: 0.85; }
-}
-
-.ctl-streaming-metric strong.ctl-loading-text {
-  color: #93c5fd;
-  font-size: 13px;
-  animation: ctl-pulse 1.5s infinite;
-}
-
-.ctl-streaming-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  font-weight: 600;
-  color: #93c5fd;
-  background: rgba(59, 130, 246, 0.15);
-  border: 1px solid rgba(59, 130, 246, 0.35);
-  padding: 2px 6px;
-  border-radius: 4px;
-  animation: ctl-pulse 1.5s infinite;
 }
 
 @media (max-width: 560px) {

@@ -72,19 +72,18 @@
 
   function paint() {
     if (!run) return clearRoot();
-    if ((run.phase === "ready" || run.phase === "streaming") && run.analysis?.stopLossRadar) {
-      mountInlineSettingHelper(run.analysis.stopLossRadar);
-    }
+    // Nothing computed from an unfinished read is shown: a stop level worked out from half the history looks
+    // exactly as true as one from all of it. Until the read is complete there is only the loading view.
+    if (run.phase === "ready" && run.analysis?.stopLossRadar) mountInlineSettingHelper(run.analysis.stopLossRadar);
     if (collapsed) return renderLauncher(run.context);
-    if (run.phase === "loading") return renderLoading(run.context);
     if (run.phase === "failed") return renderError(run.error);
+    if (run.phase !== "ready") return renderLoading(run.context);
 
-    const isStreaming = run.phase === "streaming";
     if (run.context?.pageType === "copy-setting" && settingModeView === "advisor") {
-      return renderSettingAdvisor(run.context, run.raw, run.analysis, isStreaming);
+      return renderSettingAdvisor(run.context, run.raw, run.analysis);
     }
 
-    return renderAnalysis(run.context, run.raw, run.analysis, isStreaming);
+    return renderAnalysis(run.context, run.raw, run.analysis);
   }
 
   function setCollapsed(value) {
@@ -151,17 +150,6 @@
     return h("div", { class: accent ? `ctl-metric ${accent}` : "ctl-metric" }, [
       h("span", { text: label }),
       h("strong", { text: value }),
-      hint ? h("small", { text: hint }) : null
-    ]);
-  }
-
-  function metricLoadingCard(label, hint = "") {
-    return h("div", { class: "ctl-metric is-streaming-metric" }, [
-      h("span", { text: label }),
-      h("strong", { class: "ctl-loading-text" }, [
-        h("span", { class: "ctl-mini-spinner" }),
-        h("span", { text: t("metricLoadingText") })
-      ]),
       hint ? h("small", { text: hint }) : null
     ]);
   }
@@ -264,6 +252,7 @@
 
   function mountInlineSettingHelper(radar) {
     if (!radar || radar.insufficientData) return;
+    if (!radar || radar.insufficientData) return;
     const inputs = Array.from(document.querySelectorAll("input"));
     const targets = inputs.filter((i) => {
       if (i.placeholder === "0-95") {
@@ -308,19 +297,13 @@
     return h("section", { class: "ctl-section ctl-radar-section" }, [
       h("div", { class: "ctl-radar-header" }, [
         h("h3", { text: t("sectionStopLossRadar") }),
-        !radar.isPreciseMae
-          ? h("span", { class: "ctl-radar-badge ctl-streaming-badge" }, [
-              h("span", { class: "ctl-mini-spinner", style: "border-top-color: #60a5fa; margin-right: 5px;" }),
-              h("span", { text: t("radarPreciseBadge").replace(/\s*↻\s*/, "") })
-            ])
-          : null,
         hasBag
           ? h("span", { class: "ctl-radar-badge is-danger", text: t("badgeBagHoldingAlert") })
           : h("span", { class: "ctl-radar-badge is-safe", text: t("badgeMathOptimal") })
       ]),
       h("div", { class: "ctl-radar-box" }, [
         h("div", { class: "ctl-radar-primary" }, [
-          h("div", { class: "ctl-radar-label", text: t("radarRecommendedLabel") }),
+          h("div", { class: "ctl-radar-label", text: t(radar.stopOptional ? "radarInsuranceLabel" : "radarRecommendedLabel") }),
           h("div", { class: "ctl-radar-value" }, [
             h("span", { class: "ctl-radar-number", text: `${radar.recommendedRoe}%` }),
             h("span", { class: "ctl-radar-unit", text: t("radarRoeUnit") })
@@ -389,7 +372,7 @@
 
   function renderLoading(context) {
     ensureRoot().replaceChildren(
-      h("section", { class: "ctl-panel" }, [
+      h("section", { class: context.pageType === "copy-setting" ? "ctl-panel ctl-setting-card" : "ctl-panel" }, [
         h("header", { class: "ctl-header" }, [
           h("div", {}, [
             h("span", { class: "ctl-eyebrow", text: "Copy Trading Lens" }),
@@ -400,7 +383,8 @@
         h("div", { class: "ctl-loading" }, [
           h("div", { class: "ctl-spinner" }),
           h("p", { text: t("loadingText") })
-        ])
+        ]),
+        renderStreamingBanner(run?.streamingStage)
       ])
     );
   }
@@ -455,7 +439,7 @@
     ]);
   }
 
-  function renderSettingAdvisor(context, raw, analysis, isStreaming) {
+  function renderSettingAdvisor(context, raw, analysis) {
     const radar = analysis?.stopLossRadar;
     const meta = analysis?.meta || {};
     const traderName = meta.name || context.id;
@@ -475,21 +459,11 @@
           ])
         ]),
 
-        isStreaming
-          ? renderStreamingBanner(run?.streamingStage)
-          : null,
-
         radar && !radar.insufficientData ? h("div", { class: "ctl-advisor-hero" }, [
-          h("div", { class: "ctl-advisor-hero-label", text: t("radarRecommendedLabel") }),
+          h("div", { class: "ctl-advisor-hero-label", text: t(radar.stopOptional ? "radarInsuranceLabel" : "radarRecommendedLabel") }),
           h("div", { class: "ctl-advisor-hero-val" }, [
             h("span", { class: "ctl-advisor-num", text: `${radar.recommendedRoe}%` }),
-            h("span", { class: "ctl-advisor-unit", text: t("radarRoeUnit") }),
-            !radar.isPreciseMae
-              ? h("span", { class: "ctl-streaming-badge", style: "margin-left: 8px; font-size: 13px; vertical-align: middle;" }, [
-                  h("span", { class: "ctl-mini-spinner", style: "border-top-color: #60a5fa; margin-right: 4px;" }),
-                  h("span", { text: t("radarPreciseBadge").replace(/\s*↻\s*/, "") })
-                ])
-              : null
+            h("span", { class: "ctl-advisor-unit", text: t("radarRoeUnit") })
           ]),
           h("div", { class: "ctl-advisor-sub", text: t("radarEquivalentPrice", [radar.dominantLeverage, radar.recommendedPriceDrop]) }),
           h("button", {
@@ -508,9 +482,6 @@
           }, [
             h("span", { text: `⚡ ${t("btnApplyToBinanceForm", [radar.recommendedRoe])}` })
           ])
-        ]) : (isStreaming ? h("div", { class: "ctl-loading" }, [
-          h("div", { class: "ctl-spinner" }),
-          h("p", { text: t("loadingText") })
         ]) : h("div", { class: "ctl-advisor-hero ctl-advisor-empty" }, [
           h("div", { class: "ctl-advisor-hero-label", text: t("sectionStopLossRadar") }),
           h("p", { class: "ctl-muted", style: "margin: 12px 0 16px; font-size: 13px; line-height: 1.5;", text: t("cautionThinClosedTrades", [raw?.positionHistory?.length || 0]) || t("payoffNoClosedTrades") }),
@@ -524,19 +495,13 @@
           }, [
             h("span", { text: t("btnViewFullAnalysis") })
           ])
-        ])),
+        ]),
 
         radar && !radar.insufficientData ? h("div", { class: "ctl-value-pillars" }, [
           h("div", { class: "ctl-pillar" }, [
             h("strong", {}, [
               h("span", { text: "🎯 " }),
-              h("span", { text: t("settingValuePropWinTitle", [radar.winRetentionRate]) }),
-              !radar.isPreciseMae
-                ? h("span", { class: "ctl-streaming-badge", style: "margin-left: 6px;" }, [
-                    h("span", { class: "ctl-mini-spinner", style: "border-top-color: #60a5fa; margin-right: 4px;" }),
-                    h("span", { text: t("radarPreciseBadge").replace(/\s*↻\s*/, "") })
-                  ])
-                : null
+              h("span", { text: t("settingValuePropWinTitle", [radar.winRetentionRate]) })
             ]),
             h("p", { text: t("settingValuePropWinDesc") })
           ]),
@@ -550,27 +515,16 @@
           h("div", { class: "ctl-pillar" }, [
             h("strong", {}, [
               h("span", { text: "📊 " }),
-              h("span", { text: t("settingValuePropStatsTitle") }),
-              !radar.isPreciseMae
-                ? h("span", { class: "ctl-streaming-badge", style: "margin-left: 6px;" }, [
-                    h("span", { class: "ctl-mini-spinner", style: "border-top-color: #60a5fa; margin-right: 4px;" }),
-                    h("span", { text: t("radarPreciseBadge").replace(/\s*↻\s*/, "") })
-                  ])
-                : null
+              h("span", { text: t("settingValuePropStatsTitle") })
             ]),
-            h("p", {
-              text: radar.isPreciseMae
-                ? t("settingValuePropStatsDesc", [radar.allStats?.p50?.toFixed(1) || "0.0", radar.allStats?.p90?.toFixed(1) || "0.0"])
-                : t("settingValuePropStatsDescLoss", [radar.lossStats?.p50?.toFixed(1) || "0.0", radar.lossStats?.p90?.toFixed(1) || "0.0"])
-            })
+            h("p", { text: t("settingValuePropStatsDesc", [radar.allStats.p50.toFixed(1), radar.allStats.p90.toFixed(1)]) })
           ])
         ]) : null,
 
         radar && !radar.insufficientData && stableBand(radar) ? h("div", {
           class: "ctl-advisor-range-tip"
         }, [
-          h("span", { text: `💡 ${t("radarStableBandLabel")}: ${stableBand(radar).lo}–${stableBand(radar).hi}%` }),
-          !radar.isPreciseMae ? h("span", { class: "ctl-mini-spinner", style: "border-top-color: #60a5fa; margin: 0 4px 0 6px;" }) : null
+          h("span", { text: `💡 ${t("radarStableBandLabel")}: ${stableBand(radar).lo}–${stableBand(radar).hi}%` })
         ]) : null,
 
         radar && !radar.insufficientData
@@ -595,7 +549,7 @@
     );
   }
 
-  function renderAnalysis(context, raw, analysis, isStreaming = false) {
+  function renderAnalysis(context, raw, analysis) {
     const fmt = window.CopyTradingLensAnalysis;
     const meta = analysis.meta;
     const summary = analysis.summary;
@@ -615,9 +569,6 @@
             paint();
           }
         }, t("btnReturnToAdvisor")) : null,
-        isStreaming
-          ? renderStreamingBanner(run?.streamingStage)
-          : null,
         h("header", { class: "ctl-header" }, [
           h("div", {}, [
             h("span", { class: "ctl-eyebrow", text: `${context.platform} / ${meta.id} · ${meta.isPrivate ? t("badgePrivate") : t("badgePublic")}` }),
@@ -635,11 +586,7 @@
           h("strong", { text: verdict.title }),
           h("span", { text: strategy.family })
         ]),
-        (strategy.labels?.length || verdict.momentumStatus || (isStreaming && !orders.openOrders)) ? h("div", { class: "ctl-tags" }, [
-          ...(isStreaming && !orders.openOrders ? [h("span", { class: "ctl-tag ctl-streaming-badge" }, [
-            h("span", { class: "ctl-spin-icon", style: "margin-right: 4px;", text: "↻" }),
-            h("span", { text: t("streamingStrategyLoading").replace(/\s*↻\s*/, "") })
-          ])] : []),
+        (strategy.labels?.length || verdict.momentumStatus) ? h("div", { class: "ctl-tags" }, [
           ...(verdict.momentumStatus === "active" ? [h("span", { class: "ctl-tag is-active-momentum", text: t("badgeActiveMomentum") })] : []),
           ...(verdict.momentumStatus === "stagnant" ? [h("span", { class: "ctl-tag is-stagnant", text: t("badgeStagnant") })] : []),
           ...(verdict.momentumStatus === "drawdown" ? [h("span", { class: "ctl-tag is-drawdown", text: t("badgeInDrawdown") })] : []),
@@ -652,53 +599,41 @@
           metricCard(t("metricAllPeriodPnl"), fmt.formatMoney(meta.pnl), t("hintCurrentCapitalFormula")),
           metricCard(t("metricTradingDays"), meta.days ? t("daysValue", [meta.days.toFixed(0)]) : "N/A"),
           metricCard(t("metricCopierPnlAum"), meta.aum ? `${(meta.copierPnl / meta.aum * 100).toFixed(1)}%` : "N/A"),
-          isStreaming && !summary.closedTrades && !raw.historyStatus?.positionHistory?.complete
-            ? metricLoadingCard(t("metricWinRate"), t("streamingHintPositions"))
-            : metricCard(
-              t("metricWinRate"),
-              fmt.formatPct(summary.winRate * 100),
-              summary.openPositionsExcluded
-                ? t("closedTradesOpenExcluded", [summary.closedTrades, summary.openPositionsExcluded])
-                : t("closedTrades", [summary.closedTrades])
-            ),
-          isStreaming && !summary.closedTrades && !raw.historyStatus?.positionHistory?.complete
-            ? metricLoadingCard(t("metricPayoffRatio"), t("streamingHintPositions"))
-            : metricCard(
-              t("metricPayoffRatio"),
-              summary.payoffRatio === null ? "N/A" : summary.payoffRatio.toFixed(2),
-              payoffUnavailableReason(summary)
-            ),
-          isStreaming && !summary.closedTrades && !raw.historyStatus?.positionHistory?.complete
-            ? metricLoadingCard(t("metricLossHold"), t("streamingHintPositions"))
-            : metricCard(t("metricLossHold"), fmt.formatHours(summary.avgLossHoldHours), t("longestHold", [fmt.formatHours(summary.maxLossHoldHours)])),
-          isStreaming && !orders.openOrders
-            ? metricLoadingCard(t("metricAdverseAdd"), t("streamingHintOrders"))
-            : metricCard(t("metricAdverseAdd"), fmt.formatPct(orders.adverseAddRate * 100), `${orders.adverseAdds}/${orders.openOrders}`),
+          metricCard(
+            t("metricWinRate"),
+            fmt.formatPct(summary.winRate * 100),
+            summary.openPositionsExcluded
+              ? t("closedTradesOpenExcluded", [summary.closedTrades, summary.openPositionsExcluded])
+              : t("closedTrades", [summary.closedTrades])
+          ),
+          metricCard(
+            t("metricPayoffRatio"),
+            summary.payoffRatio === null ? "N/A" : summary.payoffRatio.toFixed(2),
+            payoffUnavailableReason(summary)
+          ),
+          metricCard(t("metricLossHold"), fmt.formatHours(summary.avgLossHoldHours), t("longestHold", [fmt.formatHours(summary.maxLossHoldHours)])),
+          metricCard(t("metricAdverseAdd"), fmt.formatPct(orders.adverseAddRate * 100), `${orders.adverseAdds}/${orders.openOrders}`),
           metricCard(t("metricFloatingLoss"), fmt.formatMoney(live.openUnrealizedLoss), t("marginPct", [(live.openUnrealizedLossToMargin * 100).toFixed(1)])),
-          isStreaming && !raw.endpointResults?.transferHistory?.ok
-            ? metricLoadingCard(t("metricLossPeriodDeposit"), t("streamingHintTransfers"))
-            : metricCard(
-              t("metricLossPeriodDeposit"),
-              t("lossPeriodDepositCount", [transfers.lossPeriodDepositCount]),
-              transfers.lossPeriodDepositCount > 0
-                ? t("lossPeriodDepositHint", [fmt.formatMoney(transfers.lossPeriodDepositTotal), fmt.formatDateTime(transfers.lastLossPeriodDepositAt)])
-                : t("lossPeriodDepositNone"),
-              transfers.lossPeriodDepositCount > 0 ? "is-danger" : ""
-            ),
+          metricCard(
+            t("metricLossPeriodDeposit"),
+            t("lossPeriodDepositCount", [transfers.lossPeriodDepositCount]),
+            transfers.lossPeriodDepositCount > 0
+              ? t("lossPeriodDepositHint", [fmt.formatMoney(transfers.lossPeriodDepositTotal), fmt.formatDateTime(transfers.lastLossPeriodDepositAt)])
+              : t("lossPeriodDepositNone"),
+            transfers.lossPeriodDepositCount > 0 ? "is-danger" : ""
+          ),
           metricCard(t("metricRestartCount"), String(meta.closeLeadCount || 0), t("portfolioRestart")),
-          isStreaming && !orders.openOrders
-            ? metricLoadingCard(t("metricBiggestBet"), t("streamingHintEquity"))
-            : (analysis.biggestBet
-              ? metricCard(
-                t("metricBiggestBet"),
-                t("biggestBetValue", [analysis.biggestBet.leverage.toFixed(1)]),
-                t(analysis.biggestBet.boundByLeverage ? "biggestBetHintBound" : "biggestBetHint", [
-                  t("biggestBetPosition", [analysis.biggestBet.symbol, t(analysis.biggestBet.side === "SHORT" ? "posShort" : "posLong")]),
-                  fmt.formatDateTime(analysis.biggestBet.at),
-                  analysis.biggestBet.wipeOutMovePct.toFixed(1)
-                ])
-              )
-              : metricCard(t("metricBiggestBet"), "N/A"))
+          analysis.biggestBet
+            ? metricCard(
+              t("metricBiggestBet"),
+              t("biggestBetValue", [analysis.biggestBet.leverage.toFixed(1)]),
+              t(analysis.biggestBet.boundByLeverage ? "biggestBetHintBound" : "biggestBetHint", [
+                t("biggestBetPosition", [analysis.biggestBet.symbol, t(analysis.biggestBet.side === "SHORT" ? "posShort" : "posLong")]),
+                fmt.formatDateTime(analysis.biggestBet.at),
+                analysis.biggestBet.wipeOutMovePct.toFixed(1)
+              ])
+            )
+            : metricCard(t("metricBiggestBet"), "N/A")
         ]),
         h("section", { class: "ctl-section" }, [
           h("h3", { text: t("sectionRisks") }),
@@ -765,22 +700,13 @@
         onProgress: (event) => {
           if (!superseded()) window.CopyTradingLensPositionsPanel?.setProgress(event);
         },
+        // The read lands in pieces, but nothing is analysed or drawn from an unfinished one; the events only
+        // move the stage text of the loading view. Marks can land after orders: keep the furthest stage reached.
         onProgressive: (event) => {
           if (superseded()) return;
-          try {
-            const partialAnalysis = context.platform === "Binance"
-              ? window.CopyTradingLensAnalysis.analyzeBinance(event.raw)
-              : window.CopyTradingLensAnalysis.analyzeOkx(event.raw);
-            run = {
-              ...current,
-              phase: "streaming",
-              // marks can land after orders: the banner shows the furthest stage reached, not the latest event
-              streamingStage: (STAGE_ORDER[event.stage] ?? 0) >= (STAGE_ORDER[run?.streamingStage] ?? -1) ? event.stage : run.streamingStage,
-              raw: event.raw,
-              analysis: partialAnalysis
-            };
-            paint();
-          } catch (_e) {}
+          const reached = (STAGE_ORDER[event.stage] ?? 0) >= (STAGE_ORDER[run.streamingStage] ?? -1) ? event.stage : run.streamingStage;
+          run = { ...run, streamingStage: reached };
+          paint();
         }
       });
       if (superseded()) return;

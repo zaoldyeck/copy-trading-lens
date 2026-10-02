@@ -815,6 +815,9 @@
   "radarRecommendedLabel": {
     "message": "推奨ポジション損切り設定"
   },
+  "radarInsuranceLabel": {
+    "message": "設定する場合（コスト最小）"
+  },
   "radarRoeUnit": {
     "message": "(証拠金損失率 ROE)"
   },
@@ -913,29 +916,5 @@
   },
   "stageLoadingMarket": {
     "message": "マーク価格ローソク足と詳細な含み損精算"
-  },
-  "metricLoadingText": {
-    "message": "↻ 読み込み中..."
-  },
-  "streamingHintOrders": {
-    "message": "注文フローを分析中..."
-  },
-  "streamingHintTransfers": {
-    "message": "入出金履歴を確認中..."
-  },
-  "streamingHintEquity": {
-    "message": "資産残高とレバレッジを再計算中..."
-  },
-  "streamingHintPositions": {
-    "message": "決済損益と保有時間を集計中..."
-  },
-  "streamingStrategyLoading": {
-    "message": "取引スタイル分析中 ↻"
-  },
-  "radarPreciseBadge": {
-    "message": "ローソク足計算中 ↻"
-  },
-  "settingValuePropStatsDescLoss": {
-    "message": "負けトレード中央値 P50: -{0}% · 90パーセンタイル P90: -{1}%"
   }
 }

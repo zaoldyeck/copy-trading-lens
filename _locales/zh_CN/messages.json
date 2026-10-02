@@ -815,6 +815,9 @@
   "radarRecommendedLabel": {
     "message": "推荐填入「仓位止损」"
   },
+  "radarInsuranceLabel": {
+    "message": "若仍要设止损（代价最小）"
+  },
   "radarRoeUnit": {
     "message": "(保证金亏损比率 ROE)"
   },
@@ -913,29 +916,5 @@
   },
   "stageLoadingMarket": {
     "message": "历史标的 K 线与逐笔浮亏精算"
-  },
-  "metricLoadingText": {
-    "message": "↻ 载入中..."
-  },
-  "streamingHintOrders": {
-    "message": "深度订单流分析中..."
-  },
-  "streamingHintTransfers": {
-    "message": "比对转账入金记录..."
-  },
-  "streamingHintEquity": {
-    "message": "回溯账户净值与杠杆..."
-  },
-  "streamingHintPositions": {
-    "message": "统计平仓损益与持仓时间..."
-  },
-  "streamingStrategyLoading": {
-    "message": "交易风格分析中 ↻"
-  },
-  "radarPreciseBadge": {
-    "message": "K线精算中 ↻"
-  },
-  "settingValuePropStatsDescLoss": {
-    "message": "输单中位 P50: -{0}% · 90分位 P90: -{1}%"
   }
 }

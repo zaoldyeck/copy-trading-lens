@@ -32,18 +32,14 @@
    - **Account safety (money-path)**: every request this extension makes is anonymous (`credentials: "omit"`, no `csrftoken`) and public-endpoint only (`/friendly/`, `/fapi/`, OKX `/public/`). Never call a `/private/` BAPI endpoint and never send the user's session cookie: the exchange session guards real funds, and automated traffic carrying it risks the exchange's risk engine invalidating or flagging it. Guarded by `scripts/test-request-identity.mjs`.
    - Form injection must use `Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set` to trigger React's synthetic input, change, and blur handlers.
 
-6. **Progressive Incremental Streaming Pipeline (`src/providers.js` & `src/content.js`)**:
-   - Network reads must never force users to wait for the entire depth (65+ pages of order history) before rendering.
-   - `fetchBinanceLead` keeps one accumulating `view` and emits a snapshot of it per stage via `onProgressive`, so a slow piece finishing late can never overwrite a faster one with older state:
-     - `detail`: metadata (~150ms).
-     - `positions`: live exposure and position history; the radar already has a first reading from fills and close prices.
-     - `marks`: mark candles for every position's own life, all symbols, read while the long histories below are still paging; the radar becomes precise.
-     - `orders`: `orderHistory`, `transferHistory`, performance windows (strategy classification, entry-path replay for the radar).
-     - the final return adds funding and hourly marks for EVERY symbol (equity count-back, biggest bet, the radar's margin share), read a few symbols at a time. No symbol caps anywhere: a cap silently drops the long tail of symbols, which on 玄冥二老 (52 symbols) hid a position from the worst-drawdown figure.
+6. **Complete-or-Loading Rendering (`src/providers.js` & `src/content.js`)**:
+   - Nothing computed from an unfinished read is shown. A number worked out from half the history looks exactly as true as one from all of it (a stop level of 10% was shown while the candles were still loading), so until `fetchLeadData` resolves the overlay and the advisor card draw only the loading view (spinner plus the stage line). No default or provisional value may reach the UI; an insufficient radar carries `null`s, never placeholder numbers, and the inline "recommended" chip is not mounted for it.
+   - `fetchBinanceLead` still keeps one accumulating `view` and emits snapshots through `onProgressive` (`detail`, `positions`, `marks`, `orders`), but the overlay only uses them to move the stage text, keeping the furthest stage reached (marks can land after orders). The positions panel keeps its own page-by-page progress.
+   - The final return adds funding and hourly marks for EVERY symbol (equity count-back, biggest bet, the radar's margin share), read a few symbols at a time. No symbol caps anywhere: a cap silently drops the long tail of symbols, which on 玄冥二老 (52 symbols) hid a position from the worst-drawdown figure.
 
 7. **Dedicated Copy Setting Advisor View (`src/content.js`)**:
    - On `copy-setting` pages (`context.pageType === "copy-setting"`), the overlay defaults to a compact, non-intrusive **Stop-Loss Advisor Card** (`ctl-setting-card`) instead of the full dashboard.
-   - Provides instant decision value: Recommended ROE %, Equivalent underlying price drop %, the stable band, Win retention %, Worst historical drawdown cut-off, a note when the data cannot show a stop beats none or when position rows contradict themselves, and 1-Click React input injection.
+   - Provides instant decision value: Recommended ROE %, Equivalent underlying price drop %, the stable band, Win retention %, Worst historical drawdown cut-off, how many winners and losers the recommended stop would trigger, a note (and an "if you still want a stop" headline) when the data cannot show a stop beats none, and 1-Click React input injection.
    - Preserves an explicit toggle button `[🔍 查看帶單員完整分析報告 ▾]` so users can expand to the full report on demand, and return at will.
 
 8. **Scale-in & Martingale Mechanics in Binance Copy Stop-Loss**:
@@ -69,4 +65,4 @@
 
 11. **SPA Route Interception & Visual Spin Animation Invariants**:
    - Next.js client-side navigation (`history.pushState` and `history.replaceState`) is intercepted in `src/content.js` to dispatch `ctl:locationchange` and trigger `scheduleRouteCheck(50)`. A 250ms polling loop serves as a resilient safety net for any missed events.
-   - All loading badges, streaming tags, and cards MUST display active rotation animations (`.ctl-spin-icon`, `.ctl-mini-spinner`, `@keyframes ctl-spin`) instead of static unicode icons to provide unmistakable visual feedback.
+   - The loading view MUST display an active rotation animation (`.ctl-spinner`, `.ctl-mini-spinner`, `@keyframes ctl-spin`) instead of a static unicode icon to provide unmistakable visual feedback.
