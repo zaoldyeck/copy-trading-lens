@@ -840,7 +840,7 @@
     "message": "Any value from {0}% to {1}% backtests about as well as the best one."
   },
   "radarBacktestFootnote": {
-    "message": "The backtest uses closed positions only and does not predict the future; open positions are not counted. % is return on margin (ROE)."
+    "message": "The backtest uses closed positions with fills only and does not predict the future; open positions are not counted. Amounts are a range because Binance does not document whether a copier whose stop triggered keeps following the lead's later adds to the same position; both readings are simulated. % is return on margin (ROE)."
   },
   "streamingHintPerformance": {
     "message": "Loading performance data..."

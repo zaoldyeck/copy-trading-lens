@@ -223,6 +223,10 @@
     return 0;
   }
 
+  // Measured 2026-10-02 (reports/order-history-pacing-2026-10-02.txt, local): every new order-history page answers
+  // code 11012005 "system busy" twice before it answers, and bursts of those trip 90801003. Spacing the pages 120 / 500 /
+  // 1000 ms, fixed 150 / 800 ms retries and three pages in parallel all took 54-69 s for 12 pages (the existing backoff:
+  // 65 s), so the throughput is bounded server-side and faster polling only adds requests. The loading bar is the answer.
   async function fetchBinancePagedDetailed(path, portfolioId, onProgress, waitUntilResumed) {
     const rows = [];
     let total = null;
