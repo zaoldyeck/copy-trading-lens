@@ -74,3 +74,12 @@
 11. **SPA Route Interception & Visual Spin Animation Invariants**:
    - Next.js client-side navigation (`history.pushState` and `history.replaceState`) is intercepted in `src/content.js` to dispatch `ctl:locationchange` and trigger `scheduleRouteCheck(50)`. A 250ms polling loop serves as a resilient safety net for any missed events.
    - The loading view MUST display an active rotation animation (`.ctl-spinner`, `.ctl-mini-spinner`, `@keyframes ctl-spin`) instead of a static unicode icon to provide unmistakable visual feedback.
+
+12. **Defensive Insurance Promotion & Slippage Tolerance Invariants (`src/content.js`)**:
+   - When a trader has severe bag-holding (`hasSevereBagHolding: true`, MAE >= 150%) and unconstrained gross cash search produces no stop (`optimal.stop === null`), the UI MUST promote the protective insurance stop (`effectiveStop = radar.recommendedRoe`) as the primary recommendation (badge: `🛡️ 防穿倉保險 (推薦)`) and wire the 1-Click apply buttons to that protective value, preventing catastrophic liquidation from survival bias.
+   - For take profit, if out-of-sample holdout shows negative/zero delta (`holdoutDelta <= 0`), suppress TP (`effectiveTp = null`) to avoid overfitting, falling back to following the lead trader's exit.
+   - Calculate and display slippage tolerance recommendation (0.1%~5%): 0.3% for major-only contracts (BTC/ETH/SOL/BNB), 1.0% for illiquid altcoins or ultra-fast scalpers (< 6 min holds), and 0.5% for mixed portfolios.
+
+13. **Binance Copy-Trading Public API Pacing Architecture (`reports/order-history-pacing-2026-10-02.txt`)**:
+   - Cold page requests to `/lead-portfolio/order-history` execute backend DB queries asynchronously. Binance returns `code 11012005` ("系統目前忙碌中", HTTP 200) on cold misses while warming backend cache (~1.5s).
+   - Firing rapid requests (< 1.5s) triggers edge WAF filter `code 90801003` ("Too Many Requests") or HTTP 429. Pacing requests with ~1.5s~2.0s intervals aligns with cache warming and eliminates rate-limit bursts.
