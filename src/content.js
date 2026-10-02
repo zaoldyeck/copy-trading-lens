@@ -644,7 +644,7 @@
       h("div", { class: "ctl-advisor-slippage-tip", style: "background: rgba(240, 185, 11, 0.08); border: 1px dashed rgba(240, 185, 11, 0.3); border-radius: 6px; padding: 8px 10px; font-size: 11.5px; color: #cbd5e1; margin: 8px 0 10px; line-height: 1.4;" }, [
         h("span", { text: "💡 推薦滑點限制：" }),
         h("strong", { text: slippage.pct, style: "color: #f0b90b; margin: 0 4px;" }),
-        h("span", { text: `（${slippage.reason}）`, style: "color: #94a3b8;" })
+        h("span", { text: `（幣安範圍 0.1%～3.0%，預設 1.5% ｜ ${slippage.reason}）`, style: "color: #94a3b8;" })
       ]),
       h("details", { class: "ctl-advisor-details", style: "margin: 10px 0;" }, [
         h("summary", { class: "ctl-advisor-details-summary", text: t("advisorDetailsSummary") }),
@@ -1061,12 +1061,13 @@
 
       // Slippage Tolerance Recommendation
       h("div", { class: "ctl-advisor-slippage-tip", style: "background: rgba(240, 185, 11, 0.08); border: 1px dashed rgba(240, 185, 11, 0.3); border-radius: 6px; padding: 10px 12px; font-size: 12px; color: #cbd5e1; margin: 12px 0 14px; line-height: 1.5;" }, [
-        h("div", { style: "font-weight: 600; color: #f0b90b; margin-bottom: 4px;" }, [
-          h("span", { text: "💡 幣安跟單設定 · 推薦滑點限制：" }),
-          h("strong", { text: slippage.pct, style: "font-size: 13px; color: #fff; background: rgba(240, 185, 11, 0.25); padding: 2px 6px; border-radius: 4px; margin-left: 4px;" })
+        h("div", { style: "display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 4px;" }, [
+          h("span", { style: "font-weight: 600; color: #f0b90b;", text: "💡 幣安跟單設定 · 推薦滑點限制：" }),
+          h("strong", { text: slippage.pct, style: "font-size: 13px; color: #fff; background: rgba(240, 185, 11, 0.25); padding: 2px 6px; border-radius: 4px;" }),
+          h("span", { text: "（幣安範圍 0.1%～3.0%，預設 1.5%）", style: "font-size: 11px; color: #94a3b8;" })
         ]),
         h("div", { style: "color: #94a3b8; font-size: 11.5px;" }, [
-          h("span", { text: `根據該帶單員標的微結構診斷：${slippage.reason}` })
+          h("span", { text: `微結構診斷：${slippage.reason}` })
         ])
       ]),
 
