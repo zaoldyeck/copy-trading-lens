@@ -1,0 +1,4 @@
+{"review": "ad976995674523cb7", "n": 1, "status": "fixed", "commit": "d7d28d7474d7a26f462bba5ba743aeb5fe25c86a", "test": "scripts/test-stop-loss-radar.mjs::hedge books and flipping fills are replayed by positions.js"}
+{"review": "ad976995674523cb7", "n": 2, "status": "fixed", "commit": "d7d28d7474d7a26f462bba5ba743aeb5fe25c86a", "test": "scripts/test-stop-loss-radar.mjs::a refused symbol is a coverage gap"}
+{"review": "ad976995674523cb7", "n": 3, "status": "fixed", "commit": "d7d28d7474d7a26f462bba5ba743aeb5fe25c86a", "test": "scripts/test-overlay-collapse.mjs::a late marks event does not move the streaming banner back"}
+{"review": "ad976995674523cb7", "n": 4, "status": "fixed", "commit": "d7d28d7474d7a26f462bba5ba743aeb5fe25c86a", "test": "scripts/test-position-marks.mjs::open rows (no close time) have no outcome to judge and are not planned"}
