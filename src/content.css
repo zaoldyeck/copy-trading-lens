@@ -836,9 +836,53 @@
   color: #cbd5e1;
 }
 
+.ctl-radar-pricelist {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #cbd5e1;
+}
+
+.ctl-radar-pricelist p {
+  margin: 0 0 4px;
+}
+
+.ctl-radar-pricelist ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
 .ctl-radar-why p:last-child {
   font-size: 12px;
   color: #94a3b8;
+}
+
+
+.ctl-progress {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(148, 163, 184, 0.2);
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.ctl-progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #f0b90b, #fcd535);
+  transition: width 0.25s ease-out;
+}
+
+.ctl-progress-text {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  font-size: 12px;
+  color: #93c5fd;
+}
+
+.ctl-progress-text strong {
+  color: #f0b90b;
+  margin-right: 2px;
 }
 
 

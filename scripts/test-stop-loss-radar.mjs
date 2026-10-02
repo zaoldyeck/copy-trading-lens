@@ -98,18 +98,16 @@ const position = (extra) => ({ symbol: "XUSDT", side: "LONG", leverage: 10, avgC
   console.log("PASS: the entry that held at each moment decides the drawdown, the final average only when fills are missing");
 }
 
-// 4. roi is a FRACTION of initial margin at any magnitude ("1.2" = +120%): the outcome of a position
-//    the stop never touches is its ROI in percent. Corpus check 2026-10-02: 184,135 cached positions,
-//    97.7% satisfy roi == closingPnl / (peak qty x avgCost / leverage); 6,209 of the 6,463 with |roi| >= 1 are fractions.
+// 4. roi is a FRACTION of initial margin at any magnitude ("1.2" = +120%). Corpus check 2026-10-02: 184,135 cached
+//    positions, 97.7% satisfy roi == closingPnl / (peak qty x avgCost / leverage); 6,209 of the 6,463 with |roi| >= 1
+//    are fractions. A magnitude-based unit guess reads +120% as +1.2%.
 {
-  const rows = [
+  const rows = stoploss.positionExcursions([
     position({ symbol: "AUSDT", avgClosePrice: 112, closingPnl: 12, roi: 1.2 }),
-    position({ symbol: "BUSDT", avgClosePrice: 105, closingPnl: 5, roi: 0.5 }),
     position({ symbol: "CUSDT", avgClosePrice: 99, closingPnl: -1, roi: -0.1 })
-  ];
-  const { curve } = stoploss.selectStop(stoploss.positionExcursions(rows, [], null), null);
-  const at90 = curve.find((c) => c.stop === 90);
-  near(at90.meanRoe, (120 + 50 - 10) / 3, 0.01, "+120% is 120, not 1.2");
+  ], [], null);
+  near(rows[0].roiPct, 120, 1e-9, "+120% is 120, not 1.2");
+  near(rows[1].roiPct, -10, 1e-9);
   console.log("PASS: roi >= 100% is read as a fraction of margin, not as a percent");
 }
 
@@ -158,72 +156,123 @@ const position = (extra) => ({ symbol: "XUSDT", side: "LONG", leverage: 10, avgC
 // 4d. a symbol the exchange refuses (a delisted one fails on every request) is a coverage gap, nothing more
 {
   const rows = [position({ symbol: "AUSDT" }), position({ symbol: "BUSDT" }), position({ symbol: "DEADUSDT" })];
-  const radar = stoploss.analyzeStopLossRadar(rows, [], { symbols: { AUSDT: { minutes: [[T0, 101, 99]], hours: [] } }, failed: [{ symbol: "DEADUSDT", error: "-1121" }] }, null);
-  near(radar.marksCoverage, 1 / 3, 0.001, "one of three positions has candles");
-  assert.ok(!("isPreciseMae" in radar), "there is no provisional state to report: the UI draws nothing until the whole read is done");
+  const marks = { symbols: { AUSDT: { minutes: [[T0, 101, 99]], hours: [] } }, failed: [{ symbol: "DEADUSDT", error: "-1121" }] };
+  const excursions = stoploss.positionExcursions(rows, [], marks);
+  assert.deepEqual(plain(excursions.map((row) => row.marksUsed)), [true, false, false], "only the symbol that was read has candles");
+  assert.ok(!("isPreciseMae" in stoploss.analyzeStopLossRadar(rows, [], marks, null)), "there is no provisional state to report");
   // too little to select from: no number in it can pass for a result
   const empty = stoploss.analyzeStopLossRadar([position()], [], null, null);
   assert.equal(empty.insufficientData, true);
   for (const field of ["recommendedRoe", "recommendedPriceDrop", "winRetentionRate", "worstHistoricalRoeMae", "dominantLeverage"]) assert.equal(empty[field], null, `${field} must not default to a number`);
-  console.log("PASS: refused symbols show as coverage; an insufficient radar carries no default numbers");
+  // positions without replayable fills cannot be simulated either: still no number
+  assert.equal(stoploss.analyzeStopLossRadar(rows, [], marks, null).insufficientData, true);
+  console.log("PASS: a refused symbol is a coverage gap; an insufficient radar carries no default numbers");
 }
 
-// 5. synthetic traders whose best stop is known by construction
+// 5. The stop is evaluated by simulating the COPIER on the lead's fills, not by turning each lead position into
+//    "-L% of its final margin". A row here is a long of 1 unit at 100 held two minutes, one minute candle dipping to
+//    the given adverse ROE (10x), closing at `exit`: margin 10 USDT, so exit 103 is +30% and exit 85 is -150%.
+const MIN_CANDLE = { step: MIN };
+const simRow = ({ mae, exit, symbol = "X", leverage = 10, opened = T0 }) => ({
+  symbol, side: "LONG", leverage, closingPnl: exit - 100, roiPct: ((exit - 100) / 100) * leverage * 100, maeRoe: mae,
+  marksUsed: true, entryPathUsed: true, opened, closed: opened + 2 * MIN,
+  sim: {
+    direction: 1,
+    leverage,
+    fills: [{ time: opened, price: 100, qty: 1, entry: true }, { time: opened + 2 * MIN, price: exit, qty: 1, entry: false }],
+    candles: [{ time: opened, ...MIN_CANDLE, high: 100, low: 100 * (1 - mae / leverage / 100) }]
+  }
+});
 {
-  const excursion = (maeRoe, roiPct, equity = 1000) => ({ maeRoe, roiPct, closingPnl: roiPct, margin: 200, opened: T0, closed: T0 + MIN, entryPathUsed: false, marksUsed: true, leverage: 10 });
-  const sizing = { equityAt: () => 1000 }; // margin 200 of 1000: f = 20%
+  const sizing = { equityAt: () => 50 }; // margin 10 of 50: 20% of equity per position
 
   // 40 winners that dip at most 39% ROE and 3 disasters at 200%: the tightest stop that spares every winner
-  const disasters = [...Array.from({ length: 40 }, (_, i) => excursion(i, 20)), ...Array.from({ length: 3 }, () => excursion(200, -150))];
+  const disasters = [...Array.from({ length: 40 }, (_, i) => simRow({ mae: i, exit: 103 })), ...Array.from({ length: 3 }, () => simRow({ mae: 200, exit: 85 }))];
   const a = stoploss.selectStop(disasters, sizing);
   assert.equal(a.objective, "growth");
   assert.equal(a.optimal, 40, "the smallest candidate above every winner's 39% dip");
-  assert.equal(a.curve.find((c) => c.stop === 40).killedWins, 0);
-  assert.equal(a.curve.find((c) => c.stop === 40).stoppedLosses, 3);
+  assert.equal(a.curve.find((c) => c.stop === 40).triggered, 3, "it triggers on the three disasters only");
 
-  // winners dip as deep as 117% and one loss is -150%: every stop kills more than it saves
-  const tail = [...Array.from({ length: 40 }, (_, i) => excursion(i * 3, 30)), excursion(200, -150)];
-  const b = stoploss.selectStop(tail, { equityAt: () => 10000 }); // f = 2%
+  // winners dip as deep as 117% and one loss is -390%: every stop kills more than it saves
+  const tail = [...Array.from({ length: 40 }, (_, i) => simRow({ mae: i * 3, exit: 103 })), simRow({ mae: 200, exit: 61 })];
+  const b = stoploss.selectStop(tail, { equityAt: () => 500 });
   assert.equal(b.optimal, null, "no stop is the optimum when winners dip as deep as the disaster");
-  assert.ok(b.bestStop >= 10 && b.costOfBestStop > 0, "the best stop that exists costs something");
+  assert.ok(b.insuranceStop >= 10 && b.insuranceStop <= 95, "a stop to buy as insurance is still offered");
 
-  // without sizing the answer is the risk-neutral one and says so
+  // without sizing the answer is the risk-neutral one (total pnl) and says so
   const c = stoploss.selectStop(disasters, null);
-  assert.equal(c.objective, "meanRoe");
+  assert.equal(c.objective, "pnl");
   assert.deepEqual(plain(c.sizing), { source: "none" });
+  assert.equal(c.optimal, 40);
 
   // same positions, same stability figure
   assert.equal(stoploss.selectStop(tail, sizing).bootstrapAgreement, stoploss.selectStop(tail, sizing).bootstrapAgreement);
 
-  // growth punishes the tail that mean ROE forgives: -390% on 30% of equity wipes the account out
-  const ruin = [...Array.from({ length: 40 }, (_, i) => excursion(i * 3, 30)), excursion(500, -390)];
-  const fat = { equityAt: () => 666.67 }; // margin 200 of ~667: f = 30%
-  assert.notEqual(stoploss.selectStop(ruin, fat).optimal, null, "a position that wipes out equity must be stopped");
-  assert.equal(stoploss.selectStop(ruin, null).optimal, null, "mean ROE alone would keep the winners and ignore the wipe-out");
+  // growth punishes the tail that total pnl forgives: -390% on 30% of equity wipes the account out
+  const ruin = [...Array.from({ length: 40 }, (_, i) => simRow({ mae: i * 3, exit: 103 })), simRow({ mae: 500, exit: 61 })];
+  assert.notEqual(stoploss.selectStop(ruin, { equityAt: () => 33 }).optimal, null, "a position that wipes out equity must be stopped");
+  assert.equal(stoploss.selectStop(ruin, null).optimal, null, "total pnl alone keeps the winners and ignores the wipe-out");
+
+  // fewer than 3 positions with replayable fills and candles: nothing to select from
+  assert.equal(stoploss.selectStop([simRow({ mae: 10, exit: 103 }), simRow({ mae: 10, exit: 103 })], sizing), null);
+  assert.equal(stoploss.selectStop(disasters.map((row) => ({ ...row, sim: null })), sizing), null, "rows without fills cannot be simulated");
   console.log("PASS: stop selection finds the known optimum, defers to 'no stop' when winners dip as deep, and punishes ruin");
 }
 
-// 5b. the card explains its answer in the trader's own numbers: what the shown stop cuts, saves and averages
+// 5b. A lead who scales in: the copier's stop fires on the position AS IT WAS, a margin of 10 at the first fill, not on
+//     the finished position's 91. Lead: 1 @100, dips to 90 (-100% ROE at 10x), adds 9 @90, exits 10 @100: +90.
+//     A stop at 70 closes the copier's 1 unit at -70% of margin 10 = -7. What follows is not documented by Binance
+//     (whether a stopped copier keeps following the lead's adds), so both readings are simulated: staying out ends at
+//     -7, following the add earns +90 on it and ends at +83. Either way the stop costs far less than "-70% of 91".
 {
-  const wins = Array.from({ length: 40 }, (_, i) => position({ symbol: `W${i}USDT`, avgClosePrice: 100 - i * 0.3, closingPnl: 60, roi: 0.3 }));
-  const disaster = position({ symbol: "BRUSDT", avgClosePrice: 50, closingPnl: -780, roi: -3.9, leverage: 10 });
-  const radar = stoploss.analyzeStopLossRadar([...wins, disaster], [], null, { equityAt: () => 666.67 });
+  const scaling = (opened) => ({
+    symbol: "S", side: "LONG", leverage: 10, closingPnl: 90, roiPct: 99, maeRoe: 100, marksUsed: true, entryPathUsed: true, opened, closed: opened + 4 * MIN,
+    sim: {
+      direction: 1,
+      leverage: 10,
+      fills: [
+        { time: opened, price: 100, qty: 1, entry: true },
+        { time: opened + 2 * MIN, price: 90, qty: 9, entry: true },
+        { time: opened + 4 * MIN, price: 100, qty: 10, entry: false }
+      ],
+      candles: [{ time: opened + MIN, ...MIN_CANDLE, high: 100, low: 90 }, { time: opened + 3 * MIN, ...MIN_CANDLE, high: 100, low: 90 }]
+    }
+  });
+  const rows = [scaling(T0), scaling(T0 + 10 * MIN), scaling(T0 + 20 * MIN)];
+  const sel = stoploss.selectStop(rows, null);
+  const none = sel.curve.find((c) => c.stop === null);
+  const at70 = sel.curve.find((c) => c.stop === 70);
+  near(none.pnlStayOut, 270, 1e-6, "no stop: 3 x +90");
+  near(at70.pnlStayOut, -21, 1e-6, "stopped at 70, staying out: 3 x -7");
+  near(at70.pnlFollow, 249, 1e-6, "stopped at 70, following the add: 3 x (-7 + 90)");
+  assert.equal(at70.triggered, 3);
+  console.log("PASS: the copier's stop is simulated on the position as it was, under both readings of what follows");
+}
+
+// 5c. end to end through the shared replay: positions, fills and candles in, the explanation's numbers out
+{
+  const specs = [...Array.from({ length: 40 }, (_, i) => ({ mae: i, exit: 103 })), ...Array.from({ length: 3 }, () => ({ mae: 200, exit: 85 }))];
+  const positions = []; const orders = []; const symbols = {};
+  specs.forEach((spec, i) => {
+    const symbol = `T${i}USDT`; const opened = T0 + i * 10 * MIN;
+    positions.push(position({ symbol, avgCost: 100, avgClosePrice: spec.exit, closingPnl: spec.exit - 100, roi: ((spec.exit - 100) / 100) * 10, opened, closed: opened + 2 * MIN, maxOpenInterest: 1 }));
+    orders.push({ symbol, side: "BUY", positionSide: "BOTH", executedQty: 1, avgPrice: 100, orderUpdateTime: opened });
+    orders.push({ symbol, side: "SELL", positionSide: "BOTH", executedQty: 1, avgPrice: spec.exit, orderUpdateTime: opened + 2 * MIN });
+    symbols[symbol] = { minutes: [[opened, 100, 100 * (1 - spec.mae / 10 / 100)]], hours: [] };
+  });
+  const radar = stoploss.analyzeStopLossRadar(positions, orders, { symbols, failed: [] }, { equityAt: () => 50 });
+  assert.equal(radar.simulatedPositions, 43);
+  assert.equal(radar.recommendedRoe, 40);
+  assert.equal(radar.stopOptional, false);
   const t = radar.tradeoff;
-  const stop = radar.recommendedRoe;
-  assert.equal(t.stop, stop);
-  assert.equal(t.positions, 41);
-  assert.equal(t.wins, 40);
-  assert.equal(t.losses, 1);
-  // independent recount: winner i dips i x 3 ROE points (0.3% x 10x per step)
-  assert.equal(t.killedWins, wins.filter((_, i) => i * 3 >= stop).length, "winners whose dip reached the stop");
-  assert.equal(t.savedLosses, 1, "the -390% loser would have ended at -stop instead");
-  near(t.savedLossesAvgRoi, -390, 0.001, "what that loser really ended at");
-  near(t.killedWinsAvgRoi, t.killedWins ? 30 : 0, 0.001, "what the cut winners really ended at");
-  assert.deepEqual(plain(t.worstLoss), { symbol: "BRUSDT", leverage: 10, roiPct: -390, maeRoe: 500 });
-  const at = (level) => radar.stopSelection.curve.find((point) => point.stop === level).meanRoe;
-  near(t.meanRoeNone, at(null), 1e-9, "no stop averages what the curve says");
-  near(t.meanRoeStop, at(stop), 1e-9, "the shown stop averages what the curve says");
-  console.log("PASS: the trade-off behind the shown stop is counted from the trader's own positions");
+  near(t.pnlNone, 40 * 3 + 3 * -15, 1e-6, "no stop: 40 winners of +3 and 3 disasters of -15 USDT");
+  near(t.pnlStopWorse, 40 * 3 + 3 * -4, 1e-6, "a 40% stop caps each disaster at -40% of its margin of 10");
+  assert.equal(t.triggered, 3);
+  assert.equal(t.helped, 3);
+  near(t.helpedUsdt, 33, 1e-6, "3 x (-15 -> -4)");
+  assert.equal(t.hurt, 0);
+  assert.equal(radar.winRetentionRate, 100, "no winner is cut");
+  console.log("PASS: the trade-off behind the shown stop is counted from the replayed fills");
 }
 
 // 6. Real cached lead traders: the same numbers as tools/research/stoploss-three.mjs (V2 = entry path +
@@ -231,9 +280,9 @@ const position = (extra) => ({ symbol: "XUSDT", side: "LONG", leverage: 10, avgC
 const cacheDir = path.join(root, "tools", "cache");
 const realTraders = [
   // 玄冥二老's 428.4% is the TAIKOUSDT short squeezed to 0.538 (funding then made it a -52% row): a real drawdown
-  { id: "4908633203782592768", name: "玄冥二老", winnersP95: 91.4, worstLoss: 428.4 },
-  { id: "5131925334830383361", name: "星辰社区-海", winnersP95: 84.8, worstLoss: 652.4 },
-  { id: "5075281354358777856", name: "熬鹰资本", winnersP95: 30.0, worstLoss: 194.2 }
+  { id: "4908633203782592768", name: "玄冥二老", winnersP95: 91.4, worstLoss: 428.4, simulated: 138 },
+  { id: "5131925334830383361", name: "星辰社区-海", winnersP95: 84.8, worstLoss: 652.4, simulated: 76 },
+  { id: "5075281354358777856", name: "熬鹰资本", winnersP95: 30.0, worstLoss: 194.2, simulated: 59 }
 ];
 for (const trader of realTraders) {
   const rawFile = path.join(cacheDir, `raw_${trader.id}.json`);
@@ -253,11 +302,14 @@ for (const trader of realTraders) {
   const radar = stoploss.analyzeStopLossRadar(raw.positionHistory, raw.orderHistory, { symbols, failed: [] }, null);
   near(radar.winStats.p95, trader.winnersP95, 0.5, `${trader.name} winners' MAE p95`);
   near(radar.lossStats.max, trader.worstLoss, 0.5, `${trader.name} worst loss MAE`);
-  assert.equal(radar.stopSelection.objective, "meanRoe");
+  assert.equal(radar.stopSelection.objective, "pnl");
   assert.equal(radar.marksCoverage, 1, `${trader.name}: every position has candles`);
+  assert.equal(radar.simulatedPositions, trader.simulated, `${trader.name}: positions with replayable fills`);
+  // simulated on the lead's fills under both readings of what follows a stop, no stop level beats "no stop" for any of the three
+  assert.equal(radar.stopSelection.optimal, null, `${trader.name}: no stop beats no stop`);
+  assert.equal(radar.stopOptional, true);
   assert.ok(radar.recommendedRoe >= 10 && radar.recommendedRoe <= 95);
-  if (trader.name !== "熬鹰资本") assert.equal(radar.stopSelection.optimal, null, `${trader.name}: no stop beats every stop in-sample`);
-  console.log(`PASS: ${trader.name} (winners p95 ${radar.winStats.p95}, worst loss ${radar.lossStats.max}, optimal ${radar.stopSelection.optimal ?? "none"}, best stop ${radar.stopSelection.bestStop}, entry path ${radar.entryPathPositions}/${radar.positionCount})`);
+  console.log(`PASS: ${trader.name} (winners p95 ${radar.winStats.p95}, worst loss ${radar.lossStats.max}, replayable ${radar.simulatedPositions}/${radar.positionCount}, optimal none, insurance stop ${radar.stopSelection.insuranceStop})`);
 }
 
 // 4. Binance copy-setting URL detection test

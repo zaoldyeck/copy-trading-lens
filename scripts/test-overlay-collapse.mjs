@@ -285,7 +285,9 @@ test("a late marks event does not move the streaming banner back", async () => {
   page.fetchOptions[0].onProgressive({ stage: "marks", raw: { name: "Trader" } });
   const banner = page.find("ctl-streaming-banner");
   assert.ok(banner, "the streaming banner is shown while the read is not finished");
-  const text = banner.children.map((child) => (typeof child === "string" ? child : child.textContent)).join("");
+  const parts = [];
+  walk(banner, (el) => parts.push(el.textContent));
+  const text = parts.join("");
   assert.ok(text.includes("stageLoadedOrders"), `banner after orders then marks: ${text}`);
 });
 
@@ -343,6 +345,37 @@ test("the card fills in as the read lands and draws no value before its inputs h
   states = metricStates(page);
   assert.ok(Object.values(states).every((state) => state === "value"), "the finished read has no placeholder left");
   assert.equal(page.find("ctl-streaming-banner"), null);
+});
+
+// Loading takes seconds to a minute (Binance's busy-retry backoff on order-history alone took 72 s for 玄冥二老), so
+// the card shows how far along the read is: each piece of the read has a share, filled by what has been fetched.
+test("the progress bar only rises, fills inside each piece, and goes away with the finished read", async () => {
+  const page = loadPage();
+  const width = () => Number(/width: (\d+)%/.exec(page.find("ctl-progress-fill").attributes.style)[1]);
+  const landed = (...pieces) => Object.fromEntries(["detail", "positions", "marks", "orders", "market"].map((piece) => [piece, pieces.includes(piece)]));
+  const progress = (label, done, total) => page.fetchOptions[0].onProgress({ label, fetched: done, total });
+  const stage = (name, ...pieces) => page.fetchOptions[0].onProgressive({ stage: name, raw: { name: "Trader", loaded: landed(...pieces) } });
+
+  const seen = [width()];
+  assert.equal(seen[0], 0, "nothing fetched yet");
+  const step = (action) => { action(); seen.push(width()); };
+  step(() => stage("detail", "detail"));
+  step(() => progress("positionHistory", 50, 100));
+  step(() => progress("positionHistory", 100, 100));
+  step(() => stage("positions", "detail", "positions"));
+  step(() => progress("orderHistory", 6, 12));
+  step(() => progress("orderHistory", 12, 12));
+  step(() => progress("marks", 100, 200));
+  step(() => stage("orders", "detail", "positions", "orders"));
+  step(() => stage("marks", "detail", "positions", "orders", "marks"));
+  step(() => progress("market", 26, 52));
+  assert.deepEqual(seen, [...seen].sort((a, b) => a - b), `the bar never goes back: ${seen}`);
+  assert.ok(seen[2] > seen[1], "inside a piece the bar fills by what has been fetched");
+  assert.ok(seen[seen.length - 1] >= 90 && seen[seen.length - 1] < 100, `almost there but not done before the market history lands: ${seen.at(-1)}`);
+
+  page.fetches[0].resolve({ name: "Trader" });
+  await tick();
+  assert.equal(page.find("ctl-progress-fill"), null, "a finished read has no bar");
 });
 
 let failed = 0;

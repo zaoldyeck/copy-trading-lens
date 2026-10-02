@@ -323,26 +323,47 @@
     return radar.stopOptional ? t("radarDecisionOptional") : t("radarDecisionStop", [radar.recommendedRoe]);
   }
 
-  // Why this answer, in the trader's own numbers: what the stop cuts, what it really saves, what each choice averages per
-  // position, and, when a stop is not shown to help, that a stop is insurance and which one is cheapest.
+  // Why this answer, in the trader's own numbers: what the stop would have done to a copier on this trader's own
+  // history (total money, how many positions it triggers on, how many it helps and how many it hurts), and, when a
+  // stop is not shown to help, that a stop is insurance and which one is suggested.
   function stopExplanation(radar) {
     const tradeoff = radar.tradeoff;
     const stop = radar.recommendedRoe;
-    const digits = (value, places = 0) => value.toFixed(places);
+    const usdt = (value) => Math.round(value).toLocaleString("en-US");
+    // under the reading that is worse for the stop, and the other: show the range when they differ
+    const low = Math.min(tradeoff.pnlStopWorse, tradeoff.pnlStopBetter);
+    const high = Math.max(tradeoff.pnlStopWorse, tradeoff.pnlStopBetter);
+    const stopTotal = Math.round(low) === Math.round(high) ? usdt(low) : `${usdt(low)}～${usdt(high)}`;
+    const effects = [tradeoff.positions, stop, usdt(tradeoff.pnlNone), stopTotal, tradeoff.triggered, tradeoff.helped, usdt(tradeoff.helpedUsdt), tradeoff.hurt, usdt(Math.abs(tradeoff.hurtUsdt))];
     const paragraphs = [];
     if (radar.stopOptional) {
-      paragraphs.push(tradeoff.killedWins > 0
-        ? t("radarWhyOptional", [tradeoff.positions, tradeoff.killedWins, stop, digits(tradeoff.killedWinsAvgRoi), tradeoff.savedLosses, digits(tradeoff.meanRoeNone, 1), digits(tradeoff.meanRoeStop, 1)])
-        : t("radarWhyNoCost", [tradeoff.positions, stop, tradeoff.savedLosses, digits(tradeoff.meanRoeStop, 1), digits(tradeoff.meanRoeNone, 1)]));
+      paragraphs.push(tradeoff.triggered > 0 ? t("radarWhyOptional", effects) : t("radarWhyNoCost", [tradeoff.positions, stop, usdt(tradeoff.pnlNone)]));
       const worst = tradeoff.worstLoss;
-      if (worst && worst.roiPct < -stop) paragraphs.push(t("radarInsurance", [worst.symbol, worst.leverage, digits(Math.abs(worst.roiPct)), stop]));
+      paragraphs.push(worst && worst.returnPct < -stop
+        ? t("radarInsurance", [worst.symbol, worst.leverage, Math.abs(Math.round(worst.returnPct)), stop])
+        : t("radarInsuranceNone", [stop]));
     } else {
-      paragraphs.push(t("radarWhyStop", [tradeoff.positions, stop, tradeoff.savedLosses, digits(Math.abs(tradeoff.savedLossesAvgRoi)), tradeoff.killedWins, digits(tradeoff.meanRoeStop, 1), digits(tradeoff.meanRoeNone, 1)]));
+      paragraphs.push(t("radarWhyStop", effects));
     }
     const band = stableBand(radar);
     if (band && band.lo !== band.hi) paragraphs.push(t("radarBandSentence", [band.lo, band.hi]));
     paragraphs.push(t("radarBacktestFootnote"));
     return paragraphs;
+  }
+
+  // The price of insurance, level by level: what each stop would have cost on this history.
+  const PRICE_LIST_STOPS = [95, 85, 70, 50];
+  function stopPriceList(radar) {
+    const usdt = (value) => Math.round(value).toLocaleString("en-US");
+    const rows = radar.stopSelection.curve.filter((point) => PRICE_LIST_STOPS.includes(point.stop)).sort((a, b) => b.stop - a.stop);
+    return h("div", { class: "ctl-radar-pricelist" }, [
+      h("p", { text: t("radarPriceListTitle", [usdt(radar.tradeoff.pnlNone)]) }),
+      h("ul", {}, rows.map((point) => {
+        const low = Math.min(point.pnlStayOut, point.pnlFollow);
+        const high = Math.max(point.pnlStayOut, point.pnlFollow);
+        return h("li", { text: t("radarPriceListRow", [point.stop, point.triggered, Math.round(low) === Math.round(high) ? usdt(low) : `${usdt(low)}～${usdt(high)}`]) });
+      }))
+    ]);
   }
 
   function applyLabel(radar) {
@@ -400,6 +421,7 @@
           ])
         ]),
         h("div", { class: "ctl-radar-why" }, stopExplanation(radar).map((text) => h("p", { text }))),
+        radar.stopOptional ? stopPriceList(radar) : null,
         h("div", { class: "ctl-radar-grid" }, [
           h("div", { class: "ctl-radar-stat" }, [
             h("span", { text: t("radarWinRetention") }),
@@ -481,6 +503,36 @@
     return t("payoffNoLosses", [summary.closedTrades]);
   }
 
+  // How much of the read has landed, for the progress bar. Each piece of the read has a share; inside a piece the
+  // share fills by what has been fetched (pages of a history, windows of candles, symbols of market data), 0 until
+  // its total is known and at most 99% of it until the piece has landed, so the bar only ever rises and reaches 100
+  // with the finished read. The shares are display weights, not measured durations: on 2026-10-02 a full read of
+  // 玄冥二老 landed detail at 0.4 s, positions 0.9 s, marks 3.2 s, orders 72.5 s (Binance's busy-retry backoff on
+  // order-history), market history 74.6 s, so the long middle is shown as steady progress inside the orders share.
+  const PROGRESS_PIECES = [
+    { share: 5, landed: "detail" },
+    { share: 15, landed: "positions", counter: "positionHistory" },
+    { share: 25, landed: "orders", counter: "orderHistory" },
+    { share: 5, landed: "orders", counter: "transferHistory" },
+    { share: 5, landed: "orders" },
+    { share: 25, landed: "marks", counter: "marks" },
+    { share: 20, landed: "market", counter: "market" }
+  ];
+
+  function loadPercent(state) {
+    if (state.phase === "ready") return 100;
+    let sum = 0;
+    for (const piece of PROGRESS_PIECES) {
+      if (state.raw?.loaded?.[piece.landed]) {
+        sum += piece.share;
+        continue;
+      }
+      const counter = state.progress?.[piece.counter];
+      if (counter && counter.total > 0) sum += piece.share * Math.min(0.99, counter.done / counter.total);
+    }
+    return Math.min(99, Math.round(sum));
+  }
+
   function renderStreamingBanner(stage) {
     let loaded = t("stageLoadedDetail");
     let loading = t("stageLoadingPositions");
@@ -491,10 +543,17 @@
       loaded = t("stageLoadedOrders");
       loading = t("stageLoadingMarket");
     }
+    const percent = loadPercent(run);
     return h("div", { class: "ctl-streaming-banner", title: t("streamingBanner", [loaded, loading]) }, [
-      h("span", { text: `⚡ ${loaded} ｜ ` }),
-      h("span", { class: "ctl-mini-spinner", style: "border-top-color: #60a5fa; margin-right: 5px;" }),
-      h("span", { text: `${loading}...` })
+      h("div", { class: "ctl-progress", role: "progressbar", "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": String(percent) }, [
+        h("div", { class: "ctl-progress-fill", style: `width: ${percent}%` })
+      ]),
+      h("div", { class: "ctl-progress-text" }, [
+        h("strong", { text: `${percent}%` }),
+        h("span", { text: ` ｜ ⚡ ${loaded} ｜ ` }),
+        h("span", { class: "ctl-mini-spinner", style: "border-top-color: #60a5fa; margin-right: 5px;" }),
+        h("span", { text: `${loading}...` })
+      ])
     ]);
   }
 
@@ -530,6 +589,7 @@
             ]),
             h("div", { class: "ctl-advisor-sub", text: t("radarEquivalentPrice", [radar.dominantLeverage, radar.recommendedPriceDrop]) }),
             h("div", { class: "ctl-radar-why" }, stopExplanation(radar).map((text) => h("p", { text }))),
+            radar.stopOptional ? stopPriceList(radar) : null,
             h("button", {
               class: "ctl-primary ctl-advisor-apply-btn",
               type: "button",
@@ -716,6 +776,7 @@
     );
   }
 
+  const HISTORY_LABELS = new Set(["positionHistory", "orderHistory", "transferHistory"]);
   const STAGE_ORDER = { detail: 0, positions: 1, marks: 1, orders: 2 };
 
   async function runAnalysis(force = false) {
@@ -741,6 +802,7 @@
       context,
       phase: "loading",
       streamingStage: "init",
+      progress: {},
       fetchControl: createFetchControl(collapsed)
     };
     run = current;
@@ -753,7 +815,12 @@
       const raw = await window.CopyTradingLensProviders.fetchLeadData(context, {
         waitUntilResumed: () => current.fetchControl.waitUntilResumed(),
         onProgress: (event) => {
-          if (!superseded()) window.CopyTradingLensPositionsPanel?.setProgress(event);
+          if (superseded()) return;
+          // the positions panel shows the three paged histories; the bar also counts the candle and market reads
+          if (HISTORY_LABELS.has(event.label)) window.CopyTradingLensPositionsPanel?.setProgress(event);
+          const before = loadPercent(run);
+          run = { ...run, progress: { ...run.progress, [event.label]: { done: event.done ?? event.fetched, total: event.total } } };
+          if (loadPercent(run) !== before) paint();
         },
         // The read lands in pieces and the card fills in as each does. Marks can land after orders: keep the furthest
         // stage reached. A partial analysis can fail on what has not landed; then nothing is drawn yet.

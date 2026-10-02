@@ -468,7 +468,7 @@
 
     // Mark candles for every position's own life, every symbol, read while the long order and
     // transfer histories below are still paging. Lands as its own event.
-    const marksRead = fetchBinancePositionMarks(positionRows, { waitUntilResumed }).then((positionMarks) => {
+    const marksRead = fetchBinancePositionMarks(positionRows, { waitUntilResumed, onProgress: progressFor("marks") }).then((positionMarks) => {
       view.positionMarks = positionMarks;
       view.loaded.marks = true;
       endpointResults.positionMarks = {
@@ -524,7 +524,7 @@
     const touchedSymbols = [...new Set([...positionRows, ...orderRows].map((row) => row.symbol).filter(Boolean))];
     const startMs = allTimes.length ? Math.min(...allTimes) : nowMs;
     view.marketHistory = (touchedSymbols.length && startMs < nowMs)
-      ? { nowMs, ...(await fetchBinanceMarketHistory(touchedSymbols, startMs, nowMs, { waitUntilResumed })) }
+      ? { nowMs, ...(await fetchBinanceMarketHistory(touchedSymbols, startMs, nowMs, { waitUntilResumed, onProgress: progressFor("market") })) }
       : { nowMs, startMs: nowMs, endMs: nowMs, symbols: {}, failed: [] };
     view.loaded.market = true;
 
@@ -738,11 +738,13 @@
   }
 
   /**
+   * @param {{waitUntilResumed?: function, onProgress?: function}} options onProgress({done, total}) after each window
    * @returns {Promise<{symbols: Record<string, {minutes: number[][], hours: number[][]}>, failed: {symbol: string, error: string}[]}>}
    *   symbols[s].minutes / .hours: [openTime, high, low] sorted by time; stoploss.js lifeCandles() reads them.
    */
   async function fetchBinancePositionMarks(rows, options = {}) {
     const waitUntilResumed = typeof options.waitUntilResumed === "function" ? options.waitUntilResumed : null;
+    const onProgress = typeof options.onProgress === "function" ? options.onProgress : null;
     const symbols = {};
     const failedBySymbol = new Map();
     const jobs = [];
@@ -752,16 +754,20 @@
       for (const [from, to] of windows.hours) jobs.push({ symbol, kind: "hours", interval: "1h", stepMs: HOUR_MS, from, to });
     }
     let next = 0;
+    let done = 0;
     const worker = async () => {
       while (next < jobs.length) {
         const job = jobs[next];
         next += 1;
-        if (failedBySymbol.has(job.symbol)) continue;
-        try {
-          symbols[job.symbol][job.kind].push(...await markKlineRows(job.symbol, job.interval, job.stepMs, job.from, job.to, waitUntilResumed));
-        } catch (error) {
-          failedBySymbol.set(job.symbol, error?.message || String(error));
+        if (!failedBySymbol.has(job.symbol)) {
+          try {
+            symbols[job.symbol][job.kind].push(...await markKlineRows(job.symbol, job.interval, job.stepMs, job.from, job.to, waitUntilResumed));
+          } catch (error) {
+            failedBySymbol.set(job.symbol, error?.message || String(error));
+          }
         }
+        done += 1;
+        onProgress?.({ done, total: jobs.length });
       }
     };
     await Promise.all(Array.from({ length: Math.min(MARK_CANDLES_CONCURRENCY, jobs.length) }, worker));
@@ -776,9 +782,11 @@
   async function fetchBinanceMarketHistory(symbols, startMs, endMs, options = {}) {
     const waitUntilResumed = typeof options.waitUntilResumed === "function" ? options.waitUntilResumed : null;
     const wanted = Array.from(new Set(asArray(symbols).map(String).filter(Boolean)));
+    const onProgress = typeof options.onProgress === "function" ? options.onProgress : null;
     const bySymbol = {};
     const failed = [];
     let next = 0;
+    let done = 0;
     const worker = async () => {
       while (next < wanted.length) {
         const symbol = wanted[next];
@@ -786,6 +794,8 @@
         const result = await safeFetch(`market:${symbol}`, () => fetchBinanceSymbolHistory(symbol, startMs, endMs, { waitUntilResumed }));
         if (result.ok) bySymbol[symbol] = result.data;
         else failed.push({ symbol, error: result.error });
+        done += 1;
+        onProgress?.({ done, total: wanted.length });
       }
     };
     await Promise.all(Array.from({ length: Math.min(MARKET_HISTORY_CONCURRENCY, wanted.length) }, worker));

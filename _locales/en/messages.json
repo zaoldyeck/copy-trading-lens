@@ -813,7 +813,7 @@
     "message": "Recommended Stop-Loss Setting"
   },
   "radarInsuranceLabel": {
-    "message": "If you still want a stop (cheapest)"
+    "message": "If you still want a stop, set"
   },
   "radarDecisionOptional": {
     "message": "A stop-loss is optional here"
@@ -822,16 +822,16 @@
     "message": "Set a {0}% stop-loss"
   },
   "radarWhyOptional": {
-    "message": "Backtested on this trader's last {0} closed positions: {1} winners dipped past {2}% before recovering, so a stop would have cut them short (from +{3}% on average to -{2}%), while the stop saves only {4} big losers. Overall, no stop averages +{5}% per position against +{6}% with a {2}% stop, so in this history leaving it off pays more."
+    "message": "Simulating a copier's stop on this trader's last {0} positions with fills (amounts are the lead account's USDT): without a stop the total is +{2} USDT; with a {1}% stop it is only +{3} USDT. A {1}% stop would trigger on {4} positions: on {5} it loses less (saving {6} USDT), on {7} it exits early and earns less or loses more (costing {8} USDT). So in this history, leaving it off pays more."
   },
   "radarWhyNoCost": {
-    "message": "Backtested on this trader's last {0} closed positions: a {1}% stop would not have cut a single winner short and would have caught only {2} big losers; it averages +{3}% per position against +{4}% with no stop. It makes little difference; set one if you want the insurance."
+    "message": "Simulating a copier's stop on this trader's last {0} positions with fills: a {1}% stop would not have triggered once in this history, so it changes nothing (without a stop the total is +{2} USDT, lead account). It is insurance, not a way to improve past returns."
   },
   "radarWhyStop": {
-    "message": "Backtested on this trader's last {0} closed positions: a {1}% stop would have stopped {2} positions that ended in big losses (from -{3}% on average to -{1}%) and cut only {4} winners short. Overall it averages +{5}% per position against +{6}% with no stop, so setting it pays more."
+    "message": "Simulating a copier's stop on this trader's last {0} positions with fills (amounts are the lead account's USDT): without a stop the total is +{2} USDT; with a {1}% stop it is +{3} USDT. A {1}% stop would trigger on {4} positions: on {5} it loses less (saving {6} USDT), on {7} it exits early and earns less or loses more (costing {8} USDT). So setting it pays more."
   },
   "radarInsurance": {
-    "message": "A stop-loss is really insurance against a loss bigger than anything in the history. This trader's worst position was {0} ({1}x leverage), which ended at -{2}%; with a {3}% stop it would have lost at most {3}%. If you want that insurance, {3}% costs the least."
+    "message": "A stop-loss is really insurance against a loss bigger than anything in this history. This trader's worst recent position was {0} ({1}x leverage), which lost {2}%; with a {3}% stop it would have lost at most {3}%. If you want that insurance, {3}% costs the least in this history (the cost of each level is in the list below)."
   },
   "radarApplyOptional": {
     "message": "Set one anyway: fill in {0}%"
@@ -955,5 +955,14 @@
   },
   "stageLoadingMarket": {
     "message": "Mark Price K-Lines & Precise MAE Excursions"
+  },
+  "radarInsuranceNone": {
+    "message": "A stop-loss is really insurance against a loss bigger than anything in the future, and no position in this history needed it. If you want that insurance, {0}% costs the least in this history and guarantees no position loses more than {0}% of its margin (the cost of each level is in the list below)."
+  },
+  "radarPriceListTitle": {
+    "message": "What each stop level would have cost in this history (without a stop the total is +{0} USDT, lead account):"
+  },
+  "radarPriceListRow": {
+    "message": "A {0}% stop: triggers on {1} positions, total +{2} USDT"
   }
 }

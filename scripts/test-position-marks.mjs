@@ -17,7 +17,8 @@ let failSymbol = null;
 global.fetch = async (url, init = {}) => {
   const u = new URL(String(url));
   requests.push({ url: String(url), init, params: Object.fromEntries(u.searchParams) });
-  assert.ok(u.pathname === "/fapi/v1/markPriceKlines", `only mark-price klines are read, got ${u.pathname}`);
+  assert.ok(["/fapi/v1/markPriceKlines", "/fapi/v1/fundingRate"].includes(u.pathname), `only public market data is read, got ${u.pathname}`);
+  if (u.pathname === "/fapi/v1/fundingRate") return { ok: true, status: 200, text: async () => "[]" };
   const symbol = u.searchParams.get("symbol");
   if (symbol === failSymbol) return { ok: false, status: 400, text: async () => JSON.stringify({ code: -1121, msg: "Invalid symbol." }) };
   const step = u.searchParams.get("interval") === "1m" ? 60000 : 3600000;
@@ -31,7 +32,7 @@ global.location = { href: "https://www.binance.com/en/copy-trading/lead-details/
 global.window = global;
 // eslint-disable-next-line no-eval
 eval(read("src/providers.js"));
-const { planMarkWindows, fetchBinancePositionMarks } = global.CopyTradingLensProviders;
+const { planMarkWindows, fetchBinancePositionMarks, fetchBinanceMarketHistory } = global.CopyTradingLensProviders;
 
 const MIN = 60000; const HOUR = 3600000;
 const T0 = Date.UTC(2026, 8, 1, 10, 0, 0); // 10:00:00 sharp
@@ -115,6 +116,20 @@ const plan = (rows) => planMarkWindows(rows);
   failSymbol = null;
   assert.deepEqual(result.failed.map((f) => f.symbol), ["BADUSDT"]);
   assert.deepEqual(Object.keys(result.symbols), ["GOODUSDT"]);
+}
+
+// 8b. progress: one report per finished window, ending at done == total, for the loading bar
+{
+  const reports = [];
+  const rows = Array.from({ length: 12 }, (_, i) => row(`P${i}USDT`, T0 + i * 7 * MIN, T0 + i * 7 * MIN + MIN));
+  await fetchBinancePositionMarks(rows, { onProgress: (event) => reports.push(event) });
+  assert.equal(reports.length, 12, "one report per window");
+  assert.deepEqual(reports.map((report) => report.done), reports.map((_, i) => i + 1), "done counts up one at a time");
+  assert.ok(reports.every((report) => report.total === 12));
+  // the market history reports per symbol, failed or not
+  const market = [];
+  await fetchBinanceMarketHistory(["AAAUSDT", "BBBUSDT", "CCCUSDT"], T0, T0 + 5 * HOUR, { onProgress: (event) => market.push(event) });
+  assert.deepEqual(market.map((report) => [report.done, report.total]), [[1, 3], [2, 3], [3, 3]]);
 }
 
 // 9. no rows, no requests
