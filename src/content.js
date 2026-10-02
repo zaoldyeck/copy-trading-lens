@@ -582,6 +582,7 @@
       : t("exitOptimizing"));
     if (!selection?.optimal || radar.insufficientData) return null;
     const optimal = selection.optimal;
+    const hasInsuranceNote = optimal.stop === null && Number.isInteger(radar.recommendedRoe);
     return h("section", { class: compact ? "ctl-advisor-hero" : "ctl-section ctl-radar-section" }, [
       h("h3", { text: t("sectionJointExits") }),
       h("div", { class: "ctl-radar-decision", text: exitPairText(optimal) }),
@@ -591,7 +592,13 @@
         h("div", { class: "ctl-radar-stat" }, [h("span", { text: t("exitTakeProfitLabel") }), h("strong", { text: exitOptionLabel(optimal.takeProfit) })])
       ]),
       h("p", { class: "ctl-radar-sub", text: t("exitEquivalentPrice", [radar.dominantLeverage, optimal.stop === null ? t("exitDisabled") : `${Number((optimal.stop / radar.dominantLeverage).toPrecision(4))}%`, optimal.takeProfit === null ? t("exitDisabled") : `${Number((optimal.takeProfit / radar.dominantLeverage).toPrecision(4))}%`]) }),
-      h("div", { class: "ctl-radar-why" }, jointExitExplanation(radar).map((text) => h("p", { text }))),
+      hasInsuranceNote ? h("div", { class: "ctl-advisor-insurance-tip", style: "margin: 8px 0 12px;", text: t("advisorInsuranceNote", [radar.recommendedRoe, radar.winRetentionRate]) }) : null,
+      h("details", { class: "ctl-advisor-details", style: "margin: 10px 0;" }, [
+        h("summary", { class: "ctl-advisor-details-summary", text: t("advisorDetailsSummary") }),
+        h("div", { class: "ctl-advisor-details-content" }, [
+          h("div", { class: "ctl-radar-why" }, jointExitExplanation(radar).map((text) => h("p", { text })))
+        ])
+      ]),
       ...jointExitProfiles(selection),
       h("button", {
         class: compact ? "ctl-primary ctl-advisor-apply-btn" : "ctl-radar-fill-btn",
@@ -775,42 +782,82 @@
     return Math.min(99, Math.round(sum));
   }
 
+  function streamingStatusDetails(state) {
+    const stage = state?.streamingStage;
+    let loaded = t("stageLoadedDetail");
+    let loading = t("stageLoadingPositions");
+    let detail = "";
+
+    if (stage === "positions" || stage === "marks") {
+      loaded = t("stageLoadedPositions");
+      loading = t("stageLoadingOrders");
+      const ord = state?.progress?.orderHistory;
+      if (ord && (ord.done > 0 || ord.fetched > 0)) {
+        const done = ord.done ?? ord.fetched;
+        detail = ord.total
+          ? ` (${done.toLocaleString("en-US")} / ${ord.total.toLocaleString("en-US")} 筆 · 第 ${ord.pages || Math.ceil(done / 100)} 頁)`
+          : ` (${done.toLocaleString("en-US")} 筆)`;
+      } else {
+        const marks = state?.progress?.marks;
+        if (marks && marks.done > 0) {
+          detail = ` (${marks.done} / ${marks.total} 標的)`;
+        }
+      }
+    } else if (stage === "orders") {
+      loaded = t("stageLoadedOrders");
+      loading = t("stageLoadingMarket");
+      const mkt = state?.progress?.market;
+      if (mkt && mkt.done > 0) {
+        detail = ` (${mkt.done} / ${mkt.total} 標的)`;
+      }
+    } else if (stage === "exits") {
+      loaded = t("exitDataReady");
+      loading = t("exitOptimizing");
+      const exit = state?.exitProgress;
+      if (exit && exit.done > 0) {
+        detail = ` (${exit.done.toLocaleString("en-US")} / ${exit.total.toLocaleString("en-US")} 組)`;
+      }
+    } else {
+      const pos = state?.progress?.positionHistory;
+      if (pos && (pos.done > 0 || pos.fetched > 0)) {
+        const done = pos.done ?? pos.fetched;
+        detail = pos.total
+          ? ` (${done.toLocaleString("en-US")} / ${pos.total.toLocaleString("en-US")} 筆)`
+          : ` (${done.toLocaleString("en-US")} 筆)`;
+      }
+    }
+    return { loaded, loading, detail, percent: loadPercent(state) };
+  }
+
   function updateProgressBannerOnly() {
     if (typeof root?.querySelector !== "function") return false;
     const banner = root.querySelector(".ctl-streaming-banner");
     if (!banner || typeof banner.querySelector !== "function") return false;
+    const { loaded, loading, detail, percent } = streamingStatusDetails(run);
     const fill = banner.querySelector(".ctl-progress-fill");
-    const percent = loadPercent(run);
-    if (fill) {
-      fill.style.width = `${percent}%`;
-      const bar = banner.querySelector(".ctl-progress");
-      if (bar) bar.setAttribute("aria-valuenow", String(percent));
-    }
+    if (fill) fill.style.width = `${percent}%`;
+    const bar = banner.querySelector(".ctl-progress");
+    if (bar) bar.setAttribute("aria-valuenow", String(percent));
+    const loadedSpan = banner.querySelector(".ctl-progress-status-loaded");
+    if (loadedSpan) loadedSpan.textContent = `⚡ ${loaded} ｜ `;
+    const loadingSpan = banner.querySelector(".ctl-progress-status-loading");
+    if (loadingSpan) loadingSpan.textContent = `${loading}${detail}...`;
+    const percentSpan = banner.querySelector(".ctl-progress-status-percent");
+    if (percentSpan) percentSpan.textContent = `${percent}%`;
     return true;
   }
 
   function renderStreamingBanner(stage) {
-    let loaded = t("stageLoadedDetail");
-    let loading = t("stageLoadingPositions");
-    if (stage === "positions" || stage === "marks") {
-      loaded = t("stageLoadedPositions");
-      loading = t("stageLoadingOrders");
-    } else if (stage === "orders") {
-      loaded = t("stageLoadedOrders");
-      loading = t("stageLoadingMarket");
-    } else if (stage === "exits") {
-      loaded = t("exitDataReady");
-      loading = t("exitOptimizing");
-    }
-    const percent = loadPercent(run);
+    const { loaded, loading, detail, percent } = streamingStatusDetails(run);
     return h("div", { class: "ctl-streaming-banner", title: t("streamingBanner", [loaded, loading]) }, [
       h("div", { class: "ctl-progress", role: "progressbar", "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": String(percent) }, [
         h("div", { class: "ctl-progress-fill", style: `width: ${percent}%` })
       ]),
       h("div", { class: "ctl-progress-text" }, [
         h("span", { class: "ctl-mini-spinner", style: "border-top-color: #f0b90b; margin-right: 6px;" }),
-        h("span", { text: `⚡ ${loaded} ｜ ` }),
-        h("span", { text: `${loading}...` })
+        h("span", { class: "ctl-progress-status-loaded", text: `⚡ ${loaded} ｜ ` }),
+        h("span", { class: "ctl-progress-status-loading", text: `${loading}${detail}...` }),
+        h("span", { class: "ctl-progress-status-percent", style: "margin-left: auto; font-weight: 600; color: #f0b90b; font-size: 11px;", text: `${percent}%` })
       ])
     ]);
   }
@@ -1155,10 +1202,11 @@
           if (superseded()) return;
           // the positions panel shows the three paged histories; the bar also counts the candle and market reads
           if (HISTORY_LABELS.has(event.label)) window.CopyTradingLensPositionsPanel?.setProgress(event);
-          const before = loadPercent(run);
-          run = { ...run, progress: { ...run.progress, [event.label]: { done: event.done ?? event.fetched, total: event.total } } };
-          if (loadPercent(run) !== before) {
+          run = { ...run, progress: { ...run.progress, [event.label]: { done: event.done ?? event.fetched, total: event.total, pages: event.pages } } };
+          if (typeof updateProgressBannerOnly === "function") {
             if (!updateProgressBannerOnly()) paint();
+          } else {
+            paint();
           }
         },
         // The read lands in pieces and the card fills in as each does. Marks can land after orders: keep the furthest
