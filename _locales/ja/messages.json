@@ -806,9 +806,6 @@
   "sectionStopLossRadar": {
     "message": "ポジション損切り最適化レーダー"
   },
-  "badgeMathOptimal": {
-    "message": "数学的期待値最適"
-  },
   "badgeBagHoldingAlert": {
     "message": "深追含み損警告"
   },

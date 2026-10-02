@@ -806,9 +806,6 @@
   "sectionStopLossRadar": {
     "message": "智能仓位止损推荐"
   },
-  "badgeMathOptimal": {
-    "message": "数学期望最佳值"
-  },
   "badgeBagHoldingAlert": {
     "message": "高危死扛警告"
   },

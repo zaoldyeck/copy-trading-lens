@@ -806,9 +806,6 @@
   "sectionStopLossRadar": {
     "message": "Optimal Position Stop-Loss Radar"
   },
-  "badgeMathOptimal": {
-    "message": "Math Expectancy Optimal"
-  },
   "badgeBagHoldingAlert": {
     "message": "Deep Bag-Holding Warning"
   },
