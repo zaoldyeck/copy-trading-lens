@@ -303,7 +303,7 @@
         h("h3", { text: t("sectionStopLossRadar") }),
         !radar.isPreciseMae
           ? h("span", { class: "ctl-radar-badge ctl-streaming-badge" }, [
-              h("span", { class: "ctl-spin-icon", style: "margin-right: 4px;", text: "↻" }),
+              h("span", { class: "ctl-mini-spinner", style: "border-top-color: #60a5fa; margin-right: 5px;" }),
               h("span", { text: t("radarPreciseBadge").replace(/\s*↻\s*/, "") })
             ])
           : null,
@@ -439,7 +439,7 @@
     }
     return h("div", { class: "ctl-streaming-banner", title: t("streamingBanner", [loaded, loading]) }, [
       h("span", { text: `⚡ ${loaded} ｜ ` }),
-      h("span", { class: "ctl-spin-icon", style: "margin-right: 4px;", text: "↻" }),
+      h("span", { class: "ctl-mini-spinner", style: "border-top-color: #60a5fa; margin-right: 5px;" }),
       h("span", { text: `${loading}...` })
     ]);
   }
@@ -475,7 +475,7 @@
             h("span", { class: "ctl-advisor-unit", text: t("radarRoeUnit") }),
             !radar.isPreciseMae
               ? h("span", { class: "ctl-streaming-badge", style: "margin-left: 8px; font-size: 13px; vertical-align: middle;" }, [
-                  h("span", { class: "ctl-spin-icon", style: "margin-right: 4px;", text: "↻" }),
+                  h("span", { class: "ctl-mini-spinner", style: "border-top-color: #60a5fa; margin-right: 4px;" }),
                   h("span", { text: t("radarPreciseBadge").replace(/\s*↻\s*/, "") })
                 ])
               : null
@@ -497,10 +497,23 @@
           }, [
             h("span", { text: `⚡ ${t("btnApplyToBinanceForm", [radar.recommendedRoe])}` })
           ])
-        ]) : h("div", { class: "ctl-loading" }, [
+        ]) : (isStreaming ? h("div", { class: "ctl-loading" }, [
           h("div", { class: "ctl-spinner" }),
           h("p", { text: t("loadingText") })
-        ]),
+        ]) : h("div", { class: "ctl-advisor-hero ctl-advisor-empty" }, [
+          h("div", { class: "ctl-advisor-hero-label", text: t("sectionStopLossRadar") }),
+          h("p", { class: "ctl-muted", style: "margin: 12px 0 16px; font-size: 13px; line-height: 1.5;", text: t("cautionThinClosedTrades", [raw?.positionHistory?.length || 0]) || t("payoffNoClosedTrades") }),
+          h("button", {
+            class: "ctl-primary ctl-advisor-apply-btn",
+            type: "button",
+            onclick: () => {
+              settingModeView = "full";
+              paint();
+            }
+          }, [
+            h("span", { text: t("btnViewFullAnalysis") })
+          ])
+        ])),
 
         radar && !radar.insufficientData ? h("div", { class: "ctl-value-pillars" }, [
           h("div", { class: "ctl-pillar" }, [
@@ -509,7 +522,7 @@
               h("span", { text: t("settingValuePropWinTitle", [radar.winRetentionRate]) }),
               !radar.isPreciseMae
                 ? h("span", { class: "ctl-streaming-badge", style: "margin-left: 6px;" }, [
-                    h("span", { class: "ctl-spin-icon", style: "margin-right: 4px;", text: "↻" }),
+                    h("span", { class: "ctl-mini-spinner", style: "border-top-color: #60a5fa; margin-right: 4px;" }),
                     h("span", { text: t("radarPreciseBadge").replace(/\s*↻\s*/, "") })
                   ])
                 : null
@@ -529,7 +542,7 @@
               h("span", { text: t("settingValuePropStatsTitle") }),
               !radar.isPreciseMae
                 ? h("span", { class: "ctl-streaming-badge", style: "margin-left: 6px;" }, [
-                    h("span", { class: "ctl-spin-icon", style: "margin-right: 4px;", text: "↻" }),
+                    h("span", { class: "ctl-mini-spinner", style: "border-top-color: #60a5fa; margin-right: 4px;" }),
                     h("span", { text: t("radarPreciseBadge").replace(/\s*↻\s*/, "") })
                   ])
                 : null
@@ -548,7 +561,7 @@
           h("span", { text: `💡 ${t("radarConservative")}: ${radar.conservativeRoe}% · ${t("badgeMathOptimal")}: ${radar.recommendedRoe}%` })
         ] : [
           h("span", { text: `💡 ${t("radarConservative")}: ${radar.conservativeRoe}% · ${t("badgeMathOptimal")}: ${radar.recommendedRoe}% (` }),
-          h("span", { class: "ctl-spin-icon", style: "margin-right: 2px;", text: "↻" }),
+          h("span", { class: "ctl-mini-spinner", style: "border-top-color: #60a5fa; margin-right: 4px;" }),
           h("span", { text: `${t("radarPreciseBadge").replace(/\s*↻\s*/, "")})` })
         ]) : null,
 
@@ -811,6 +824,13 @@
     // Extension context can be invalidated mid-reload; nothing to recover.
   }
 
+  // Capture phase, so the card is read before the page's own handler navigates.
+  document.addEventListener("click", (event) => {
+    if (location.pathname.includes("/copy-trading/copy-management")) {
+      window.CopyTradingLensProviders.rememberPressedCard(event.target);
+    }
+  }, true);
+
   window.addEventListener("popstate", () => {
     lastKnownHref = location.href;
     scheduleRouteCheck(50);
@@ -825,6 +845,8 @@
     if (location.href !== lastKnownHref) {
       lastKnownHref = location.href;
       scheduleRouteCheck(50);
+    } else if (!run && location.pathname.includes("/copy-trading/copy-setting")) {
+      runAnalysis(false);
     }
   }, 250);
 

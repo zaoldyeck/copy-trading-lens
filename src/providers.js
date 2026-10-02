@@ -19,11 +19,6 @@
     return Array.isArray(value) ? value : [];
   }
 
-  function csrfTokenFromCookie() {
-    const match = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
-    return match ? decodeURIComponent(match[1]) : "";
-  }
-
   async function fetchJson(url, options = {}) {
     const { waitUntilResumed, ...requestOptions } = options;
     await waitForResume(waitUntilResumed);
@@ -34,15 +29,19 @@
       "lang": document.documentElement.lang || "zh-TC",
       ...options.headers
     };
-    const csrf = csrfTokenFromCookie();
-    if (csrf && !headers.csrftoken) headers.csrftoken = csrf;
 
     let response;
     try {
+      // Everything this extension reads is public (friendly lead data, futures
+      // market data, OKX ecotrade/public), so requests are anonymous: no cookies
+      // and no csrftoken. The user's exchange session guards real funds, and a
+      // burst of automated requests carrying it, or an authenticated call missing
+      // the page's own device headers, is exactly what an exchange risk engine
+      // flags. Guarded by scripts/test-request-identity.mjs.
       response = await fetch(url, {
-        credentials: "include",
         cache: "no-store",
         ...requestOptions,
+        credentials: "omit",
         headers
       });
     } catch (error) {
@@ -392,25 +391,11 @@
     const pageTitle = document.title;
     const endpointResults = {};
 
-    // Canonical resolution for copy-setting edit mode: ensure portfolioId is the true lead trader ID
+    // Ensure portfolioId uses cached lead trader ID if resolved
     if (isSettingPage && context.mode === "edit" && context.copyPortfolioId) {
       if (copyPortfolioToLeadMap.has(context.copyPortfolioId)) {
         portfolioId = copyPortfolioToLeadMap.get(context.copyPortfolioId);
         context.id = portfolioId;
-      } else {
-        try {
-          const activeDetailRes = await getBinance(`/bapi/futures/v1/private/future/copy-trade/copy-portfolio/active-detail?portfolioId=${encodeURIComponent(context.copyPortfolioId)}`, waitUntilResumed);
-          let trueLeadId = activeDetailRes?.data?.leadPortfolioId;
-          if (!trueLeadId) {
-            const copyDetailRes = await getBinance(`/bapi/futures/v1/private/future/copy-trade/copy-portfolio/detail?portfolioId=${encodeURIComponent(context.copyPortfolioId)}`, waitUntilResumed);
-            trueLeadId = copyDetailRes?.data?.leadPortfolioId;
-          }
-          if (trueLeadId && String(trueLeadId).length >= 10) {
-            portfolioId = String(trueLeadId);
-            context.id = portfolioId;
-            copyPortfolioToLeadMap.set(context.copyPortfolioId, portfolioId);
-          }
-        } catch (_e) {}
       }
     }
 
@@ -921,6 +906,87 @@
 
   const copyPortfolioToLeadMap = new Map();
 
+  function saveMapping(copyId, leadId) {
+    if (!copyId || !leadId || String(copyId) === String(leadId)) return;
+    const cStr = String(copyId);
+    const lStr = String(leadId);
+    copyPortfolioToLeadMap.set(cStr, lStr);
+    try {
+      if (typeof sessionStorage !== "undefined") {
+        const raw = sessionStorage.getItem("ctl_copy_to_lead_map");
+        const obj = raw ? JSON.parse(raw) : {};
+        obj[cStr] = lStr;
+        sessionStorage.setItem("ctl_copy_to_lead_map", JSON.stringify(obj));
+      }
+    } catch (_e) {}
+  }
+
+  function loadMappingsFromStorage() {
+    try {
+      if (typeof sessionStorage !== "undefined") {
+        const raw = sessionStorage.getItem("ctl_copy_to_lead_map");
+        if (raw) {
+          const obj = JSON.parse(raw);
+          for (const [k, v] of Object.entries(obj)) {
+            if (k && v && k !== v) copyPortfolioToLeadMap.set(k, v);
+          }
+        }
+      }
+    } catch (_e) {}
+  }
+  loadMappingsFromStorage();
+
+  // Resource entries are per document, not per SPA route, so entries from a
+  // previous route would name the wrong trader. The baseline is the URL the
+  // document loaded with (every entry then belongs to it); only a later URL
+  // change moves the cutoff forward.
+  let lastNavigationTime = 0;
+  let lastDetectedUrl = typeof location !== "undefined" ? location.href : "";
+
+  function markNavigation(url = (typeof location !== "undefined" ? location.href : "")) {
+    if (url && url !== lastDetectedUrl) {
+      lastDetectedUrl = url;
+      if (typeof performance !== "undefined" && typeof performance.now === "function") {
+        lastNavigationTime = performance.now();
+      }
+    }
+  }
+
+  // copy-management shows each card's trader and its lead portfolio id as text
+  // ("投資組合 ID: 5131…") but opens the setting page through a button, and the
+  // copy portfolio id the next URL carries lives only in the page's React state
+  // (invisible to an isolated-world content script). So the two are paired by
+  // intent: remember the card the user pressed, then bind it to the copy-setting
+  // URL that follows. Measured 2026-10-02 on copy-management: 0 anchors to
+  // lead-details or copy-setting, ids present as card text.
+  const LEAD_ID_PATTERN = /\b\d{16,20}\b/g;
+  const PRESS_TTL_MS = 5000;
+  let pressedLead = null;
+
+  // The smallest ancestor holding any id is the card; if it holds several, the
+  // press landed on a wrapper and names no single trader.
+  function leadIdOfCard(target) {
+    for (let node = target, depth = 0; node && depth < 12; node = node.parentElement, depth += 1) {
+      const ids = new Set(String(node.innerText || "").match(LEAD_ID_PATTERN) || []);
+      if (ids.size === 1) return [...ids][0];
+      if (ids.size > 1) return null;
+    }
+    return null;
+  }
+
+  function rememberPressedCard(target, now = Date.now()) {
+    const leadId = leadIdOfCard(target);
+    pressedLead = leadId ? { leadId, at: now } : null;
+  }
+
+  function claimPressedLead(copyId) {
+    const press = pressedLead;
+    pressedLead = null;
+    if (!press || Date.now() - press.at > PRESS_TTL_MS || press.leadId === copyId) return null;
+    saveMapping(copyId, press.leadId);
+    return press.leadId;
+  }
+
   function findLeadPortfolioIdOnSettingPage(parsed = new URL(location.href)) {
     const mode = parsed.searchParams.get("mode");
     const paramId = parsed.searchParams.get("portfolioId");
@@ -932,68 +998,42 @@
 
     if (!paramId) return null;
 
+    markNavigation(parsed.href);
+
     if (copyPortfolioToLeadMap.has(paramId)) {
       return copyPortfolioToLeadMap.get(paramId);
     }
 
-    // 1. Check React fibers in DOM first: this is the authoritative live state for the current page
+    const pressed = claimPressedLead(paramId);
+    if (pressed) return pressed;
+
+    // Fallback: resource entries the page itself requested for this route (the
+    // content script cannot read response bodies, only URLs).
     try {
-      if (typeof document !== "undefined") {
-        const all = document.querySelectorAll("*");
-        for (const el of all) {
-          const fiberKey = Object.keys(el).find((k) => k.startsWith("__reactFiber"));
-          if (fiberKey) {
-            let fiber = el[fiberKey];
-            let depth = 0;
-            while (fiber && depth < 20) {
-              const props = fiber.memoizedProps;
-              if (props) {
-                const fiberCopyId = props.copyPortfolioId
-                  || props.portfolioId
-                  || props.detail?.copyPortfolioId
-                  || props.detail?.portfolioId
-                  || props.portfolioDetail?.copyPortfolioId;
-
-                const cand = props.leadPortfolioId
-                  || props.detail?.leadPortfolioId
-                  || props.portfolioDetail?.leadPortfolioId
-                  || props.leadTrader?.leadPortfolioId;
-
-                if (cand && String(cand).length >= 10 && String(cand) !== paramId) {
-                  // Only accept if fiber explicitly matches paramId, or in headless unit tests
-                  const isHeadless = typeof document === "undefined" || (document.querySelectorAll && document.querySelectorAll("*").length <= 2);
-                  if ((fiberCopyId && String(fiberCopyId) === paramId) || (!fiberCopyId && isHeadless)) {
-                    const leadId = String(cand);
-                    copyPortfolioToLeadMap.set(paramId, leadId);
-                    return leadId;
-                  }
-                }
-              }
-              fiber = fiber.return;
-              depth++;
-            }
+      if (typeof performance !== "undefined" && typeof performance.getEntriesByType === "function") {
+        const resources = performance.getEntriesByType("resource");
+        for (let i = resources.length - 1; i >= 0; i--) {
+          const entry = resources[i];
+          // If we tracked navigation time, ignore resources fetched before this navigation
+          if (lastNavigationTime > 0 && entry.startTime < (lastNavigationTime - 150)) {
+            continue;
+          }
+          const entryUrl = entry.name || "";
+          const match1 = entryUrl.match(/[?&]leadPortfolioId=(\d+)/);
+          if (match1 && match1[1] !== paramId) {
+            saveMapping(paramId, match1[1]);
+            return match1[1];
+          }
+          const match2 = entryUrl.match(/\/lead-portfolio\/detail\?portfolioId=(\d+)/);
+          if (match2 && match2[1] !== paramId) {
+            saveMapping(paramId, match2[1]);
+            return match2[1];
           }
         }
       }
     } catch (_e) {}
 
-    // 2. Fallback: check performance resource entries (strictly require matching paramId in browser to prevent SPA contamination)
-    try {
-      if (typeof performance !== "undefined" && typeof performance.getEntriesByType === "function") {
-        const isHeadless = typeof document === "undefined" || (document.querySelectorAll && document.querySelectorAll("*").length <= 2);
-        const resources = performance.getEntriesByType("resource");
-        for (let i = resources.length - 1; i >= 0; i--) {
-          const entryUrl = resources[i].name || "";
-          if (!isHeadless && !entryUrl.includes(paramId)) continue;
-          const match1 = entryUrl.match(/[?&]leadPortfolioId=(\d+)/);
-          if (match1 && match1[1] !== paramId) return match1[1];
-          const match2 = entryUrl.match(/\/lead-portfolio\/detail\?portfolioId=(\d+)/);
-          if (match2 && match2[1] !== paramId) return match2[1];
-        }
-      }
-    } catch (_e) {}
-
-    return paramId;
+    return null;
   }
 
   function detectLeadPage(url = location.href) {
@@ -1027,6 +1067,8 @@
     fetchBinanceListPage,
     fetchBinanceMarkPrices,
     fetchBinanceMarkCandles,
-    fetchBinanceMarketHistory
+    fetchBinanceMarketHistory,
+    rememberPressedCard,
+    markNavigation
   };
 })(window);

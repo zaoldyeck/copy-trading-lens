@@ -73,16 +73,19 @@ function analysisFor(name) {
 
 // Loads content.js into a fresh page. Every fetchLeadData call is recorded
 // with a deferred the test settles by hand.
-function loadPage() {
+function loadPage(pathname = "/en/copy-trading/lead-details/p1") {
   const documentElement = fakeElement("html");
+  const pressed = [];
+  const documentListeners = {};
   const fetches = [];
   const fetchOptions = [];
   const panel = { mounts: [], fails: [], retry: null };
   const sandbox = {
     console,
-    location: { href: "https://www.binance.com/en/copy-trading/lead-details/p1" },
+    location: { href: `https://www.binance.com${pathname}`, pathname },
     document: {
       documentElement,
+      addEventListener(type, fn, capture) { (documentListeners[type] ||= []).push({ fn, capture }); },
       createElement: fakeElement,
       createTextNode: (text) => text,
       getElementById(id) {
@@ -98,6 +101,7 @@ function loadPage() {
     CopyTradingLensI18n: { t: (key) => key },
     CopyTradingLensProviders: {
       detectLeadPage: () => ({ platform: "Binance", id: "p1" }),
+      rememberPressedCard: (target) => pressed.push(target),
       fetchLeadData(_context, options) {
         const call = deferred();
         fetches.push(call);
@@ -147,7 +151,7 @@ function loadPage() {
     walk(documentElement, (el) => { if (found === null && el.tag === "h2") found = el.textContent; });
     return found;
   };
-  return { fetches, fetchOptions, panel, find, click, collapseButton, shownName };
+  return { fetches, fetchOptions, panel, find, click, collapseButton, shownName, pressed, documentListeners };
 }
 
 const tests = [];
@@ -255,6 +259,22 @@ test("a run superseded mid-flight never replaces the newer result", async () => 
   await tick();
   assert.equal(failing.shownName(), "New (badgePublic)");
   assert.deepEqual(failing.panel.fails, []);
+});
+
+// A press on a copy-management card is how a later copy-setting URL learns its
+// trader (see providers.js rememberPressedCard); it has to be heard before the
+// page's own handler navigates away, and nowhere else.
+test("card presses are remembered on copy-management only, in the capture phase", async () => {
+  const management = loadPage("/zh-TC/copy-trading/copy-management");
+  const [listener] = management.documentListeners.click;
+  assert.equal(listener.capture, true, "the press must be read before the page's own handler runs");
+  const target = { innerText: "設定" };
+  listener.fn({ target });
+  assert.deepEqual(management.pressed, [target]);
+
+  const lead = loadPage("/zh-TC/copy-trading/lead-details/p1");
+  lead.documentListeners.click[0].fn({ target });
+  assert.deepEqual(lead.pressed, [], "clicks elsewhere are never inspected");
 });
 
 let failed = 0;

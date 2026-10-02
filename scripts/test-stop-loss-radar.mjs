@@ -126,24 +126,16 @@ if (fs.existsSync(path.join(cacheDir, "raw_5131925334830383361.json"))) {
       { name: "https://www.binance.com/bapi/futures/v1/private/future/copy-trade/copy-portfolio/get-limit-info?leadPortfolioId=4908633203782592768" }
     ] : []
   };
-  // Test edit mode with React fiber taking precedence over stale performance entries (e.g. 熬鷹資本)
-  sandbox.document = {
-    querySelectorAll: (sel) => sel === "*" ? [
-      {
-        __reactFiber$test: {
-          memoizedProps: {
-            leadPortfolioId: "5075281354358777856"
-          }
-        }
-      }
-    ] : []
-  };
+  // Edit mode: the card the user just pressed on copy-management takes precedence
+  // over a stale performance entry (e.g. 熬鷹資本). More scenarios live in
+  // scripts/test-lead-resolution.mjs.
+  providers.rememberPressedCard({ innerText: "熬鷹資本\n投資組合 ID: 5075281354358777856\n設定", parentElement: null });
   const aoYingSetting = providers.detectLeadPage("https://www.binance.com/zh-TC/copy-trading/copy-setting?mode=edit&portfolioId=5115151497967086081");
   assert.equal(aoYingSetting?.platform, "Binance");
-  assert.equal(aoYingSetting?.id, "5075281354358777856", "React fiber must take precedence over stale performance resource entry 4908633203782592768");
+  assert.equal(aoYingSetting?.id, "5075281354358777856", "the pressed card must take precedence over stale performance resource entry 4908633203782592768");
   assert.equal(aoYingSetting?.pageType, "copy-setting");
 
-  console.log("PASS: Binance copy-setting URL and lead portfolio detection verified for both direct and edit modes, including React fiber precedence");
+  console.log("PASS: Binance copy-setting URL and lead portfolio detection verified for both direct and edit modes, including pressed-card precedence");
 }
 
 console.log("\nALL STOP LOSS RADAR UNIT TESTS PASSED SUCCESSFULLY!");
