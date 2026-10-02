@@ -14,6 +14,7 @@ const read = (file) => readFileSync(path.join(__dirname, "..", file), "utf8");
 
 const requests = [];
 let failSymbol = null;
+let gapSymbol = null;
 global.fetch = async (url, init = {}) => {
   const u = new URL(String(url));
   requests.push({ url: String(url), init, params: Object.fromEntries(u.searchParams) });
@@ -25,6 +26,7 @@ global.fetch = async (url, init = {}) => {
   const start = Number(u.searchParams.get("startTime")); const end = Number(u.searchParams.get("endTime")); const limit = Number(u.searchParams.get("limit"));
   const rows = [];
   for (let t = start, n = 0; t <= end && n < limit; t += step, n += 1) rows.push([t, 100, 100 + (t / step) % 7, 90 - (t / step) % 5, 95, 0, t + step - 1]);
+  if (symbol === gapSymbol && rows.length > 1) rows.splice(1, 1);
   return { ok: true, status: 200, text: async () => JSON.stringify(rows) };
 };
 global.document = { cookie: "csrftoken=x; logined=y", documentElement: { lang: "en" }, body: { innerText: "" }, title: "" };
@@ -119,6 +121,19 @@ const plan = (rows) => planMarkWindows(rows);
 }
 
 // 8b. progress: one report per finished window, ending at done == total, for the loading bar
+{
+  gapSymbol = "GAPUSDT";
+  const result = await fetchBinancePositionMarks([row("GAPUSDT", T0, T0 + 3 * MIN), row("GOODUSDT", T0, T0 + MIN)]);
+  assert.deepEqual(result.failed.map((failure) => failure.symbol), ["GAPUSDT"]);
+  assert.match(result.failed[0].error, /Incomplete MARK/);
+  assert.deepEqual(Object.keys(result.symbols), ["GOODUSDT"]);
+  gapSymbol = null;
+  const repaired = await fetchBinancePositionMarks([row("GAPUSDT", T0, T0 + 3 * MIN)]);
+  assert.deepEqual(repaired.failed, []);
+  assert.equal(repaired.symbols.GAPUSDT.minutes.length, 4, "repair recovers without publishing a partial history");
+}
+
+// 8c. progress: one report per finished window, ending at done == total, for the loading bar
 {
   const reports = [];
   const rows = Array.from({ length: 12 }, (_, i) => row(`P${i}USDT`, T0 + i * 7 * MIN, T0 + i * 7 * MIN + MIN));

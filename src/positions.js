@@ -933,6 +933,7 @@
     fillTimeOf,
     bucketKeyOf,
     symbolOfKey,
+    toScaledQty,
     // exported for tests
     replayFills
   };

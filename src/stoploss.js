@@ -15,22 +15,23 @@
   // cost of every stop for traders who add to positions (tools/research/stoploss-copier-sim.mjs, 2026-10-02:
   // 玄冥二老 has adds in 91 of 138 replayable positions).
   //
-  // Objective: expected log growth of the copier's equity, mean(log(1 + pnl / equity at entry)), with pnl in the
+  // Objective: historical per-position log utility, mean(log(1 + pnl / equity at entry)), with pnl in the
   // lead's USDT and equity from the equity count-back (src/equity.js; a fixed-ratio copier inherits the lead's
-  // proportions). Without it the risk-neutral limit, total pnl, is used and the result says so. A stop only counts
-  // as better than none when it is better under BOTH readings.
+  // proportions as a sizing approximation, not a chronological portfolio return). Without usable equity,
+  // total price pnl is used and the result says so. Four declared model readings cover follow/no-follow after
+  // a stop and conservative branching over unknown intrabar timing. The lowest reading determines each candidate's score.
+  // Fees, funding, execution delay and slippage are unavailable counterfactuals, never implied to be zero in reality.
   //
-  // Evidence (reports/stoploss-review-three-2026-10-02.txt): on 玄冥二老, 星辰社区-海 and 熬鹰资本 no stop level beat
-  // "no stop" under either reading; the old rule of thumb (winners' 95th-percentile drawdown) maximised nothing.
+  // Reproduce sample results with scripts/review-stoploss-optimum.mjs. Admission and execution assumptions
+  // affect the optimum; never freeze a trader's prior result into a recommendation. A percentile is not an objective.
 
   const MINUTE_MS = 60000;
   const HOUR_MS = 3600000;
-  const STOP_CANDIDATES = [10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95];
-  // 1 + f x outcome cannot fall below 1% of equity inside the log: a wipe-out is a large, finite penalty.
-  const GROWTH_FLOOR = 0.01;
+  // User-facing policy domain: integer ROE percentages, 1..95; null means disabled (the form's 0).
+  const STOP_CANDIDATES = Array.from({ length: 95 }, (_, i) => i + 1);
   const BOOTSTRAP_RESAMPLES = 300;
   const BOOTSTRAP_SEED = 20261002;
-  // A candidate belongs to the stable band when it beats the sample's optimum in at least this share of resamples.
+  // A resampling alternative ties or beats the sample's optimum in at least this share of resamples.
   const BAND_SHARE = 0.1;
 
   function num(value, fallback = 0) {
@@ -77,7 +78,7 @@
     const candles = [];
     const minutes = marks?.minutes || [];
     const hours = marks?.hours || [];
-    for (let i = firstAtOrAfter(minutes, openedMs - MINUTE_MS + 1); i < minutes.length && minutes[i][0] <= closedMs; i += 1) {
+    for (let i = firstAtOrAfter(minutes, openedMs - MINUTE_MS + 1); i < minutes.length && minutes[i][0] < closedMs; i += 1) {
       candles.push({ time: minutes[i][0], step: MINUTE_MS, high: minutes[i][1], low: minutes[i][2] });
     }
     for (let i = firstAtOrAfter(hours, openedMs); i < hours.length && hours[i][0] + HOUR_MS <= closedMs; i += 1) {
@@ -103,7 +104,7 @@
    * against that interval's entry, and each fill's own price against the entry before it.
    * @returns {number|null} null when the fills do not begin with an opening fill (history starts mid-position)
    */
-  function pathExcursion({ fills, isShort, candles, closedMs }) {
+  function pathExcursion({ fills, isShort, candles, closedMs, favorable = false }) {
     const direction = isShort ? -1 : 1;
     if (!fills.length || fills[0].sign !== direction) return null; // history begins mid-position
     let qty = 0;
@@ -113,14 +114,14 @@
     const judge = (fromMs, toMs, lastInterval) => {
       for (const candle of candles) {
         if (lastInterval ? candle.time > toMs : candle.time >= toMs) break;
-        if (candle.time + candle.step > fromMs) worst = Math.max(worst, adverseMove(isShort, entry, candle.high, candle.low));
+        if (candle.time + candle.step > fromMs) worst = Math.max(worst, adverseMove(favorable ? !isShort : isShort, entry, candle.high, candle.low));
       }
     };
     let last = fills[0].time;
     for (const fill of fills) {
       if (qty > 1e-12) {
         judge(last, fill.time);
-        worst = Math.max(worst, adverseMove(isShort, entry, fill.price, fill.price));
+        worst = Math.max(worst, adverseMove(favorable ? !isShort : isShort, entry, fill.price, fill.price));
       }
       if (fill.sign === direction) {
         entry = (qty * entry + fill.qty * fill.price) / (qty + fill.qty);
@@ -157,6 +158,7 @@
       for (const replayed of P.replayPositions(key, fills).positions) {
         bySymbol.get(symbol).push({
           side: replayed.side,
+          closed: replayed.closed,
           fills: replayed.fills.map((fill) => ({
             time: P.fillTimeOf(fill.order),
             price: num(firstDefined(fill.order.avgPrice, fill.order.fillPx, fill.order.price)),
@@ -169,14 +171,36 @@
     return bySymbol;
   }
 
-  function fillsOfRow(replayed, symbol, side, openedMs) {
-    let best = null;
+  function fillsOfRow(replayed, symbol, side, openedMs, closedMs, position) {
+    const matches = [];
     for (const candidate of replayed.get(symbol) || []) {
-      if (candidate.side !== side || !candidate.fills.length) continue;
+      if (candidate.side !== side || !candidate.closed || !candidate.fills.length) continue;
       const gap = Math.abs(candidate.fills[0].time - openedMs);
-      if (gap <= MATCH_SLACK_MS && (!best || gap < best.gap)) best = { gap, fills: candidate.fills };
+      if (gap > MATCH_SLACK_MS || Math.abs(candidate.fills.at(-1).time - closedMs) > MATCH_SLACK_MS) continue;
+      let qty = 0; let peak = 0; let exited = 0;
+      for (const fill of candidate.fills) {
+        qty += fill.entry ? fill.qty : -fill.qty;
+        peak = Math.max(peak, qty);
+        if (!fill.entry) exited += fill.qty;
+      }
+      const sameQty = (a, b) => global.CopyTradingLensPositions.toScaledQty(a) === global.CopyTradingLensPositions.toScaledQty(b);
+      if (position.maxOpenInterest != null && !sameQty(peak, position.maxOpenInterest)) continue;
+      if (position.closedVolume != null && !sameQty(exited, position.closedVolume)) continue;
+      if (candidate.fills.some((fill) => !(fill.price > 0) || !(fill.qty > 0))) continue;
+      matches.push(candidate);
     }
-    return best ? best.fills : null;
+    // Never assign the same approximate opening clock to an ambiguous position.
+    return matches.length === 1 ? matches[0].fills : null;
+  }
+
+  function candlesCover(candles, opened, closed) {
+    let through = opened;
+    for (const candle of candles) {
+      if (candle.time > through) return false;
+      through = Math.max(through, candle.time + candle.step);
+      if (through >= closed) return true;
+    }
+    return false;
   }
 
   /**
@@ -205,16 +229,21 @@
       const avgClose = num(position.avgClosePrice);
       const candles = lifeCandles(positionMarks?.symbols?.[symbol], opened, closed);
       const direction = isShort ? -1 : 1;
-      const rowFills = fillsOfRow(replayed, symbol, isShort ? "SHORT" : "LONG", opened);
+      const rowFills = fillsOfRow(replayed, symbol, isShort ? "SHORT" : "LONG", opened, closed, position);
 
       let adverse = rowFills
         ? pathExcursion({ fills: rowFills.map((fill) => ({ ...fill, sign: fill.entry ? direction : -direction })), isShort, candles, closedMs: closed })
         : null;
       const entryPathUsed = adverse !== null;
+      let favorable = rowFills
+        ? pathExcursion({ fills: rowFills.map((fill) => ({ ...fill, sign: fill.entry ? direction : -direction })), isShort, candles, closedMs: closed, favorable: true })
+        : null;
       if (!entryPathUsed) {
         // No replayable fills (older than the ~2 months Binance keeps): judge against the final average cost.
         adverse = avgClose > 0 ? adverseMove(isShort, avgCost, avgClose, avgClose) : 0;
         for (const candle of candles) adverse = Math.max(adverse, adverseMove(isShort, avgCost, candle.high, candle.low));
+        favorable = avgClose > 0 ? adverseMove(!isShort, avgCost, avgClose, avgClose) : 0;
+        for (const candle of candles) favorable = Math.max(favorable, adverseMove(!isShort, avgCost, candle.high, candle.low));
       }
       // `roi` is a fraction of initial margin at any magnitude ("1.2" = +120%); see
       // scripts/test-stop-loss-radar.mjs for the corpus check behind this. Binance's closingPnl, and so roi,
@@ -229,12 +258,14 @@
         closingPnl,
         roiPct: roi * 100,
         maeRoe: adverse * leverage,
+        mfeRoe: favorable * leverage,
         entryPathUsed,
         marksUsed: candles.length > 0,
+        marksComplete: candlesCover(candles, opened, closed),
         opened,
         closed,
         // what the copier simulation replays: the position's own fills, the candle path, direction and leverage
-        sim: rowFills ? { fills: rowFills, direction, leverage, candles } : null
+        sim: rowFills ? { fills: rowFills, direction, leverage, candles, closed } : null
       });
     }
     return rows;
@@ -242,49 +273,82 @@
 
   // A stop at `stop` (null: none) on one position as the copier would have lived it. The copier mirrors every
   // fill at ratio 1 (so USDT are the lead's); between fills its ROE (price move from ITS OWN average entry x
-  // leverage) is judged against every candle, and the first candle that reaches -stop closes the whole copier
-  // position at exactly -stop of ITS margin then. `follow` is the undocumented part: false, the copier stays out
+  // leverage) is judged against MARK candles. A trigger closes the whole copier at exactly -stop of ITS margin
+  // then, under the disclosed exact-threshold assumption. `follow` is undocumented: false, the copier stays out
   // of that lead position until it is closed; true, the lead's later entries open it again. Funding and fees are
   // left out of both sides; the outcome is price pnl and the margin the position peaked at.
-  function simulateCopier(sim, stop, follow) {
-    const { fills, direction, leverage, candles } = sim;
-    let qty = 0;
-    let entry = 0;
-    let pnl = 0;
-    let out = false;
-    let peakMargin = 0;
-    const judge = (fromMs, toMs, lastInterval) => {
-      if (stop === null || qty <= 1e-12) return;
-      for (const candle of candles) {
-        if (lastInterval ? candle.time > toMs : candle.time >= toMs) break;
-        if (candle.time + candle.step <= fromMs) continue;
-        const adverse = ((direction > 0 ? entry - candle.low : candle.high - entry) / entry) * 100 * leverage;
-        if (adverse >= stop) {
-          pnl += (-stop / 100) * ((qty * entry) / leverage);
-          qty = 0;
-          out = true;
-          return;
+  const intervalCache = new WeakMap();
+
+  function intervalsOf(sim) {
+    if (intervalCache.has(sim)) return intervalCache.get(sim);
+    const intervals = sim.fills.map((fill, i) => {
+      const from = i === 0 ? fill.time : sim.fills[i - 1].time;
+      const to = fill.time;
+      if (to <= from) return [];
+      return sim.candles.filter((candle) => candle.time < to && candle.time + candle.step > from)
+        .map((candle) => ({ ...candle, definite: candle.time >= from && candle.time + candle.step <= to }));
+    });
+    intervalCache.set(sim, intervals);
+    return intervals;
+  }
+
+  function simulateCopier(sim, stop, follow, optimisticTiming = false) {
+    const { fills, direction, leverage } = sim;
+    const intervals = intervalsOf(sim);
+    let leadQty = 0n;
+    // All histories which leave the same last restart have the same future quantity/entry. Keep only their
+    // lowest (or highest) PnL: log utility is increasing in PnL, so this is an exact dominance reduction.
+    // On a candle crossing a fill, allow either a stop or no stop. Fully contained candles force the trigger.
+    // This relaxes OHLC chronology: the lower result is conservative, not a claimed realised tick path.
+    let states = [{ qty: 0, entry: 0, pnl: 0, out: false, peakMargin: 0, triggers: 0, minTriggers: 0, maxTriggers: 0, restart: -1 }];
+    const better = (a, b) => optimisticTiming ? a.pnl > b.pnl : a.pnl < b.pnl;
+    for (let i = 0; i < fills.length; i += 1) {
+      const fill = fills[i];
+      const branched = [];
+      for (const state of states) {
+        if (stop === null || state.qty <= 0) { branched.push(state); continue; }
+        const price = state.entry * (1 - direction * stop / (100 * leverage));
+        const crossing = intervals[i].filter((candle) => direction > 0 ? candle.low <= price : candle.high >= price);
+        if (!crossing.length) { branched.push(state); continue; }
+        if (!crossing.some((candle) => candle.definite)) branched.push(state);
+        branched.push({ ...state, pnl: state.pnl - stop / 100 * state.qty * state.entry / leverage,
+          qty: 0, out: true, triggers: state.triggers + 1,
+          minTriggers: state.minTriggers + 1, maxTriggers: state.maxTriggers + 1, restart: -1 });
+      }
+      const fillUnits = global.CopyTradingLensPositions.toScaledQty(fill.qty);
+      if (fill.entry) leadQty += fillUnits;
+      const merged = new Map();
+      for (const prior of branched) {
+        const state = { ...prior };
+        if (fill.entry && !(state.out && !follow)) {
+          if (state.qty <= 0) state.restart = i;
+          state.entry = state.qty > 0 ? (state.qty * state.entry + fill.qty * fill.price) / (state.qty + fill.qty) : fill.price;
+          state.qty += fill.qty;
+          state.out = false;
+          state.peakMargin = Math.max(state.peakMargin, state.qty * state.entry / leverage);
+        } else if (!fill.entry && state.qty > 0) {
+          // Close the same FRACTION as the lead; absolute lead units are wrong after a copier-only stop.
+          const reduced = state.qty * (fillUnits >= leadQty ? 1 : Number(fillUnits) / Number(leadQty));
+          state.pnl += (fill.price - state.entry) * direction * reduced;
+          state.qty -= reduced;
+        }
+        const key = state.qty <= 0 ? (state.out ? "stopped" : "flat") : `held:${state.restart}`;
+        const kept = merged.get(key);
+        if (!kept) merged.set(key, state);
+        else {
+          const winner = better(state, kept) ? state : kept;
+          winner.minTriggers = Math.min(state.minTriggers, kept.minTriggers);
+          winner.maxTriggers = Math.max(state.maxTriggers, kept.maxTriggers);
+          merged.set(key, winner);
         }
       }
-    };
-    let last = fills[0].time;
-    for (const fill of fills) {
-      judge(last, fill.time, false);
-      last = fill.time;
-      if (fill.entry) {
-        if (out && !follow) continue;
-        entry = qty > 0 ? (qty * entry + fill.qty * fill.price) / (qty + fill.qty) : fill.price;
-        qty += fill.qty;
-        out = false;
-        peakMargin = Math.max(peakMargin, (qty * entry) / leverage);
-      } else if (qty > 0) {
-        const reduced = Math.min(qty, fill.qty);
-        pnl += (fill.price - entry) * direction * reduced;
-        qty -= reduced;
-      }
+      states = [...merged.values()];
+      if (!fill.entry) leadQty = leadQty > fillUnits ? leadQty - fillUnits : 0n;
     }
-    judge(last, last + HOUR_MS, true);
-    return { pnl, peakMargin };
+    const result = states.reduce((best, state) => better(state, best) ? state : best);
+    return { pnl: result.pnl, peakMargin: result.peakMargin, triggers: result.triggers,
+      triggerPossible: states.some((state) => state.maxTriggers > 0),
+      triggerCertain: states.every((state) => state.minTriggers > 0) };
   }
 
   // Seeded generator: the same positions always give the same stability figure.
@@ -296,31 +360,48 @@
     };
   }
 
-  const READINGS = [false, true]; // follow: the copier stays out | follows the lead's later entries
+  const READINGS = [
+    { follow: false, optimisticTiming: false }, { follow: true, optimisticTiming: false },
+    { follow: false, optimisticTiming: true }, { follow: true, optimisticTiming: true }
+  ];
+
+  function completeSimulation(sim) {
+    if (!sim?.fills?.length || !sim.fills[0].entry || ![1, -1].includes(sim.direction) || !(sim.leverage > 0)) return false;
+    let qty = 0n; let last = 0;
+    for (const fill of sim.fills) {
+      if (!(fill.price > 0) || !(fill.qty > 0) || !(fill.time >= last)) return false;
+      const delta = global.CopyTradingLensPositions.toScaledQty(fill.qty);
+      qty += fill.entry ? delta : -delta;
+      if (qty < 0n) return false;
+      last = fill.time;
+    }
+    return qty === 0n && candlesCover(sim.candles, sim.fills[0].time, last);
+  }
 
   /**
-   * Best stop level, with how stable that answer is. Candidates are "no stop" (null) and 10..95 step 5, Binance's
-   * 0-95% field. Only positions whose fills can be replayed are simulated (Binance keeps ~2 months of fills).
+   * Historical optimum and resampling sensitivity. Candidates are "no stop" (null) and every integer 1..95.
+   * Only complete, reconciled fill paths with continuous mark coverage are admitted.
    * @param {object[]} rows positionExcursions rows
    * @param {{equityAt: function}|null} equity
    * @returns {object|null} null when fewer than 3 positions can be simulated
    */
   function selectStop(rows, equity) {
-    const sims = rows.filter((row) => row.sim && row.marksUsed);
+    const sims = rows.filter((row) => row.marksUsed && row.marksComplete !== false && completeSimulation(row.sim));
     if (sims.length < 3) return null;
     const candidates = [null, ...STOP_CANDIDATES];
     const none = sims.map((row) => simulateCopier(row.sim, null, true));
     // pnl[reading][candidate][position]
-    const pnl = READINGS.map((follow) => candidates.map((stop, c) => sims.map((row, i) => {
-      if (stop === null || row.maeRoe < stop) return none[i].pnl; // its path never reaches the stop
-      return simulateCopier(row.sim, stop, follow).pnl;
-    })));
-    const accounts = equity && typeof equity.equityAt === "function"
-      ? sims.map((row, i) => Math.max(equity.equityAt(row.opened) || 0, none[i].peakMargin, 1e-9))
-      : null;
+    const outcomes = READINGS.map(({ follow, optimisticTiming }) => candidates.map((stop) => sims.map((row, i) => (
+      stop === null ? none[i] : simulateCopier(row.sim, stop, follow, optimisticTiming)
+    ))));
+    const pnl = outcomes.map((byCandidate) => byCandidate.map((byPosition) => byPosition.map((result) => result.pnl)));
+    const estimates = equity && !equity.unpriced?.length && typeof equity.equityAt === "function"
+      ? sims.map((row) => equity.equityAt(row.opened)) : null;
+    // Do not invent account size from the FUTURE peak margin or turn missing/negative equity into positive equity.
+    const accounts = estimates?.every((value) => Number.isFinite(value) && value > 0) ? estimates : null;
     const objective = accounts ? "growth" : "pnl";
     const terms = pnl.map((byCandidate) => byCandidate.map((byPosition) => byPosition.map((value, i) => (
-      accounts ? Math.log(Math.max(GROWTH_FLOOR, 1 + value / accounts[i])) : value
+      accounts ? (value <= -accounts[i] ? -Infinity : Math.log1p(value / accounts[i])) : value
     ))));
     const scores = terms.map((byCandidate) => byCandidate.map(mean));
     // a stop's standing is its worse reading; "no stop" is the same under both
@@ -329,7 +410,11 @@
     // protection (a stop that never triggers in the history is free insurance).
     const bestOf = (values) => values.reduce((best, value, i) => (value > values[best] + 1e-12 ? i : best), 0);
     const optimalIndex = bestOf(score);
+    if (!Number.isFinite(score[optimalIndex])) return null;
     const bestStopIndex = 1 + bestOf(score.slice(1));
+    if (!Number.isFinite(score[bestStopIndex])) return null;
+    const ties = (a, b) => a === b || (Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) <= 1e-12);
+    const optimalIndices = candidates.map((_, c) => c).filter((c) => ties(score[c], score[optimalIndex]));
 
     const random = seededRandom(BOOTSTRAP_SEED);
     const beatsOptimum = new Array(candidates.length).fill(0);
@@ -343,26 +428,34 @@
       const combined = candidates.map((_, c) => Math.min(...sums.map((bySymbol) => bySymbol[c])));
       if (bestOf(combined) === optimalIndex) sameOptimum += 1;
       for (let c = 0; c < candidates.length; c += 1) {
-        if (combined[c] > combined[optimalIndex]) beatsOptimum[c] += 1;
+        if (combined[c] > combined[optimalIndex] || ties(combined[c], combined[optimalIndex])) beatsOptimum[c] += 1;
       }
     }
-    const inBand = candidates.map((_, c) => c === optimalIndex || beatsOptimum[c] / BOOTSTRAP_RESAMPLES >= BAND_SHARE);
+    const inBand = candidates.map((_, c) => optimalIndices.includes(c) || beatsOptimum[c] / BOOTSTRAP_RESAMPLES >= BAND_SHARE);
     const total = (readingIndex, c) => pnl[readingIndex][c].reduce((a, value) => a + value, 0);
     const curve = candidates.map((stop, c) => ({
       stop,
       score: score[c],
       pnlStayOut: total(0, c),
       pnlFollow: total(1, c),
-      triggered: stop === null ? 0 : sims.filter((row) => row.maeRoe >= stop).length
+      triggered: Math.max(...outcomes.map((byCandidate) => byCandidate[c].filter((result) => result.triggerPossible).length)),
+      triggeredMin: Math.min(...outcomes.map((byCandidate) => byCandidate[c].filter((result) => result.triggerCertain).length)),
+      pnlMin: Math.min(...READINGS.map((_, r) => total(r, c))),
+      pnlMax: Math.max(...READINGS.map((_, r) => total(r, c)))
     }));
     const stable = candidates.filter((_, c) => inBand[c]);
     return {
       objective,
+      scope: "historicalPriceUtility",
+      candidateStep: 1,
+      candidateMin: 1,
+      candidateMax: 95,
       sizing: accounts
         ? { source: "leadEquity", medianShare: percentile(sims.map((_, i) => none[i].peakMargin / accounts[i]), 50), p90Share: percentile(sims.map((_, i) => none[i].peakMargin / accounts[i]), 90) }
         : { source: "none" },
       simulatedPositions: sims.length,
       optimal: candidates[optimalIndex],
+      optima: optimalIndices.map((c) => candidates[c]),
       // when "no stop" is not beaten, the stop worth buying as insurance is the one that costs least
       insuranceStop: candidates[bestStopIndex],
       costOfInsurance: score[optimalIndex] - score[bestStopIndex],
@@ -374,6 +467,7 @@
       _sims: sims,
       _none: none,
       _pnl: pnl,
+      _outcomes: outcomes,
       _candidates: candidates
     };
   }
@@ -385,8 +479,8 @@
   function tradeoffOf(selection, stop) {
     const c = selection._candidates.indexOf(stop);
     const noneIndex = 0;
-    const readingTotals = [0, 1].map((r) => selection._pnl[r][c].reduce((a, value) => a + value, 0));
-    const worse = readingTotals[0] <= readingTotals[1] ? 0 : 1;
+    const readingTotals = READINGS.map((_, r) => selection._pnl[r][c].reduce((a, value) => a + value, 0));
+    const worse = readingTotals.indexOf(Math.min(...readingTotals));
     let helped = 0;
     let hurt = 0;
     let helpedUsdt = 0;
@@ -403,14 +497,15 @@
     return {
       stop,
       positions: selection._sims.length,
-      triggered: selection._sims.filter((row) => row.maeRoe >= stop).length,
+      triggered: selection._outcomes[worse][c].filter((result) => result.triggers > 0).length,
+      triggeredAny: Math.max(...selection._outcomes.map((byCandidate) => byCandidate[c].filter((result) => result.triggerPossible).length)),
       helped,
       helpedUsdt,
       hurt,
       hurtUsdt,
       pnlNone: selection._pnl[0][noneIndex].reduce((a, value) => a + value, 0),
       pnlStopWorse: readingTotals[worse],
-      pnlStopBetter: readingTotals[1 - worse],
+      pnlStopBetter: Math.max(...readingTotals),
       worstLoss: { symbol: worstRow.symbol, leverage: worstRow.leverage, returnPct: returns[worstIndex], maeRoe: worstRow.maeRoe }
     };
   }
@@ -463,13 +558,14 @@
     const losses = rows.filter((row) => row.closingPnl < 0);
     const recommendedRoe = selection.optimal === null ? selection.insuranceStop : selection.optimal;
     const dominantLeverage = Math.round(percentile(rows.map((row) => row.leverage), 50)) || 5;
-    const simulatedWins = selection._sims.filter((row, i) => selection._none[i].pnl > 0);
-    const keptWins = simulatedWins.filter((row) => row.maeRoe < recommendedRoe).length;
+    const winIndices = selection._sims.map((_, i) => i).filter((i) => selection._none[i].pnl > 0);
+    const c = selection._candidates.indexOf(recommendedRoe);
+    const keptWins = Math.min(...selection._outcomes.map((byCandidate) => winIndices.filter((i) => !byCandidate[c][i].triggerPossible).length));
     const lossStats = stats(losses.map((row) => row.maeRoe));
-    const marksCoverage = rows.filter((row) => row.marksUsed).length / rows.length;
+    const marksCoverage = rows.filter((row) => row.marksComplete).length / rows.length;
     const tradeoff = tradeoffOf(selection, recommendedRoe);
     // the per-position scratch of the simulation stays out of the result
-    const { _sims, _none, _pnl, _candidates, ...stopSelection } = selection;
+    const { _sims, _none, _pnl, _outcomes, _candidates, ...stopSelection } = selection;
 
     return {
       insufficientData: false,
@@ -477,16 +573,17 @@
       simulatedPositions: selection.simulatedPositions,
       dominantLeverage,
       recommendedRoe,
-      recommendedPriceDrop: Number((recommendedRoe / dominantLeverage).toFixed(1)),
+      recommendedPriceDrop: Number((recommendedRoe / dominantLeverage).toPrecision(4)),
       // the data cannot tell a stop from no stop: the optimum is "none", or "none" sits in the stable band
-      stopOptional: selection.optimal === null || selection.bandIncludesNone,
-      winRetentionRate: Number((simulatedWins.length ? (keptWins / simulatedWins.length) * 100 : 100).toFixed(1)),
+      stopOptional: selection.optimal === null,
+      winRetentionRate: Number((winIndices.length ? (keptWins / winIndices.length) * 100 : 100).toFixed(1)),
       tradeoff,
       hasSevereBagHolding: lossStats.max >= 100 || losses.some((row) => row.roiPct <= -100),
-      worstHistoricalRoeMae: Number(lossStats.max.toFixed(1)),
+      worstHistoricalRoeMae: Number(stats(rows.map((row) => row.maeRoe)).max.toFixed(1)),
       allStats: rounded(stats(rows.map((row) => row.maeRoe))),
       winStats: rounded(stats(wins.map((row) => row.maeRoe))),
       lossStats: rounded(lossStats),
+      mfeStats: rounded(stats(rows.map((row) => row.mfeRoe))),
       marksCoverage,
       entryPathPositions: rows.filter((row) => row.entryPathUsed).length,
       stopSelection
@@ -497,6 +594,8 @@
     analyzeStopLossRadar,
     positionExcursions,
     selectStop,
+    simulateCopier,
+    tradeoffOf,
     lifeCandles,
     lifeExtremes,
     STOP_CANDIDATES

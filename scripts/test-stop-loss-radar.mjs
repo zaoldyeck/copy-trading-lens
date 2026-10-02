@@ -180,7 +180,10 @@ const simRow = ({ mae, exit, symbol = "X", leverage = 10, opened = T0 }) => ({
     direction: 1,
     leverage,
     fills: [{ time: opened, price: 100, qty: 1, entry: true }, { time: opened + 2 * MIN, price: exit, qty: 1, entry: false }],
-    candles: [{ time: opened, ...MIN_CANDLE, high: 100, low: 100 * (1 - mae / leverage / 100) }]
+    candles: [
+      { time: opened, ...MIN_CANDLE, high: 100, low: 100 * (1 - mae / leverage / 100) },
+      { time: opened + MIN, ...MIN_CANDLE, high: 100, low: 100 }
+    ]
   }
 });
 {
@@ -235,7 +238,12 @@ const simRow = ({ mae, exit, symbol = "X", leverage = 10, opened = T0 }) => ({
         { time: opened + 2 * MIN, price: 90, qty: 9, entry: true },
         { time: opened + 4 * MIN, price: 100, qty: 10, entry: false }
       ],
-      candles: [{ time: opened + MIN, ...MIN_CANDLE, high: 100, low: 90 }, { time: opened + 3 * MIN, ...MIN_CANDLE, high: 100, low: 90 }]
+      candles: [
+        { time: opened, ...MIN_CANDLE, high: 100, low: 100 },
+        { time: opened + MIN, ...MIN_CANDLE, high: 100, low: 90 },
+        { time: opened + 2 * MIN, ...MIN_CANDLE, high: 90, low: 90 },
+        { time: opened + 3 * MIN, ...MIN_CANDLE, high: 100, low: 90 }
+      ]
     }
   });
   const rows = [scaling(T0), scaling(T0 + 10 * MIN), scaling(T0 + 20 * MIN)];
@@ -258,7 +266,7 @@ const simRow = ({ mae, exit, symbol = "X", leverage = 10, opened = T0 }) => ({
     positions.push(position({ symbol, avgCost: 100, avgClosePrice: spec.exit, closingPnl: spec.exit - 100, roi: ((spec.exit - 100) / 100) * 10, opened, closed: opened + 2 * MIN, maxOpenInterest: 1 }));
     orders.push({ symbol, side: "BUY", positionSide: "BOTH", executedQty: 1, avgPrice: 100, orderUpdateTime: opened });
     orders.push({ symbol, side: "SELL", positionSide: "BOTH", executedQty: 1, avgPrice: spec.exit, orderUpdateTime: opened + 2 * MIN });
-    symbols[symbol] = { minutes: [[opened, 100, 100 * (1 - spec.mae / 10 / 100)]], hours: [] };
+    symbols[symbol] = { minutes: [[opened, 100, 100 * (1 - spec.mae / 10 / 100)], [opened + MIN, 100, 100]], hours: [] };
   });
   const radar = stoploss.analyzeStopLossRadar(positions, orders, { symbols, failed: [] }, { equityAt: () => 50 });
   assert.equal(radar.simulatedPositions, 43);
@@ -275,14 +283,15 @@ const simRow = ({ mae, exit, symbol = "X", leverage = 10, opened = T0 }) => ({
   console.log("PASS: the trade-off behind the shown stop is counted from the replayed fills");
 }
 
-// 6. Real cached lead traders: the same numbers as tools/research/stoploss-three.mjs (V2 = entry path +
-//    exact in-life minute marks). Skipped when the local research caches are absent.
+// 6. Real cached lead traders: excursions and reconciled replay admission. The independent review CLI records
+//    the full optimum/holdout evidence; known-optimum synthetic tests above and the independent oracle protect
+//    optimal selection. Skipped when the local research caches are absent.
 const cacheDir = path.join(root, "tools", "cache");
 const realTraders = [
   // 玄冥二老's 428.4% is the TAIKOUSDT short squeezed to 0.538 (funding then made it a -52% row): a real drawdown
   { id: "4908633203782592768", name: "玄冥二老", winnersP95: 91.4, worstLoss: 428.4, simulated: 138 },
-  { id: "5131925334830383361", name: "星辰社区-海", winnersP95: 84.8, worstLoss: 652.4, simulated: 76 },
-  { id: "5075281354358777856", name: "熬鹰资本", winnersP95: 30.0, worstLoss: 194.2, simulated: 59 }
+  { id: "5131925334830383361", name: "星辰社区-海", winnersP95: 84.8, worstLoss: 652.4, simulated: 75 },
+  { id: "5075281354358777856", name: "熬鹰资本", winnersP95: 30.0, worstLoss: 194.2, simulated: 56 }
 ];
 for (const trader of realTraders) {
   const rawFile = path.join(cacheDir, `raw_${trader.id}.json`);
@@ -305,11 +314,10 @@ for (const trader of realTraders) {
   assert.equal(radar.stopSelection.objective, "pnl");
   assert.equal(radar.marksCoverage, 1, `${trader.name}: every position has candles`);
   assert.equal(radar.simulatedPositions, trader.simulated, `${trader.name}: positions with replayable fills`);
-  // simulated on the lead's fills under both readings of what follows a stop, no stop level beats "no stop" for any of the three
-  assert.equal(radar.stopSelection.optimal, null, `${trader.name}: no stop beats no stop`);
-  assert.equal(radar.stopOptional, true);
-  assert.ok(radar.recommendedRoe >= 10 && radar.recommendedRoe <= 95);
-  console.log(`PASS: ${trader.name} (winners p95 ${radar.winStats.p95}, worst loss ${radar.lossStats.max}, replayable ${radar.simulatedPositions}/${radar.positionCount}, optimal none, insurance stop ${radar.stopSelection.insuranceStop})`);
+  assert.equal(radar.stopSelection.curve.length, 96, `${trader.name}: every integer candidate is retained`);
+  assert.equal(radar.stopOptional, radar.stopSelection.optimal === null);
+  assert.ok(radar.recommendedRoe >= 1 && radar.recommendedRoe <= 95);
+  console.log(`PASS: ${trader.name} (winners p95 ${radar.winStats.p95}, worst loss ${radar.lossStats.max}, complete replay ${radar.simulatedPositions}/${radar.positionCount}, historical optimum ${radar.stopSelection.optimal ?? "none"}, enabled best ${radar.stopSelection.insuranceStop})`);
 }
 
 // 4. Binance copy-setting URL detection test

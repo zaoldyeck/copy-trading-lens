@@ -734,9 +734,17 @@
         { method: "GET", waitUntilResumed }
       ), waitUntilResumed);
       const page = asArray(value);
-      rows.push(...page.map((row) => [Number(row[0]), Number(row[2]), Number(row[3])]).filter(([time, high, low]) => time > 0 && high > 0 && low > 0));
-      if (page.length < limit) break;
-      cursor = Number(page[page.length - 1][0]) + stepMs;
+      // A successful HTTP response can still be an empty, truncated or gapped history. Never publish it as
+      // complete market coverage: every requested candle must be present at its semantic time key.
+      if (page.length !== limit) throw new Error(`Incomplete MARK candles for ${symbol} ${interval}: expected ${limit}, received ${page.length}`);
+      for (let i = 0; i < page.length; i += 1) {
+        const [time, high, low] = [Number(page[i][0]), Number(page[i][2]), Number(page[i][3])];
+        if (time !== cursor + i * stepMs || !(high >= low && low > 0)) {
+          throw new Error(`Invalid or gapped MARK candles for ${symbol} ${interval} at ${cursor + i * stepMs}`);
+        }
+        rows.push([time, high, low]);
+      }
+      cursor += limit * stepMs;
     }
     return rows;
   }

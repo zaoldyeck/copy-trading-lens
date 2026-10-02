@@ -252,7 +252,6 @@
 
   function mountInlineSettingHelper(radar) {
     if (!radar || radar.insufficientData) return;
-    if (!radar || radar.insufficientData) return;
     const inputs = Array.from(document.querySelectorAll("input"));
     const targets = inputs.filter((i) => {
       if (i.placeholder === "0-95") {
@@ -270,7 +269,7 @@
     const chip = h("button", {
       class: "ctl-inline-helper",
       type: "button",
-      title: t("inlineChipTitle", [radar.recommendedRoe]),
+      title: applyLabel(radar),
       onclick: (e) => {
         e.preventDefault();
         applyStopLossToBinanceInputs(radar.recommendedRoe);
@@ -278,7 +277,7 @@
         chip.classList.add("is-applied");
       }
     }, [
-      h("span", { text: `⚡ CopyLens 推薦: ${radar.recommendedRoe}% (點擊填入)` })
+      h("span", { text: `⚡ CopyLens: ${applyLabel(radar)}` })
     ]);
 
     container.appendChild(chip);
@@ -313,10 +312,16 @@
     ]);
   }
 
-  // The stop levels the data cannot tell apart from the best one, as the lowest and highest of them.
+  // Preserve holes: bootstrap alternatives can be disjoint, so never fill the interval between min and max.
   function stableBand(radar) {
     const band = radar?.stopSelection?.band || [];
-    return band.length ? { lo: Math.min(...band), hi: Math.max(...band) } : null;
+    const ranges = [];
+    for (const value of [...band].sort((a, b) => a - b)) {
+      const last = ranges.at(-1);
+      if (last && value === last[1] + 1) last[1] = value;
+      else ranges.push([value, value]);
+    }
+    return ranges.map(([lo, hi]) => lo === hi ? `${lo}%` : `${lo}–${hi}%`).join(", ");
   }
 
   function stopDecision(radar) {
@@ -329,15 +334,17 @@
   function stopExplanation(radar) {
     const tradeoff = radar.tradeoff;
     const stop = radar.recommendedRoe;
-    const usdt = (value) => Math.round(value).toLocaleString("en-US");
+    const usdt = (value) => (Math.round(value) || 0).toLocaleString("en-US");
     // under the reading that is worse for the stop, and the other: show the range when they differ
     const low = Math.min(tradeoff.pnlStopWorse, tradeoff.pnlStopBetter);
     const high = Math.max(tradeoff.pnlStopWorse, tradeoff.pnlStopBetter);
     const stopTotal = Math.round(low) === Math.round(high) ? usdt(low) : `${usdt(low)}～${usdt(high)}`;
     const effects = [tradeoff.positions, stop, usdt(tradeoff.pnlNone), stopTotal, tradeoff.triggered, tradeoff.helped, usdt(tradeoff.helpedUsdt), tradeoff.hurt, usdt(Math.abs(tradeoff.hurtUsdt))];
     const paragraphs = [];
+    paragraphs.push(t(radar.stopSelection.objective === "growth" ? "radarObjectiveGrowth" : "radarObjectivePnl"));
+    paragraphs.push(t("radarCoverage", [radar.simulatedPositions, radar.positionCount]));
     if (radar.stopOptional) {
-      paragraphs.push(tradeoff.triggered > 0 ? t("radarWhyOptional", effects) : t("radarWhyNoCost", [tradeoff.positions, stop, usdt(tradeoff.pnlNone)]));
+      paragraphs.push(tradeoff.triggeredAny > 0 ? t("radarWhyOptional", effects) : t("radarWhyNoCost", [tradeoff.positions, stop, usdt(tradeoff.pnlNone)]));
       const worst = tradeoff.worstLoss;
       paragraphs.push(worst && worst.returnPct < -stop
         ? t("radarInsurance", [worst.symbol, worst.leverage, Math.abs(Math.round(worst.returnPct)), stop])
@@ -346,21 +353,20 @@
       paragraphs.push(t("radarWhyStop", effects));
     }
     const band = stableBand(radar);
-    if (band && band.lo !== band.hi) paragraphs.push(t("radarBandSentence", [band.lo, band.hi]));
+    if (band) paragraphs.push(t("radarBandSentence", [band]));
     paragraphs.push(t("radarBacktestFootnote"));
     return paragraphs;
   }
 
   // The price of insurance, level by level: what each stop would have cost on this history.
-  const PRICE_LIST_STOPS = [95, 85, 70, 50];
   function stopPriceList(radar) {
-    const usdt = (value) => Math.round(value).toLocaleString("en-US");
-    const rows = radar.stopSelection.curve.filter((point) => PRICE_LIST_STOPS.includes(point.stop)).sort((a, b) => b.stop - a.stop);
-    return h("div", { class: "ctl-radar-pricelist" }, [
-      h("p", { text: t("radarPriceListTitle", [usdt(radar.tradeoff.pnlNone)]) }),
+    const usdt = (value) => (Math.round(value) || 0).toLocaleString("en-US");
+    const rows = radar.stopSelection.curve.filter((point) => point.stop !== null);
+    return h("details", { class: "ctl-radar-pricelist" }, [
+      h("summary", { text: t("radarPriceListTitle", [usdt(radar.tradeoff.pnlNone)]) }),
       h("ul", {}, rows.map((point) => {
-        const low = Math.min(point.pnlStayOut, point.pnlFollow);
-        const high = Math.max(point.pnlStayOut, point.pnlFollow);
+        const low = point.pnlMin;
+        const high = point.pnlMax;
         return h("li", { text: t("radarPriceListRow", [point.stop, point.triggered, Math.round(low) === Math.round(high) ? usdt(low) : `${usdt(low)}～${usdt(high)}`]) });
       }))
     ]);
@@ -421,7 +427,7 @@
           ])
         ]),
         h("div", { class: "ctl-radar-why" }, stopExplanation(radar).map((text) => h("p", { text }))),
-        radar.stopOptional ? stopPriceList(radar) : null,
+        stopPriceList(radar),
         h("div", { class: "ctl-radar-grid" }, [
           h("div", { class: "ctl-radar-stat" }, [
             h("span", { text: t("radarWinRetention") }),
@@ -434,7 +440,11 @@
           h("div", { class: "ctl-radar-stat" }, [
             h("span", { text: t("radarWorstDrawdown") }),
             h("strong", { class: hasBag ? "is-danger" : "", text: `-${radar.worstHistoricalRoeMae}%` })
-          ])
+          ]),
+          radar.mfeStats ? h("div", { class: "ctl-radar-stat" }, [
+            h("span", { text: t("radarMfe") }),
+            h("strong", { text: `+${radar.mfeStats.max}%` })
+          ]) : null
         ])
       ]),
       hasBag
@@ -589,7 +599,7 @@
             ]),
             h("div", { class: "ctl-advisor-sub", text: t("radarEquivalentPrice", [radar.dominantLeverage, radar.recommendedPriceDrop]) }),
             h("div", { class: "ctl-radar-why" }, stopExplanation(radar).map((text) => h("p", { text }))),
-            radar.stopOptional ? stopPriceList(radar) : null,
+            stopPriceList(radar),
             h("button", {
               class: "ctl-primary ctl-advisor-apply-btn",
               type: "button",

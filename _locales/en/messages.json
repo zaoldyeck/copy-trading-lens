@@ -810,37 +810,37 @@
     "message": "Deep Bag-Holding Warning"
   },
   "radarRecommendedLabel": {
-    "message": "Recommended Stop-Loss Setting"
+    "message": "Best historical setting (1% steps)"
   },
   "radarInsuranceLabel": {
     "message": "If you still want a stop, set"
   },
   "radarDecisionOptional": {
-    "message": "A stop-loss is optional here"
+    "message": "Historical optimum: no stop loss"
   },
   "radarDecisionStop": {
-    "message": "Set a {0}% stop-loss"
+    "message": "Historical optimum: {0}% ROE"
   },
   "radarWhyOptional": {
-    "message": "Simulating a copier's stop on this trader's last {0} positions with fills (amounts are the lead account's USDT): without a stop the total is +{2} USDT; with a {1}% stop it is only +{3} USDT. A {1}% stop would trigger on {4} positions: on {5} it loses less (saving {6} USDT), on {7} it exits early and earns less or loses more (costing {8} USDT). So in this history, leaving it off pays more."
+    "message": "Across {0} fully replayable positions, no stop has the highest historical score. No-stop price PnL was {2} USDT; a {1}% insurance stop gives {3} USDT across the model readings. In the least profitable reading it triggers on {4} positions: {5} improve by {6} USDT in total; {7} worsen by {8} USDT."
   },
   "radarWhyNoCost": {
-    "message": "Simulating a copier's stop on this trader's last {0} positions with fills: a {1}% stop would not have triggered once in this history, so it changes nothing (without a stop the total is +{2} USDT, lead account). It is insurance, not a way to improve past returns."
+    "message": "Across {0} fully replayable positions, no stop is a historical optimum. A {1}% insurance stop never triggers in any model reading and leaves price PnL at {2} USDT. The sample has no evidence that this protection improves returns."
   },
   "radarWhyStop": {
-    "message": "Simulating a copier's stop on this trader's last {0} positions with fills (amounts are the lead account's USDT): without a stop the total is +{2} USDT; with a {1}% stop it is +{3} USDT. A {1}% stop would trigger on {4} positions: on {5} it loses less (saving {6} USDT), on {7} it exits early and earns less or loses more (costing {8} USDT). So setting it pays more."
+    "message": "Across {0} fully replayable positions, {1}% has the highest historical score. No-stop price PnL was {2} USDT; at {1}% it is {3} USDT across the model readings. In the least profitable reading it triggers on {4} positions: {5} improve by {6} USDT in total; {7} worsen by {8} USDT. The score balances both effects under the objective above."
   },
   "radarInsurance": {
-    "message": "A stop-loss is really insurance against a loss bigger than anything in this history. This trader's worst recent position was {0} ({1}x leverage), which lost {2}%; with a {3}% stop it would have lost at most {3}%. If you want that insurance, {3}% costs the least in this history (the cost of each level is in the list below)."
+    "message": "The worst replayable price outcome was {0} ({1}x), losing {2}% of peak margin. If you choose insurance, {3}% is the stop with the highest historical score among enabled stops. Each trigger closes the then-current copier position in this model; later reentries can lose again. Actual losses also depend on execution and costs."
   },
   "radarApplyOptional": {
     "message": "Set one anyway: fill in {0}%"
   },
   "radarBandSentence": {
-    "message": "Any value from {0}% to {1}% backtests about as well as the best one."
+    "message": "Bootstrap alternatives (including exact ties): {0}. These are resampling sensitivity results, not a confidence interval or proof of future optimality."
   },
   "radarBacktestFootnote": {
-    "message": "The backtest uses closed positions with fills only and does not predict the future; open positions are not counted. Amounts are a range because Binance does not document whether a copier whose stop triggered keeps following the lead's later adds to the same position; both readings are simulated. % is return on margin (ROE)."
+    "message": "Uses fully closed positions with matched complete fills and continuous MARK candles. Price PnL excludes fees, funding and slippage; fills at the exact threshold are a model assumption. The range considers stay-out/follow-later-adds behaviour and conservative branching over unknown intrabar timing. It bounds this relaxed price-only model, not actual execution. Historical optimality does not guarantee future optimality. Percentages are margin ROE."
   },
   "streamingHintPerformance": {
     "message": "Loading performance data..."
@@ -884,9 +884,6 @@
   "btnCopiedToClipboard": {
     "message": "Copied {0}% to Clipboard"
   },
-  "inlineChipTitle": {
-    "message": "Click to auto-fill CopyLens recommended stop-loss {0}%"
-  },
   "inlineChipApplied": {
     "message": "Successfully applied {0}%"
   },
@@ -900,10 +897,10 @@
     "message": "Worst Historical Drawdown"
   },
   "radarSevereBagWarning": {
-    "message": "⚠️ Warning: Trader had historical position drawdown reaching -{0}%! Strictly recommend stop-loss to avoid blowups."
+    "message": "Historical adverse excursion reached -{0}% ROE. A stop may reduce tail losses and cut recovering winners; evaluate both effects above."
   },
   "radarBinanceRoeNotice": {
-    "message": "💡 Binance Tip: 'Position Stop-Loss (0-95%)' input is Margin ROE %, NOT price change %. Setting 5-10% kills 50%+ of wins prematurely due to normal volatility! Follow the radar recommendation above. (Note: Stop-loss is triggered by Binance's backend ROE daemon rather than exchange book orders; table shows --/--, and blended entry price updates dynamically on scale-ins.)"
+    "message": "Binance’s position stop-loss percentage is margin ROE, not the underlying price move. At leverage L, a stop of S% corresponds approximately to S/L% in price. Each trader’s replay determines whether a tighter stop helps or harms."
   },
   "settingAdvisorTitle": {
     "message": "CopyLens Smart Stop-Loss Advisor"
@@ -915,13 +912,13 @@
     "message": "Preserves {0}% Historical Wins"
   },
   "settingValuePropWinDesc": {
-    "message": "Prevents prematurely cutting profitable trades during normal market volatility, ensuring positive expectancy."
+    "message": "Share of replayable profitable trades that cannot trigger the shown stop under this model. It does not guarantee positive future expectancy."
   },
   "settingValuePropBagTitle": {
-    "message": "Cuts Off Catastrophic Drawdowns"
+    "message": "Historical adverse price risk"
   },
   "settingValuePropBagDesc": {
-    "message": "Historical worst drawdown reached -{0}%; cuts losses at trend breakdowns to prevent total wipeout."
+    "message": "Historical adverse excursion reached -{0}% ROE. Realised stop losses depend on execution and later reentries."
   },
   "settingValuePropStatsTitle": {
     "message": "Empirical Excursion Distribution"
@@ -957,12 +954,24 @@
     "message": "Mark Price K-Lines & Precise MAE Excursions"
   },
   "radarInsuranceNone": {
-    "message": "A stop-loss is really insurance against a loss bigger than anything in the future, and no position in this history needed it. If you want that insurance, {0}% costs the least in this history and guarantees no position loses more than {0}% of its margin (the cost of each level is in the list below)."
+    "message": "If you choose insurance, {0}% has the highest historical score among enabled stops. It does not guarantee a cap on realised losses, especially after reentry, execution delay or costs."
   },
   "radarPriceListTitle": {
-    "message": "What each stop level would have cost in this history (without a stop the total is +{0} USDT, lead account):"
+    "message": "Expand all 1%–95% historical outcomes (no-stop price PnL {0} USDT)"
   },
   "radarPriceListRow": {
-    "message": "A {0}% stop: triggers on {1} positions, total +{2} USDT"
+    "message": "{0}%: up to {1} positions triggered; price PnL {2} USDT"
+  },
+  "radarObjectiveGrowth": {
+    "message": "We compare no stop and every integer ROE from 1% to 95%, maximising the worse scenario’s mean log(1 + price PnL / estimated entry equity). This rewards returns and penalises damage to capital; it need not maximise total USDT profit. This is a historical per-position utility, not a portfolio CAGR."
+  },
+  "radarObjectivePnl": {
+    "message": "We compare no stop and every integer ROE from 1% to 95%, maximising the worse scenario’s total price PnL. Entry equity could not be reconstructed reliably, so account growth is not estimated."
+  },
+  "radarCoverage": {
+    "message": "Selection uses {0} of {1} closed positions. Missing fills, unmatched quantities or candle gaps are excluded; this coverage can affect the answer."
+  },
+  "radarMfe": {
+    "message": "Maximum favourable excursion (MFE)"
   }
 }
