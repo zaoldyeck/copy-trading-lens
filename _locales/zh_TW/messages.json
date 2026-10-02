@@ -840,7 +840,7 @@
     "message": "重抽樣的替代候選（含並列最佳解）：{0}。這是抽樣敏感度，不是信賴區間或未來最佳值的證明。"
   },
   "radarBacktestFootnote": {
-    "message": "只用完整平倉、成交可核對且標記價格 K 線無缺口的交易選值。價格損益未扣手續費、資金費與滑價；按止損門檻精確成交是模型假設。範圍包含止損後不再跟單／跟後續加碼，以及對 K 線內未知時序保守分支後的結果；它是放寬時序限制的價格模型界限，並非實際成交保證。歷史最佳不保證未來最佳。「%」為保證金 ROE。"
+    "message": "USDT 金額按帶單員原成交量（模擬比例 1）計算；跟單金額需按實際倉位大小換算。模型採標記價格、平掉跟單全部倉位；公開指南未確認實際觸發價格來源或平倉數量處理。只用完整平倉、成交可核對且標記價格 K 線無缺口的交易選值。價格損益未扣手續費、資金費與滑價。止損觸發價格於跟單開倉／重新入場時固定，帶單後續加減倉不移動它；模型假設全部倉位按門檻精確成交。範圍包含出場後不再跟單／跟後續加碼，以及 K 線內未知時序的保守分支；它是放寬時序限制的價格模型界限，並非實際成交保證。歷史最佳不證明未來最佳。「%」為保證金 ROE 設定。"
   },
   "streamingHintPerformance": {
     "message": "績效數據載入中..."
@@ -900,19 +900,19 @@
     "message": "歷史逆向浮虧曾達 -{0}% ROE。止損可能減少尾端損失，也可能砍掉後來回本的獲利單，請依上方計算同時評估。"
   },
   "radarBinanceRoeNotice": {
-    "message": "幣安「倉位止損」的百分比是保證金 ROE，不是標的跌幅。槓桿 L 倍、止損 S% 約相當於 S/L% 的價格逆向波動；較緊止損的利弊必須依每位帶單員的交易回放計算。"
+    "message": "倉位出場設定以保證金 ROE 計算，不是標的價格漲跌幅。L 倍槓桿下，初始 S% 止損／T% 止盈約對應 S/L% 逆向／T/L% 順向價格距離。帶單後續加倉不移動觸發訂單，觸發時的實際 ROE 可能改變。"
   },
   "settingAdvisorTitle": {
-    "message": "CopyLens 智能跟單止損顧問"
+    "message": "CopyLens 止盈／止損顧問"
   },
   "settingAdvisorSubtitle": {
     "message": "帶單員：{0} · 主導槓桿：{1}x"
   },
   "settingValuePropWinTitle": {
-    "message": "保留 {0}% 歷史獲利單"
+    "message": "只設止損：保留 {0}% 歷史獲利單"
   },
   "settingValuePropWinDesc": {
-    "message": "可回放獲利單中，在模型內不會觸發此止損的比例；不代表保證未來為正期望值。"
+    "message": "這是下方「只設止損」選值的贏單保留率，不是止盈／止損聯合組合的保留率，也不保證未來表現。"
   },
   "settingValuePropBagTitle": {
     "message": "歷史逆向價格風險"
@@ -930,7 +930,7 @@
     "message": "🔍 查看帶單員完整分析報告 ▾"
   },
   "btnReturnToAdvisor": {
-    "message": "⚡ 返回精簡止損設定助手 ▴"
+    "message": "⚡ 返回精簡止盈／止損助手 ▴"
   },
   "streamingBanner": {
     "message": "⚡ 已優先呈現：{0} ｜ ↻ 背景載入中：{1}..."
@@ -962,16 +962,115 @@
   "radarPriceListRow": {
     "message": "設 {0}%：最多觸發 {1} 筆，價格損益 {2} USDT"
   },
-  "radarObjectiveGrowth": {
-    "message": "完整比較不設止損與 1%～95% 的每個整數，以各情境中較差的「平均 log(1＋價格損益／估計入場資金)」最高者為最佳值。這會權衡獲利與本金損傷，不一定使總 USDT 獲利最高；它是歷史逐筆效用，不是帳戶年化報酬。"
-  },
   "radarObjectivePnl": {
-    "message": "完整比較不設止損與 1%～95% 的每個整數，以各情境中較差的「總價格損益」最高者為最佳值。入場資金無法可靠還原，因此未估計帳戶成長率。"
+    "message": "完整比較不設止損與 1%～95% 的每個整數，以各情境中較低的「總價格損益」最高者為最佳值。在相同固定起始本金與期間下，等同價格 ROI 最大化；不是逐筆 ROE 平均，也不是扣成本後的帳戶收益。"
   },
   "radarCoverage": {
     "message": "選值採用 {1} 筆已平倉交易中的 {0} 筆；缺少成交、數量無法核對或 K 線有缺口者排除。這個樣本覆蓋範圍會影響答案。"
   },
   "radarMfe": {
     "message": "歷史最大順向浮盈（MFE）"
+  },
+  "sectionJointExits": {
+    "message": "止盈／止損聯合分析"
+  },
+  "exitHistoricalLabel": {
+    "message": "歷史價格報酬最高的聯合組合 · ROE 每 1% 比較"
+  },
+  "exitStopLabel": {
+    "message": "倉位止損（ROE）"
+  },
+  "exitTakeProfitLabel": {
+    "message": "倉位止盈（ROE）"
+  },
+  "exitDisabled": {
+    "message": "不啟用（0%）"
+  },
+  "exitPairSummary": {
+    "message": "止損：{0} · 止盈：{1}"
+  },
+  "exitObjectivePriceRoi": {
+    "message": "歷史比較以各模型情境中較低的「總價格損益」最高者為最佳組合。在相同固定起始本金、倉位大小與期間下，這也等於價格 ROI 最大化；不是逐筆 ROE 平均最高，也不代表未來風險調整後報酬最佳。"
+  },
+  "exitHistoricalResult": {
+    "message": "這組止盈／止損的價格損益為 {0} USDT；兩者都不設為 {1} USDT，模型各情境的差額為 {2} USDT。"
+  },
+  "exitCapitalRoi": {
+    "message": "以固定起始本金 {0} USDT 計算，模型價格 ROI 為 {1}%～{2}%。"
+  },
+  "exitCapitalUnknown": {
+    "message": "固定起始本金無法核實，因此帳戶 ROI 留白。USDT 結果採帶單員歷史倉位大小，並非你的投入金額。"
+  },
+  "exitTradeoff": {
+    "message": "最多 {0} 個倉位可能觸發出場。在損益最低的情境中，{1} 筆改善，共增加 {2} USDT；{3} 筆惡化，共減少 {4} USDT。"
+  },
+  "exitTiedOptima": {
+    "message": "共有 {0} 組並列歷史最佳解；顯示的是其中一組，不是唯一數學解。"
+  },
+  "exitBacktestFootnote": {
+    "message": "USDT 金額按帶單員原成交量（模擬比例 1）計算；跟單金額需按實際倉位大小換算。模型採標記價格、平掉跟單全部倉位；公開指南未確認實際觸發價格來源或平倉數量處理。價格模型未扣手續費、資金費、滑價，也未模擬清算限制。觸發價格於跟單倉位開倉／重新入場時固定，後續帶單加減倉不移動該訂單的觸發點。模型假設觸發時全部倉位精確按門檻成交。K 線無法確認先止盈還是先止損，或成交在根內極值之前／之後；範圍對這些可能性及是否跟後續加碼保守分支。這是放寬時序限制的模型界限，並非實際成交保證。歷史最佳不證明未來最佳。"
+  },
+  "exitEquivalentPrice": {
+    "message": "在 {0}x 槓桿下，初始逆向／順向價格距離約為 {1}／{2}；後續加倉會改變固定觸發點當下的實際 ROE。"
+  },
+  "exitApplyPair": {
+    "message": "一鍵填入倉位止盈與止損"
+  },
+  "exitApplied": {
+    "message": "已填入，請核對後儲存"
+  },
+  "exitInputUnavailable": {
+    "message": "無法唯一辨識倉位止盈／止損欄位，請依顯示值手動填入"
+  },
+  "exitStopOnlyTitle": {
+    "message": "只設止損：比較結果與保險選擇"
+  },
+  "exitStopProfile": {
+    "message": "展開全部止損值（固定上述止盈）"
+  },
+  "exitTakeProfitProfile": {
+    "message": "展開全部止盈值（固定上述止損）"
+  },
+  "exitProfileRow": {
+    "message": "止損 {0} · 止盈 {1}：價格損益 {2} USDT，最多 {3} 筆可能觸發"
+  },
+  "exitOptimizing": {
+    "message": "正在比較止盈／止損聯合組合…"
+  },
+  "exitDataReady": {
+    "message": "持倉、成交與歷史價格已載入"
+  },
+  "exitOptimizingProgress": {
+    "message": "止盈／止損組合比較：{0}/{1}（{2}%）…"
+  },
+  "exitValidationNeeded": {
+    "message": "這些研究值仍需完成扣成本的獨立樣本外與實際成交驗證；不可視為已驗證的實盤最佳設定。"
+  },
+  "exitHoldoutInsufficient": {
+    "message": "可用的完整時序樣本不足，無法做固定參數的樣本外檢查；尚無樣本外效益證據。"
+  },
+  "exitHoldoutResult": {
+    "message": "時序檢查：只用前 {0} 筆選出止損 {3}／止盈 {4}，固定後測試 {2} 之後的 {1} 筆。相對不設出場的樣本外價格損益差額：{5} USDT；跨越切分點的 {6} 筆排除，樣本外資料未參與選值。"
+  },
+  "exitHoldoutPriceBenefit": {
+    "message": "固定組合在樣本外價格模型的較低界限仍改善損益；但未包含成本與實際成交，也不證明未來表現。"
+  },
+  "exitHoldoutNoBenefit": {
+    "message": "固定組合在樣本外價格模型的較低界限沒有改善損益；這份驗證不支持採用樣本內勝出的設定。"
+  },
+  "exitValidatingProgress": {
+    "message": "時序樣本外檢查：{0}/{1}（{2}%）…"
+  },
+  "radarNoFreeInsurance": {
+    "message": "可完整回放的歷史中，1%～95% 沒有任何整數止損在所有模型情境都完全不觸發。顯示的 {0}% 是啟用止損候選中代價最低者；成本仍須以上方損益衡量，不保證最高 ROI 或實際虧損上限。"
+  },
+  "radarFreeInsurance": {
+    "message": "{0}% ROE 在本次採用的完整歷史交易、所有模型情境都不觸發，因此保留不設止損的價格損益，並列歷史最佳解。這只適用於可完整回放的樣本，不包含被排除的交易，也不保證未來收益或實際損失。"
+  },
+  "radarFreeBaselineOnly": {
+    "message": "{0}% ROE 在本次採用的完整歷史交易都不觸發，保留不設止損的價格損益；但不等於上方歷史最佳解較高的收益。樣本內未觸發不證明未來或實際成交安全。"
+  },
+  "radarOutsideInsurance": {
+    "message": "要在這些可完整回放交易的所有模型時序都不觸發，需要至少 {0}% ROE；超出幣安 {1}% 上限，不能直接填入。這不涵蓋缺失歷史，也不保證未來表現。"
   }
 }

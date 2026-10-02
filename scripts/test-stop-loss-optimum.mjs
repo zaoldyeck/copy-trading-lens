@@ -33,15 +33,30 @@ assert.equal(tied.optimal, null);
 assert.equal(tied.optima.length, 96);
 assert.equal(tied.band.length, 95);
 assert.equal(tied.insuranceStop, 1);
+assert.equal(tied.neverTriggeredStop, 1);
+assert.equal(tied.neverTriggeredEquivalentToOptimal, true);
+assert.equal(sel.neverTriggeredStop, null, "no free enabled stop if every supported threshold can trigger");
+assert.equal(sel.neverTriggeredEquivalentToOptimal, false);
+assert.equal(sel.historicalNeverTriggerRoe, 201, "a mathematical no-hit boundary can exceed the exchange input domain");
+assert.equal(tied.historicalNeverTriggerRoe, 1);
+
+// A trigger at the original losing close can tie in money but is NOT never-triggered insurance.
+const freeTie = S.selectStop([row(1, 99.9), row(1, 99.9), row(1, 99.9)], null);
+assert.equal(freeTie.optimal, null);
+assert.equal(freeTie.curve.find((point) => point.stop === 1).triggered, 3);
+assert.equal(freeTie.neverTriggeredStop, 2);
+assert.equal(freeTie.insuranceStop, 2, "prefer the tightest genuinely never-triggered candidate when no-stop is optimal");
+assert.equal(freeTie.neverTriggeredEquivalentToOptimal, true);
 
 // Undefined/negative/NaN reconstructed equity must never be invented from future position size.
 for (const value of [undefined, 0, -100, NaN]) assert.equal(S.selectStop(controls, { equityAt: () => value }).objective, "pnl");
 assert.equal(S.selectStop(controls, { equityAt: () => 50, unpriced: ["X"] }).objective, "pnl");
 
-// Genuine log utility cannot reward bankruptcy with a clipped finite penalty, regardless of many winners.
+// ROI ranking must not silently switch to log utility when reconstructed equity happens to exist.
 const ruin = [...Array.from({ length: 40 }, () => row(0, 103)), row(200, 85)];
 const growth = S.selectStop(ruin, { equityAt: () => 10 });
-assert.equal(growth.curve[0].score, -Infinity);
+assert.equal(growth.objective, "pnl");
+near(growth.curve[0].score, (40 * 3 - 15) / 41);
 assert.equal(growth.optimal, 1);
 
 // MARK triggers cannot be inferred from execution-price MAE.
@@ -77,8 +92,9 @@ const uncertainAdd = { direction: 1, leverage: 10,
   fills: [{ time: T, entry: true, qty: 1, price: 100 }, { time: T + M / 2, entry: true, qty: 9, price: 96 }, { time: T + M, entry: false, qty: 10, price: 96 }],
   candles: [{ time: T, step: M, high: 100, low: 91.4 }]
 };
-near(S.simulateCopier(uncertainAdd, 50, false, false).pnl, -48.2);
-near(S.simulateCopier(uncertainAdd, 50, true, false).pnl, -48.2);
+near(S.simulateCopier(uncertainAdd, 50, false, false, null, "dynamic").pnl, -48.2);
+near(S.simulateCopier(uncertainAdd, 50, false, false).pnl, -14);
+near(S.simulateCopier(uncertainAdd, 50, true, false, null, "dynamic").pnl, -48.2);
 near(S.simulateCopier(uncertainAdd, 50, false, true).pnl, -4);
 
 const equalPnlTrigger = { direction: 1, leverage: 10,

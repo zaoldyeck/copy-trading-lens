@@ -840,7 +840,7 @@
     "message": "Bootstrap alternatives (including exact ties): {0}. These are resampling sensitivity results, not a confidence interval or proof of future optimality."
   },
   "radarBacktestFootnote": {
-    "message": "Uses fully closed positions with matched complete fills and continuous MARK candles. Price PnL excludes fees, funding and slippage; fills at the exact threshold are a model assumption. The range considers stay-out/follow-later-adds behaviour and conservative branching over unknown intrabar timing. It bounds this relaxed price-only model, not actual execution. Historical optimality does not guarantee future optimality. Percentages are margin ROE."
+    "message": "USDT amounts use the lead trader's original fill sizes (simulation ratio 1); copier amounts depend on actual position sizes. The model uses MARK candles and closes the entire mirrored position; the public guide does not specify the actual trigger feed or quantity treatment. Only complete reconciled closed positions with gap-free MARK candles choose the values. Price PnL excludes fees, funding and slippage. The stop trigger is anchored when the copier opens/reopens; later lead adds/reductions do not move it. Exact-threshold full-position fills are assumed. The range branches unknown intrabar timing and both post-exit follow behaviours; these are relaxed price-model bounds, not guaranteed executions. Historical optimality does not prove future optimality. Percentages are margin ROE settings."
   },
   "streamingHintPerformance": {
     "message": "Loading performance data..."
@@ -900,19 +900,19 @@
     "message": "Historical adverse excursion reached -{0}% ROE. A stop may reduce tail losses and cut recovering winners; evaluate both effects above."
   },
   "radarBinanceRoeNotice": {
-    "message": "Binance’s position stop-loss percentage is margin ROE, not the underlying price move. At leverage L, a stop of S% corresponds approximately to S/L% in price. Each trader’s replay determines whether a tighter stop helps or harms."
+    "message": "Position exit inputs use margin ROE, not the asset’s price move. At L× leverage, initial S% stop / T% take-profit settings approximately anchor prices S/L% lower / T/L% higher in the appropriate direction. Lead adds do not move those trigger orders; the ROE at a later trigger can change."
   },
   "settingAdvisorTitle": {
-    "message": "CopyLens Smart Stop-Loss Advisor"
+    "message": "CopyLens Take-Profit / Stop-Loss Advisor"
   },
   "settingAdvisorSubtitle": {
     "message": "Trader: {0} · Dominant Leverage: {1}x"
   },
   "settingValuePropWinTitle": {
-    "message": "Preserves {0}% Historical Wins"
+    "message": "Stop-only diagnostic: {0}% of winners retained"
   },
   "settingValuePropWinDesc": {
-    "message": "Share of replayable profitable trades that cannot trigger the shown stop under this model. It does not guarantee positive future expectancy."
+    "message": "For the separate stop-only choice, the share of replayable winners that never trigger this stop in the model; it is not the joint take-profit/stop-loss retention rate or a future guarantee."
   },
   "settingValuePropBagTitle": {
     "message": "Historical adverse price risk"
@@ -930,7 +930,7 @@
     "message": "🔍 View Full Trader Analysis Report ▾"
   },
   "btnReturnToAdvisor": {
-    "message": "⚡ Back to Stop-Loss Advisor ▴"
+    "message": "⚡ Return to compact exit settings ▴"
   },
   "streamingBanner": {
     "message": "⚡ Loaded: {0} ｜ ↻ Background loading: {1}..."
@@ -962,16 +962,115 @@
   "radarPriceListRow": {
     "message": "{0}%: up to {1} positions triggered; price PnL {2} USDT"
   },
-  "radarObjectiveGrowth": {
-    "message": "We compare no stop and every integer ROE from 1% to 95%, maximising the worse scenario’s mean log(1 + price PnL / estimated entry equity). This rewards returns and penalises damage to capital; it need not maximise total USDT profit. This is a historical per-position utility, not a portfolio CAGR."
-  },
   "radarObjectivePnl": {
-    "message": "We compare no stop and every integer ROE from 1% to 95%, maximising the worse scenario’s total price PnL. Entry equity could not be reconstructed reliably, so account growth is not estimated."
+    "message": "Every integer stop from 1% to 95% and no stop is compared using the lower total price PnL across scenarios. For the same fixed starting capital and period, this is equivalent to maximising price ROI. It is not average trade ROE or net account return."
   },
   "radarCoverage": {
     "message": "Selection uses {0} of {1} closed positions. Missing fills, unmatched quantities or candle gaps are excluded; this coverage can affect the answer."
   },
   "radarMfe": {
     "message": "Maximum favourable excursion (MFE)"
+  },
+  "sectionJointExits": {
+    "message": "Take-profit and stop-loss analysis"
+  },
+  "exitHistoricalLabel": {
+    "message": "Joint historical price-return optimum · 1% ROE steps"
+  },
+  "exitStopLabel": {
+    "message": "Position stop loss (ROE)"
+  },
+  "exitTakeProfitLabel": {
+    "message": "Position take profit (ROE)"
+  },
+  "exitDisabled": {
+    "message": "Disabled (0%)"
+  },
+  "exitPairSummary": {
+    "message": "Stop loss: {0} · Take profit: {1}"
+  },
+  "exitObjectivePriceRoi": {
+    "message": "The historical comparison maximises the lower total price PnL across the model scenarios. With the same fixed starting capital, trade sizes and period, this also maximises price ROI. It does not maximise average trade ROE or establish the best future risk-adjusted return."
+  },
+  "exitHistoricalResult": {
+    "message": "The joint choice has price PnL of {0} USDT, versus {1} USDT with both exits disabled; the difference is {2} USDT across model scenarios."
+  },
+  "exitCapitalRoi": {
+    "message": "Using fixed starting capital of {0} USDT, model price ROI ranges from {1}% to {2}%."
+  },
+  "exitCapitalUnknown": {
+    "message": "Fixed starting capital cannot be verified, so account ROI is left blank. USDT results use the lead trader’s historical position sizes, not your deposit."
+  },
+  "exitTradeoff": {
+    "message": "An exit may trigger on up to {0} positions. In the lowest-PnL scenario, {1} positions improve by {2} USDT in total, and {3} worsen by {4} USDT."
+  },
+  "exitTiedOptima": {
+    "message": "There are {0} tied historical combinations. The displayed choice is one of them, not a unique mathematical solution."
+  },
+  "exitBacktestFootnote": {
+    "message": "USDT amounts use the lead trader's original fill sizes (simulation ratio 1); copier amounts depend on actual position sizes. The model uses MARK candles and closes the entire mirrored position; the public guide does not specify the actual trigger feed or quantity treatment. Price-only model: fees, funding, slippage and liquidation constraints are excluded. Triggers are anchored when a copier position opens or reopens; later lead adds/reductions do not move that order’s trigger. The model assumes a full close exactly at the threshold. OHLC bars cannot establish whether take profit or stop loss happened first, or where an intrabar fill falls; the range branches these possibilities and both later-follow behaviours. These are relaxed model bounds, not executable guarantees. Historical optimality does not prove future optimality."
+  },
+  "exitEquivalentPrice": {
+    "message": "At {0}x leverage, the initial adverse/favourable price distances are approximately {1} / {2}; subsequent adds can change the actual ROE at these fixed triggers."
+  },
+  "exitApplyPair": {
+    "message": "Fill position take profit and stop loss"
+  },
+  "exitApplied": {
+    "message": "Values filled; review before saving"
+  },
+  "exitInputUnavailable": {
+    "message": "Position exit fields are not uniquely identified; enter the values manually"
+  },
+  "exitStopOnlyTitle": {
+    "message": "Stop loss only: comparison and optional insurance"
+  },
+  "exitStopProfile": {
+    "message": "View every stop-loss level with the chosen take profit held fixed"
+  },
+  "exitTakeProfitProfile": {
+    "message": "View every take-profit level with the chosen stop loss held fixed"
+  },
+  "exitProfileRow": {
+    "message": "SL {0} · TP {1}: price PnL {2} USDT; may trigger on up to {3} positions"
+  },
+  "exitOptimizing": {
+    "message": "Comparing joint take-profit / stop-loss choices…"
+  },
+  "exitDataReady": {
+    "message": "Positions, fills and price history loaded"
+  },
+  "exitOptimizingProgress": {
+    "message": "Comparing joint exits: {0}/{1} combinations ({2}%)…"
+  },
+  "exitValidationNeeded": {
+    "message": "These research values still require independent cost-inclusive out-of-sample and actual execution validation; they are not validated live-trading optima."
+  },
+  "exitHoldoutInsufficient": {
+    "message": "There is insufficient clean chronological data for a frozen-choice holdout. No out-of-sample benefit is established."
+  },
+  "exitHoldoutResult": {
+    "message": "Chronological check: choose SL {3} / TP {4} using only the first {0} positions, freeze that pair, and test the next {1} positions after {2}. Holdout price-PnL difference versus disabled exits: {5} USDT. Excluded {6} positions spanning the cutoff. The holdout never selects the pair."
+  },
+  "exitHoldoutPriceBenefit": {
+    "message": "The frozen pair improves price PnL even in the lower holdout model bound. This still excludes costs and actual execution, and is not proof of future performance."
+  },
+  "exitHoldoutNoBenefit": {
+    "message": "The frozen pair does not improve the lower holdout model bound. This test does not support adopting the in-sample winner."
+  },
+  "exitValidatingProgress": {
+    "message": "Chronological holdout check: {0}/{1} combinations ({2}%)…"
+  },
+  "radarNoFreeInsurance": {
+    "message": "Within the fully replayable history, no integer stop from 1% to 95% is guaranteed not to trigger in the model. The displayed {0}% is the lowest-cost enabled choice; judge its cost from the PnL above. It does not guarantee maximum ROI or a cap on actual losses."
+  },
+  "radarFreeInsurance": {
+    "message": "A {0}% ROE stop never triggers in any model scenario on the admitted history, preserving the no-stop price PnL and tying the historical optimum. This applies only to these complete replayable positions, not excluded trades or future results; it does not guarantee real losses."
+  },
+  "radarFreeBaselineOnly": {
+    "message": "A {0}% ROE stop never triggers on the admitted history and preserves the no-stop price PnL. It does not match the higher PnL of the historical optimum above. Non-triggering in this sample does not establish future or execution safety."
+  },
+  "radarOutsideInsurance": {
+    "message": "To avoid triggering in every model timing of these replayable trades requires at least {0}% ROE. This exceeds Binance’s {1}% limit and cannot be entered directly. It does not cover missing history or guarantee future results."
   }
 }

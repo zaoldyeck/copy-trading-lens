@@ -192,7 +192,7 @@ const simRow = ({ mae, exit, symbol = "X", leverage = 10, opened = T0 }) => ({
   // 40 winners that dip at most 39% ROE and 3 disasters at 200%: the tightest stop that spares every winner
   const disasters = [...Array.from({ length: 40 }, (_, i) => simRow({ mae: i, exit: 103 })), ...Array.from({ length: 3 }, () => simRow({ mae: 200, exit: 85 }))];
   const a = stoploss.selectStop(disasters, sizing);
-  assert.equal(a.objective, "growth");
+  assert.equal(a.objective, "pnl");
   assert.equal(a.optimal, 40, "the smallest candidate above every winner's 39% dip");
   assert.equal(a.curve.find((c) => c.stop === 40).triggered, 3, "it triggers on the three disasters only");
 
@@ -211,15 +211,15 @@ const simRow = ({ mae, exit, symbol = "X", leverage = 10, opened = T0 }) => ({
   // same positions, same stability figure
   assert.equal(stoploss.selectStop(tail, sizing).bootstrapAgreement, stoploss.selectStop(tail, sizing).bootstrapAgreement);
 
-  // growth punishes the tail that total pnl forgives: -390% on 30% of equity wipes the account out
+  // Available equity cannot silently change the objective: capital feasibility is a separate limitation.
   const ruin = [...Array.from({ length: 40 }, (_, i) => simRow({ mae: i * 3, exit: 103 })), simRow({ mae: 500, exit: 61 })];
-  assert.notEqual(stoploss.selectStop(ruin, { equityAt: () => 33 }).optimal, null, "a position that wipes out equity must be stopped");
+  assert.equal(stoploss.selectStop(ruin, { equityAt: () => 33 }).optimal, null, "ROI/PnL objective stays explicit even if reconstructed equity is small");
   assert.equal(stoploss.selectStop(ruin, null).optimal, null, "total pnl alone keeps the winners and ignores the wipe-out");
 
   // fewer than 3 positions with replayable fills and candles: nothing to select from
   assert.equal(stoploss.selectStop([simRow({ mae: 10, exit: 103 }), simRow({ mae: 10, exit: 103 })], sizing), null);
   assert.equal(stoploss.selectStop(disasters.map((row) => ({ ...row, sim: null })), sizing), null, "rows without fills cannot be simulated");
-  console.log("PASS: stop selection finds the known optimum, defers to 'no stop' when winners dip as deep, and punishes ruin");
+  console.log("PASS: stop selection finds the known optimum, defers to 'no stop' when winners dip as deep, and keeps the ROI objective explicit");
 }
 
 // 5b. A lead who scales in: the copier's stop fires on the position AS IT WAS, a margin of 10 at the first fill, not on

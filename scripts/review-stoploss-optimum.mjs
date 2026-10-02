@@ -15,9 +15,10 @@ const DOMAIN = [null, ...Array.from({ length: 95 }, (_, i) => i + 1)];
 const DEFAULT_IDS = ["4908633203782592768", "5131925334830383361", "5075281354358777856"];
 const sandbox = { console };
 sandbox.window = sandbox;
-vm.createContext(sandbox);
+// Compile trusted local production source in the host realm. Contextified VM globals add proxy
+// callbacks to every Math/Map access in the hot DAG and do not model browser execution cost.
 for (const file of ["positions", "equity", "stoploss"]) {
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "src", `${file}.js`), "utf8"), sandbox);
+  vm.compileFunction(fs.readFileSync(path.join(ROOT, "src", `${file}.js`), "utf8"), ["window"])(sandbox);
 }
 const S = sandbox.CopyTradingLensStopLoss;
 const P = sandbox.CopyTradingLensPositions;
@@ -235,7 +236,7 @@ function analyticalOracle(specs, equityValue) {
     const outcomes = specs.map((spec) => stop !== null && spec.maeRoe >= stop
       ? -stop / 100 * spec.entry * spec.qty / spec.leverage
       : (spec.exit - spec.entry) * spec.direction * spec.qty);
-    const terms = equityValue === null ? outcomes : outcomes.map((pnl) => 1 + pnl / equityValue > 0 ? Math.log1p(pnl / equityValue) : -Infinity);
+    const terms = outcomes;
     return { stop, score: total(terms) / terms.length, pnl: total(outcomes), triggered: stop === null ? 0 : specs.filter((spec) => spec.maeRoe >= stop).length };
   });
 }
@@ -309,6 +310,21 @@ function independentControls() {
   return { seed: "0x05eeda11", fixtures: fixtures.length, evaluations: checks.length, complete: true, checks };
 }
 
+export function loadCachedTrader(id) {
+  const rawFile = path.join(TOOLS, "cache", `raw_${id}.json`);
+  const marksFile = path.join(TOOLS, "cache", "mark1m", `${id}.json`);
+  const raw = JSON.parse(fs.readFileSync(rawFile, "utf8"));
+  const windows = JSON.parse(fs.readFileSync(marksFile, "utf8"));
+  const nowMs = snapshotNowMs(raw, P.fillTimeOf);
+  assert.ok(nowMs > 0, `${id}: no auditable snapshot cutoff`);
+  const { marks, audit } = marksFromWindows(windows, nowMs);
+  const rows = S.positionExcursions(raw.positionHistory || [], raw.orderHistory || [], marks);
+  return { id, name: raw.detail?.nickname || id, rows, raw, marks,
+    snapshot: { cutoff: iso(nowMs), raw: receipt(rawFile), minuteMarks: receipt(marksFile) }, markAudit: audit };
+}
+export { S as StopLoss, coverage, receipt };
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
 const report = {
   schemaVersion: 1, generatedAt: new Date().toISOString(), stopDomain: DOMAIN,
   productionSource: receipt(path.join(ROOT, "src", "stoploss.js")),
@@ -317,8 +333,8 @@ const report = {
     "A maximizer exists on this finite 96-choice domain; it can be no stop or several equally scoring stops. It is conditional on the specified objective and simulation.",
     "Closed-history optimality does not establish the future optimal threshold. Open positions and incomplete replay/candles can create selection bias.",
     "ROE drawdown is price risk; reported closingPnl includes funding and fees. Simulated price-PnL differences cannot be promoted to net executable profit.",
-    "Both post-stop following interpretations are considered because Binance does not document that transition. Candle extremes cannot reveal the exact order of intraminute prices and fills. Dynamic branching relaxes chronology to give conservative price-model bounds, not guaranteed execution outcomes.",
-    "Entry-equity normalized log utility is a per-position historical score. It is not a compounded chronological portfolio return with overlapping exposure or counterfactual position sizing."
+    "Both post-exit following interpretations are considered. Static initial/reentry trigger anchors follow the current FAQ; full-position MARK triggering and exact threshold fills are model assumptions. Branching gives conservative price-model bounds, not actual execution guarantees.",
+    "Aggregate historical price PnL maximises price ROI only at a common fixed capital base. It is not Binance net ROI or exact portfolio CAGR."
   ],
   traders: []
 };
@@ -384,3 +400,5 @@ for (const review of report.traders) {
   console.log(`Chronological holdout ${JSON.stringify(clean(heldout))}`);
 }
 if (output) console.log(`\nReport published atomically: ${output}`);
+
+}

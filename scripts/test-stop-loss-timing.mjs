@@ -97,8 +97,8 @@ for (let fixture = 0; fixture < 80; fixture += 1) {
   for (const follow of [false, true]) {
     for (const stop of [1, 30, 50, 95]) {
       const reference = enumerateHistories(sim, stop, follow);
-      const lower = simulateCopier(sim, stop, follow, false);
-      const upper = simulateCopier(sim, stop, follow, true);
+      const lower = simulateCopier(sim, stop, follow, false, null, "dynamic");
+      const upper = simulateCopier(sim, stop, follow, true, null, "dynamic");
       const label = `fixture ${fixture}, direction ${sim.direction}, follow ${follow}, stop ${stop}`;
       near(lower.pnl, reference.minimum, `${label}, minimum`);
       near(upper.pnl, reference.maximum, `${label}, maximum`);

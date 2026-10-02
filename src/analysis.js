@@ -1278,7 +1278,7 @@
     // equity count-back for the margin share. A read still landing has no radar yet (null), not a provisional one.
     const radarInputsLoaded = !raw.loaded || (raw.loaded.positions && raw.loaded.marks && raw.loaded.orders && raw.loaded.market);
     const stopLossRadar = radarInputsLoaded
-      ? global.CopyTradingLensStopLoss.analyzeStopLossRadar(raw.positionHistory || [], raw.orderHistory || [], raw.positionMarks, equity)
+      ? global.CopyTradingLensStopLoss.analyzeStopLossRadar(raw.positionHistory || [], raw.orderHistory || [], raw.positionMarks, equity, raw.exitSelection || null)
       : null;
     return {
       platform: "Binance",

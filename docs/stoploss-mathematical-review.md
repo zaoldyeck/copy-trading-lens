@@ -1,4 +1,6 @@
-# Stop-loss optimiser review
+# Stop-loss optimiser review — archived 0.1.7
+
+This records the delivered 0.1.7 model and its dated results. The objective and execution model are superseded by [the joint exit review](exit-optimization-review.md); these numbers must not be read as current recommendations. Re-running the script now uses the current static-anchor price-PnL selector.
 
 ## Tracked requirements
 

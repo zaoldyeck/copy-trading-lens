@@ -71,6 +71,9 @@
   let settingModeView = "advisor";
 
   function paint() {
+    if (run?.phase !== "ready" || !run.analysis?.stopLossRadar || run.analysis.stopLossRadar.insufficientData) {
+      clearInlineSettingHelpers();
+    }
     if (!run) return clearRoot();
     if (run.phase === "ready" && run.analysis?.stopLossRadar) mountInlineSettingHelper(run.analysis.stopLossRadar);
     if (collapsed) return renderLauncher(run.context);
@@ -220,66 +223,127 @@
     return cautions;
   }
 
-  function applyStopLossToBinanceInputs(value) {
-    const inputs = Array.from(document.querySelectorAll("input"));
-    const stopLossInputs = inputs.filter((i) => {
-      if (i.placeholder === "0-95") {
-        const p = i.closest("div")?.parentElement?.parentElement?.innerText || "";
-        return /止損|Stop Loss|損切り/i.test(p);
+  // Only the position-risk pair may be changed. Placeholder-only matching can confuse a
+  // portfolio-wide stop with a position stop, so an ambiguous page is never filled.
+  function exitInputRange(input) {
+    const parse = (text) => {
+      const match = String(text || "").replace(/[,，\s%]/g, "").match(/^(\d+)[–—−-](\d+)$/);
+      return match ? [Number(match[1]), Number(match[2])] : null;
+    };
+    const placeholder = parse(input.placeholder);
+    const rawMin = input.getAttribute?.("min");
+    const rawMax = input.getAttribute?.("max");
+    const attributes = rawMin !== null && rawMin !== "" && rawMax !== null && rawMax !== ""
+      && Number.isFinite(Number(rawMin)) && Number.isFinite(Number(rawMax)) ? [Number(rawMin), Number(rawMax)] : null;
+    if (placeholder && attributes && (placeholder[0] !== attributes[0] || placeholder[1] !== attributes[1])) return null;
+    return attributes || placeholder;
+  }
+
+  function exitScopeText(node) {
+    let text = node?.innerText || node?.textContent || "";
+    for (const helper of node?.querySelectorAll?.(".ctl-inline-helper") || []) {
+      text = text.replace(helper.innerText || helper.textContent || "", "");
+    }
+    return text;
+  }
+
+  function exitInputKind(input) {
+    const stop = /止損|止损|Stop\s*Loss|損切り|ストップロス/i;
+    const takeProfit = /止盈|Take\s*Profit|利確|利益確定|テイクプロフィット/i;
+    const classify = (text) => stop.test(text) !== takeProfit.test(text) ? (stop.test(text) ? "stop" : "takeProfit") : null;
+    const label = [input.getAttribute?.("aria-label"), ...(Array.from(input.labels || []).map(exitScopeText))].filter(Boolean).join(" ");
+    if (label) return classify(label);
+    for (let node = input.parentElement; node && node !== document.body; node = node.parentElement) {
+      if (Array.from(node.querySelectorAll?.("input") || []).filter((item) => exitInputRange(item)).length !== 1) break;
+      const kind = classify(exitScopeText(node));
+      if (kind) return kind;
+    }
+    return null;
+  }
+
+  function positionExitInputs() {
+    const positionRisk = /倉位風險|仓位风险|Position\s*Risk|ポジションリスク|ポジションのリスク/i;
+    const portfolioRisk = /投資組合風險|投资组合风险|Portfolio\s*Risk|Total\s*Stop\s*Loss|總止損|总止损|ポートフォリオリスク/i;
+    const candidates = Array.from(document.querySelectorAll("input")).filter((input) =>
+      !input.disabled && !input.readOnly && input.type !== "hidden" && exitInputRange(input));
+    const pairs = [];
+    for (const input of candidates) {
+      for (let node = input.parentElement; node && node !== document.body; node = node.parentElement) {
+        const text = exitScopeText(node);
+        if (!positionRisk.test(text)) continue;
+        if (portfolioRisk.test(text)) break;
+        const members = candidates.filter((item) => node.contains(item));
+        if (members.length !== 2) break;
+        const stop = members.filter((item) => exitInputKind(item) === "stop" && exitInputRange(item)?.[0] === 0 && exitInputRange(item)?.[1] === 95);
+        const takeProfit = members.filter((item) => exitInputKind(item) === "takeProfit" && exitInputRange(item)?.[0] === 0 && exitInputRange(item)?.[1] === 2000);
+        if (stop.length === 1 && takeProfit.length === 1 && !pairs.some((pair) => pair.stop === stop[0] && pair.takeProfit === takeProfit[0])) {
+          pairs.push({ stop: stop[0], takeProfit: takeProfit[0] });
+        }
+        break;
+      }
+    }
+    return pairs.length === 1 ? pairs[0] : null;
+  }
+
+  function fillExitInputs(values) {
+    const pair = positionExitInputs();
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+    if (!pair || !setter) return false;
+    const entries = Object.entries(values);
+    if (!entries.length || entries.some(([kind, value]) => !pair[kind] || !Number.isInteger(value)
+      || value < 0 || value > (kind === "stop" ? 95 : 2000))) return false;
+    const before = entries.map(([kind]) => [pair[kind], pair[kind].value]);
+    const notify = (input) => {
+      for (const event of ["input", "change", "blur"]) input.dispatchEvent(new Event(event, { bubbles: true }));
+    };
+    try {
+      for (const [kind, value] of entries) setter.call(pair[kind], String(value));
+      if (entries.some(([kind, value]) => pair[kind].value !== String(value))) throw new Error("Input value was rejected");
+      for (const [kind] of entries) notify(pair[kind]);
+      return true;
+    } catch (_error) {
+      // Restore the values if a setter or event handler rejects either side of the pair.
+      for (const [input, value] of before) {
+        try { setter.call(input, value); notify(input); } catch (_restoreError) { /* The result stays failed. */ }
       }
       return false;
-    });
-
-    const targets = stopLossInputs.length ? stopLossInputs : inputs.filter((i) => i.placeholder === "0-95");
-    let filled = 0;
-
-    for (const input of targets) {
-      try {
-        const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
-        if (nativeSetter) {
-          nativeSetter.call(input, String(value));
-        } else {
-          input.value = String(value);
-        }
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-        input.dispatchEvent(new Event("change", { bubbles: true }));
-        input.dispatchEvent(new Event("blur", { bubbles: true }));
-        filled++;
-      } catch (_err) {}
     }
-    return filled > 0;
+  }
+
+  function applyStopLossToBinanceInputs(value) {
+    return fillExitInputs({ stop: value });
+  }
+
+  function applyJointExitsToBinanceInputs(selection) {
+    if (!selection?.optimal) return false;
+    return fillExitInputs({ stop: selection.optimal.stop ?? 0, takeProfit: selection.optimal.takeProfit ?? 0 });
+  }
+
+  function clearInlineSettingHelpers() {
+    for (const helper of document.querySelectorAll?.(".ctl-inline-helper") || []) helper.remove();
   }
 
   function mountInlineSettingHelper(radar) {
+    // A reused SPA input or refresh must never retain an older trader's recommendation.
+    clearInlineSettingHelpers();
     if (!radar || radar.insufficientData) return;
-    const inputs = Array.from(document.querySelectorAll("input"));
-    const targets = inputs.filter((i) => {
-      if (i.placeholder === "0-95") {
-        const p = i.closest("div")?.parentElement?.parentElement?.innerText || "";
-        return /止損|Stop Loss|損切り/i.test(p);
-      }
-      return false;
-    });
-
-    const target = targets[0] || inputs.find((i) => i.placeholder === "0-95");
+    const pair = positionExitInputs();
+    const target = pair?.stop;
     if (!target) return;
     const container = target.closest(".input") || target.parentElement;
-    if (!container || container.querySelector(".ctl-inline-helper")) return;
-
+    if (!container) return;
+    const selection = radar.exitSelection;
     const chip = h("button", {
       class: "ctl-inline-helper",
       type: "button",
-      title: applyLabel(radar),
+      title: selection ? t("exitApplyPair") : applyLabel(radar),
       onclick: (e) => {
         e.preventDefault();
-        applyStopLossToBinanceInputs(radar.recommendedRoe);
-        chip.textContent = `✓ ${t("inlineChipApplied", [radar.recommendedRoe])}`;
-        chip.classList.add("is-applied");
+        const filled = selection ? applyJointExitsToBinanceInputs(selection) : applyStopLossToBinanceInputs(radar.recommendedRoe);
+        chip.textContent = filled ? `✓ ${t("exitApplied")}` : t("exitInputUnavailable");
+        chip.classList.toggle("is-applied", filled);
       }
-    }, [
-      h("span", { text: `⚡ CopyLens: ${applyLabel(radar)}` })
-    ]);
-
+    }, [h("span", { text: "⚡ CopyLens" })]);
     container.appendChild(chip);
   }
 
@@ -287,7 +351,8 @@
   // only when the pieces it is computed from are loaded; until then its own placeholder spins, so the card fills in
   // as data arrives and never shows a default or half-computed number as if it were real.
   function landed(...pieces) {
-    return run.phase === "ready" || pieces.every((piece) => run.raw?.loaded?.[piece]);
+    return run.phase === "ready" || (run.streamingStage === "exits" && run.raw && !run.raw.loaded)
+      || pieces.every((piece) => run.raw?.loaded?.[piece]);
   }
 
   function loadingBlock(className, text) {
@@ -341,7 +406,7 @@
     const stopTotal = Math.round(low) === Math.round(high) ? usdt(low) : `${usdt(low)}～${usdt(high)}`;
     const effects = [tradeoff.positions, stop, usdt(tradeoff.pnlNone), stopTotal, tradeoff.triggered, tradeoff.helped, usdt(tradeoff.helpedUsdt), tradeoff.hurt, usdt(Math.abs(tradeoff.hurtUsdt))];
     const paragraphs = [];
-    paragraphs.push(t(radar.stopSelection.objective === "growth" ? "radarObjectiveGrowth" : "radarObjectivePnl"));
+    paragraphs.push(t("radarObjectivePnl"));
     paragraphs.push(t("radarCoverage", [radar.simulatedPositions, radar.positionCount]));
     if (radar.stopOptional) {
       paragraphs.push(tradeoff.triggeredAny > 0 ? t("radarWhyOptional", effects) : t("radarWhyNoCost", [tradeoff.positions, stop, usdt(tradeoff.pnlNone)]));
@@ -351,6 +416,17 @@
         : t("radarInsuranceNone", [stop]));
     } else {
       paragraphs.push(t("radarWhyStop", effects));
+    }
+    const neverTriggered = radar.stopSelection.neverTriggeredStop;
+    if (Number.isInteger(neverTriggered)) {
+      paragraphs.push(t(radar.stopSelection.neverTriggeredEquivalentToOptimal
+        ? "radarFreeInsurance" : "radarFreeBaselineOnly", [neverTriggered]));
+    } else if (neverTriggered === null) {
+      if (radar.stopOptional) paragraphs.push(t("radarNoFreeInsurance", [stop]));
+      const historicalNeverTrigger = radar.stopSelection.historicalNeverTriggerRoe;
+      if (Number.isFinite(historicalNeverTrigger) && historicalNeverTrigger > 95) {
+        paragraphs.push(t("radarOutsideInsurance", [historicalNeverTrigger, 95]));
+      }
     }
     const band = stableBand(radar);
     if (band) paragraphs.push(t("radarBandSentence", [band]));
@@ -376,12 +452,112 @@
     return radar.stopOptional ? t("radarApplyOptional", [radar.recommendedRoe]) : t("btnApplyToBinanceForm", [radar.recommendedRoe]);
   }
 
+  function exitOptionLabel(value) {
+    return value === null ? t("exitDisabled") : `${value}%`;
+  }
+
+  function exitMoneyRange(low, high) {
+    const money = (value) => (Math.round(value) || 0).toLocaleString("en-US");
+    return Math.round(low) === Math.round(high) ? money(low) : `${money(low)}～${money(high)}`;
+  }
+
+  function exitPairText(pair) {
+    return t("exitPairSummary", [exitOptionLabel(pair.stop), exitOptionLabel(pair.takeProfit)]);
+  }
+
+  function jointExitExplanation(radar) {
+    const selection = radar.exitSelection;
+    if (!selection?.optimal) return [];
+    const paragraphs = [
+      t("exitObjectivePriceRoi"),
+      t("radarCoverage", [selection.simulatedPositions ?? radar.simulatedPositions, radar.positionCount]),
+      t("exitHistoricalResult", [exitMoneyRange(selection.optimalPnlMin, selection.optimalPnlMax), exitMoneyRange(selection.baselinePnl, selection.baselinePnl), exitMoneyRange(selection.deltaMin, selection.deltaMax)])
+    ];
+    if (Number.isFinite(selection.roiMin) && Number.isFinite(selection.roiMax) && Number.isFinite(selection.capital) && selection.capital > 0) {
+      paragraphs.push(t("exitCapitalRoi", [exitMoneyRange(selection.capital, selection.capital), selection.roiMin.toFixed(2), selection.roiMax.toFixed(2)]));
+    } else paragraphs.push(t("exitCapitalUnknown"));
+    const effects = selection.tradeoff;
+    if (effects) paragraphs.push(t("exitTradeoff", [effects.triggeredAny, effects.helped, exitMoneyRange(effects.helpedUsdt, effects.helpedUsdt), effects.hurt, exitMoneyRange(Math.abs(effects.hurtUsdt), Math.abs(effects.hurtUsdt))]));
+    if ((selection.optima?.length || 0) > 1) paragraphs.push(t("exitTiedOptima", [selection.optima.length]));
+    const holdout = selection.holdout;
+    if (holdout) {
+      if (holdout.insufficientData || holdout.heldoutUsedForSelection !== false || !holdout.trainOptimal
+        || !Number.isFinite(holdout.fixed?.deltaMin) || !Number.isFinite(holdout.fixed?.deltaMax)) {
+        paragraphs.push(t("exitHoldoutInsufficient"));
+      } else {
+        paragraphs.push(t("exitHoldoutResult", [holdout.trainPositions, holdout.testPositions, holdout.cutoff,
+          exitOptionLabel(holdout.trainOptimal.stop), exitOptionLabel(holdout.trainOptimal.takeProfit),
+          exitMoneyRange(holdout.fixed.deltaMin, holdout.fixed.deltaMax), holdout.excludedStraddling]));
+        paragraphs.push(t(holdout.fixed.deltaMin > 0 ? "exitHoldoutPriceBenefit" : "exitHoldoutNoBenefit"));
+      }
+    }
+    paragraphs.push(t("exitValidationNeeded"));
+    paragraphs.push(t("exitBacktestFootnote"));
+    return paragraphs;
+  }
+
+  function jointProfileRows(points) {
+    return (points || []).map((point) => h("li", { text: t("exitProfileRow", [exitOptionLabel(point.stop), exitOptionLabel(point.takeProfit), exitMoneyRange(point.pnlMin, point.pnlMax), point.triggered]) }));
+  }
+
+  function jointExitProfiles(selection) {
+    const profiles = [
+      ["exitStopProfile", selection.profileStop],
+      ["exitTakeProfitProfile", selection.profileTakeProfit]
+    ];
+    return profiles.filter(([, points]) => points?.length).map(([title, points]) => {
+      const list = h("ul");
+      let drawn = false;
+      return h("details", {
+        class: "ctl-radar-pricelist",
+        ontoggle: (event) => {
+          if (event.currentTarget.open && !drawn) {
+            list.replaceChildren(...jointProfileRows(points));
+            drawn = true;
+          }
+        }
+      }, [h("summary", { text: t(title) }), list]);
+    });
+  }
+
+  function renderJointExits(radar, compact = false, pending = false) {
+    const selection = radar?.exitSelection;
+    if (pending) return loadingBlock(compact ? "ctl-advisor-hero" : "ctl-radar-box", typeof pending === "object"
+      ? t(pending.scope === "holdout" ? "exitValidatingProgress" : "exitOptimizingProgress", [pending.done.toLocaleString("en-US"), pending.total.toLocaleString("en-US"), pending.percent])
+      : t("exitOptimizing"));
+    if (!selection?.optimal || radar.insufficientData) return null;
+    const optimal = selection.optimal;
+    return h("section", { class: compact ? "ctl-advisor-hero" : "ctl-section ctl-radar-section" }, [
+      h("h3", { text: t("sectionJointExits") }),
+      h("div", { class: "ctl-radar-decision", text: exitPairText(optimal) }),
+      h("div", { class: "ctl-radar-label", text: t("exitHistoricalLabel") }),
+      h("div", { class: "ctl-radar-grid" }, [
+        h("div", { class: "ctl-radar-stat" }, [h("span", { text: t("exitStopLabel") }), h("strong", { text: exitOptionLabel(optimal.stop) })]),
+        h("div", { class: "ctl-radar-stat" }, [h("span", { text: t("exitTakeProfitLabel") }), h("strong", { text: exitOptionLabel(optimal.takeProfit) })])
+      ]),
+      h("p", { class: "ctl-radar-sub", text: t("exitEquivalentPrice", [radar.dominantLeverage, optimal.stop === null ? t("exitDisabled") : `${Number((optimal.stop / radar.dominantLeverage).toPrecision(4))}%`, optimal.takeProfit === null ? t("exitDisabled") : `${Number((optimal.takeProfit / radar.dominantLeverage).toPrecision(4))}%`]) }),
+      h("div", { class: "ctl-radar-why" }, jointExitExplanation(radar).map((text) => h("p", { text }))),
+      ...jointExitProfiles(selection),
+      h("button", {
+        class: compact ? "ctl-primary ctl-advisor-apply-btn" : "ctl-radar-fill-btn",
+        type: "button",
+        onclick: (event) => {
+          const button = event.currentTarget;
+          const filled = applyJointExitsToBinanceInputs(selection);
+          button.textContent = filled ? `✓ ${t("exitApplied")}` : t("exitInputUnavailable");
+          button.classList.toggle("is-applied", filled);
+        }
+      }, [h("span", { text: `⚡ ${t("exitApplyPair")}` })])
+    ]);
+  }
+
   function renderStopLossRadar(radar) {
     if (!radar || radar.insufficientData) return null;
     const hasBag = radar.hasSevereBagHolding;
     return h("section", { class: "ctl-section ctl-radar-section" }, [
+      renderJointExits(radar, false, run.phase !== "ready" && run.streamingStage === "exits" && (run.exitProgress || true)),
       h("div", { class: "ctl-radar-header" }, [
-        h("h3", { text: t("sectionStopLossRadar") }),
+        h("h3", { text: t(radar.exitSelection ? "exitStopOnlyTitle" : "sectionStopLossRadar") }),
         hasBag
           ? h("span", { class: "ctl-radar-badge is-danger", text: t("badgeBagHoldingAlert") })
           : null
@@ -552,6 +728,9 @@
     } else if (stage === "orders") {
       loaded = t("stageLoadedOrders");
       loading = t("stageLoadingMarket");
+    } else if (stage === "exits") {
+      loaded = t("exitDataReady");
+      loading = t("exitOptimizing");
     }
     const percent = loadPercent(run);
     return h("div", { class: "ctl-streaming-banner", title: t("streamingBanner", [loaded, loading]) }, [
@@ -590,31 +769,37 @@
 
         !radarReady
           ? loadingBlock("ctl-advisor-hero ctl-advisor-empty", t("streamingRadarLoading"))
-          : (radar && !radar.insufficientData ? h("div", { class: "ctl-advisor-hero" }, [
-            h("div", { class: "ctl-advisor-decision", text: stopDecision(radar) }),
-            h("div", { class: "ctl-advisor-hero-label", text: t(radar.stopOptional ? "radarInsuranceLabel" : "radarRecommendedLabel") }),
-            h("div", { class: "ctl-advisor-hero-val" }, [
-              h("span", { class: "ctl-advisor-num", text: `${radar.recommendedRoe}%` }),
-              h("span", { class: "ctl-advisor-unit", text: t("radarRoeUnit") })
-            ]),
-            h("div", { class: "ctl-advisor-sub", text: t("radarEquivalentPrice", [radar.dominantLeverage, radar.recommendedPriceDrop]) }),
-            h("div", { class: "ctl-radar-why" }, stopExplanation(radar).map((text) => h("p", { text }))),
-            stopPriceList(radar),
-            h("button", {
-              class: "ctl-primary ctl-advisor-apply-btn",
-              type: "button",
-              onclick: (e) => {
-                const btn = e.currentTarget;
-                applyStopLossToBinanceInputs(radar.recommendedRoe);
-                btn.textContent = `✓ ${t("inlineChipApplied", [radar.recommendedRoe])}`;
-                btn.classList.add("is-applied");
-                setTimeout(() => {
-                  btn.textContent = `⚡ ${applyLabel(radar)}`;
-                  btn.classList.remove("is-applied");
-                }, 2500);
-              }
-            }, [
-              h("span", { text: `⚡ ${applyLabel(radar)}` })
+          : (radar && !radar.insufficientData ? h("div", {}, [
+            renderJointExits(radar, true, run.phase !== "ready" && run.streamingStage === "exits" && (run.exitProgress || true)),
+            h("details", { open: radar.exitSelection ? null : "" }, [
+              h("summary", { class: "ctl-radar-label", text: t("exitStopOnlyTitle") }),
+              h("div", { class: "ctl-advisor-hero" }, [
+                h("div", { class: "ctl-advisor-decision", text: stopDecision(radar) }),
+                h("div", { class: "ctl-advisor-hero-label", text: t(radar.stopOptional ? "radarInsuranceLabel" : "radarRecommendedLabel") }),
+                h("div", { class: "ctl-advisor-hero-val" }, [
+                  h("span", { class: "ctl-advisor-num", text: `${radar.recommendedRoe}%` }),
+                  h("span", { class: "ctl-advisor-unit", text: t("radarRoeUnit") })
+                ]),
+                h("div", { class: "ctl-advisor-sub", text: t("radarEquivalentPrice", [radar.dominantLeverage, radar.recommendedPriceDrop]) }),
+                h("div", { class: "ctl-radar-why" }, stopExplanation(radar).map((text) => h("p", { text }))),
+                stopPriceList(radar),
+                h("button", {
+                  class: "ctl-primary ctl-advisor-apply-btn",
+                  type: "button",
+                  onclick: (e) => {
+                    const btn = e.currentTarget;
+                    const filled = applyStopLossToBinanceInputs(radar.recommendedRoe);
+                    btn.textContent = filled ? `✓ ${t("exitApplied")}` : t("exitInputUnavailable");
+                    btn.classList.toggle("is-applied", filled);
+                    setTimeout(() => {
+                      btn.textContent = `⚡ ${applyLabel(radar)}`;
+                      btn.classList.remove("is-applied");
+                    }, 2500);
+                  }
+                }, [
+                  h("span", { text: `⚡ ${applyLabel(radar)}` })
+                ])
+              ])
             ])
           ]) : h("div", { class: "ctl-advisor-hero ctl-advisor-empty" }, [
             h("div", { class: "ctl-advisor-hero-label", text: t("sectionStopLossRadar") }),
@@ -850,6 +1035,32 @@
         }
       });
       if (superseded()) return;
+      const exitEngine = window.CopyTradingLensStopLoss;
+      if (context.platform === "Binance" && exitEngine?.selectExitAsync) {
+        // The joint grid yields to the UI and shares the same pause/cancel boundary as
+        // network reads. Partial provider snapshots never launch duplicate searches.
+        run = {
+          ...run, raw, streamingStage: "exits",
+          analysis: window.CopyTradingLensAnalysis.analyzeBinance({ ...raw, exitSelection: null })
+        };
+        paint();
+        const rows = exitEngine.positionExcursions(raw.positionHistory || [], raw.orderHistory || [], raw.positionMarks);
+        const exitSelection = await exitEngine.selectExitAsync(rows, null, {
+          withHoldout: true,
+          isCancelled: superseded,
+          waitUntilResumed: () => current.fetchControl.waitUntilResumed(),
+          onProgress: (event) => {
+            if (superseded() || !(event.count > 0)) return;
+            const percent = Math.min(99, Math.floor(event.evaluations / event.count * 100));
+            const scope = event.scope || "historical";
+            if (run.exitProgress?.percent === percent && run.exitProgress?.scope === scope) return;
+            run = { ...run, exitProgress: { done: event.evaluations, total: event.count, percent, scope } };
+            paint();
+          }
+        });
+        if (superseded()) return;
+        raw.exitSelection = exitSelection;
+      }
       const analysis = context.platform === "Binance"
         ? window.CopyTradingLensAnalysis.analyzeBinance(raw)
         : window.CopyTradingLensAnalysis.analyzeOkx(raw);

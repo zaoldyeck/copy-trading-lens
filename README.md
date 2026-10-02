@@ -6,6 +6,15 @@ Copy Trading Lens is a Chrome Extension that analyzes Binance and OKX copy-tradi
 
 It is not a trading bot, does not place orders, and does not guarantee profit. Its purpose is to make follower-facing risks visible before you copy: martingale-like sizing, grid/range behavior, adverse averaging, rescue capital injections, held floating losses, high-frequency micro-profit slippage, weak payoff ratio, and divergence between the lead trader and copiers.
 
+## Joint take-profit and stop-loss research
+
+The advisor compares disabled exits and every integer position SL from 1–95% with TP from 1–2,000%. It maximises the conservative aggregate historical **price PnL**, equivalent to price ROI at a common fixed capital base. It shows the joint result, the SL-only diagnostic, gains/sacrifices, and the full 1% profiles. Missing verified starting capital leaves ROI percentages unavailable.
+
+Current Binance documentation anchors orders to entry when placed; additions do not automatically move their trigger prices. Replay preserves this static anchor, adds, proportional reductions, possible reentry and unknown intrabar first-hit order. Whole-position exact-threshold MARK exits are declared assumptions: actual order size/trigger feed, costs, funding, liquidation and copy failures are not fully public. A historical maximiser is not a proven future/live net-ROI optimum. The browser yields during search and honours pause/route cancellation. A user click may fill uniquely identified Position Risk fields; it never submits settings.
+
+See [mathematics, source evidence and reproducible three-trader/holdout review](docs/exit-optimization-review.md).
+
+
 ## Features
 
 - Supports Binance lead pages: `/copy-trading/lead-details/<portfolioId>`
