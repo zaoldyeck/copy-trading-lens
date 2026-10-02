@@ -342,13 +342,29 @@
     const container = target.closest(".input") || target.parentElement;
     if (!container) return;
     const selection = radar.exitSelection;
+    const optimal = selection?.optimal;
+    const hasBag = Boolean(radar.hasSevereBagHolding);
+    const effectiveStop = (hasBag && optimal?.stop == null && Number.isInteger(radar.recommendedRoe))
+      ? radar.recommendedRoe
+      : (optimal?.stop ?? (noStopOptimal(radar) ? null : radar.recommendedRoe));
+    const holdoutDelta = selection?.holdout?.fixed?.deltaMin;
+    const holdoutFailed = typeof holdoutDelta === "number" && holdoutDelta <= 0;
+    const effectiveTp = holdoutFailed ? null : (optimal?.takeProfit ?? null);
+
+    const targetSelection = selection ? {
+      optimal: {
+        stop: effectiveStop,
+        takeProfit: effectiveTp
+      }
+    } : null;
+
     const chip = h("button", {
       class: "ctl-inline-helper",
       type: "button",
       title: selection ? t("exitApplyPair") : applyLabel(radar),
       onclick: (e) => {
         e.preventDefault();
-        const filled = selection ? applyJointExitsToBinanceInputs(selection) : applyStopLossToBinanceInputs(radar.recommendedRoe);
+        const filled = targetSelection ? applyJointExitsToBinanceInputs(targetSelection) : applyStopLossToBinanceInputs(radar.recommendedRoe);
         chip.textContent = filled ? `✓ ${t("exitApplied")}` : t("exitInputUnavailable");
         chip.classList.toggle("is-applied", filled);
       }
@@ -575,6 +591,37 @@
     });
   }
 
+  function recommendSlippage(radar, raw) {
+    const positions = raw?.positionHistory || [];
+    const symbols = [...new Set(positions.map((p) => p.symbol).filter(Boolean))];
+    const isMajorOnly = symbols.length > 0 && symbols.every((s) => s === "BTCUSDT" || s === "ETHUSDT" || s === "SOLUSDT" || s === "BNBUSDT");
+    const isAltcoinHeavy = symbols.some((s) => !["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "DOGEUSDT", "XRPUSDT"].includes(s));
+
+    const holdHours = positions.map((p) => (p.closed && p.opened) ? (p.closed - p.opened) / 3600000 : null).filter((h) => h !== null);
+    const sortedHours = [...holdHours].sort((a, b) => a - b);
+    const medianHoldHours = sortedHours.length ? sortedHours[Math.floor(sortedHours.length / 2)] : 1;
+    const isUltraFast = medianHoldHours < 0.1; // < 6 minutes
+
+    if (isAltcoinHeavy || isUltraFast) {
+      return {
+        pct: "1.0%",
+        reason: isUltraFast
+          ? "超短線高頻倒手，適度放寬滑點防拒單漏單"
+          : "交易長尾山寨幣，流動性較薄，建議放寬防拒單"
+      };
+    }
+    if (isMajorOnly) {
+      return {
+        pct: "0.3%",
+        reason: "主要交易高深度主流合約，嚴控摩擦磨損"
+      };
+    }
+    return {
+      pct: "0.5%",
+      reason: "兼顧市價跟單成交率與抗滑價磨損"
+    };
+  }
+
   function renderJointExits(radar, compact = false, pending = false) {
     const selection = radar?.exitSelection;
     if (pending) return loadingBlock(compact ? "ctl-advisor-hero" : "ctl-radar-box", typeof pending === "object"
@@ -583,6 +630,7 @@
     if (!selection?.optimal || radar.insufficientData) return null;
     const optimal = selection.optimal;
     const hasInsuranceNote = optimal.stop === null && Number.isInteger(radar.recommendedRoe);
+    const slippage = recommendSlippage(radar, run?.raw);
     return h("section", { class: compact ? "ctl-advisor-hero" : "ctl-section ctl-radar-section" }, [
       h("h3", { text: t("sectionJointExits") }),
       h("div", { class: "ctl-radar-decision", text: exitPairText(optimal) }),
@@ -593,6 +641,11 @@
       ]),
       h("p", { class: "ctl-radar-sub", text: t("exitEquivalentPrice", [radar.dominantLeverage, optimal.stop === null ? t("exitDisabled") : `${Number((optimal.stop / radar.dominantLeverage).toPrecision(4))}%`, optimal.takeProfit === null ? t("exitDisabled") : `${Number((optimal.takeProfit / radar.dominantLeverage).toPrecision(4))}%`]) }),
       hasInsuranceNote ? h("div", { class: "ctl-advisor-insurance-tip", style: "margin: 8px 0 12px;", text: t("advisorInsuranceNote", [radar.recommendedRoe, radar.winRetentionRate]) }) : null,
+      h("div", { class: "ctl-advisor-slippage-tip", style: "background: rgba(240, 185, 11, 0.08); border: 1px dashed rgba(240, 185, 11, 0.3); border-radius: 6px; padding: 8px 10px; font-size: 11.5px; color: #cbd5e1; margin: 8px 0 10px; line-height: 1.4;" }, [
+        h("span", { text: "💡 推薦滑點限制：" }),
+        h("strong", { text: slippage.pct, style: "color: #f0b90b; margin: 0 4px;" }),
+        h("span", { text: `（${slippage.reason}）`, style: "color: #94a3b8;" })
+      ]),
       h("details", { class: "ctl-advisor-details", style: "margin: 10px 0;" }, [
         h("summary", { class: "ctl-advisor-details-summary", text: t("advisorDetailsSummary") }),
         h("div", { class: "ctl-advisor-details-content" }, [
@@ -616,80 +669,101 @@
   function renderStopLossRadar(radar) {
     if (!radar || radar.insufficientData) return null;
     const hasBag = radar.hasSevereBagHolding;
-    return h("section", { class: "ctl-section ctl-radar-section" }, [
-      renderJointExits(radar, false, run.phase !== "ready" && run.streamingStage === "exits" && (run.exitProgress || true)),
-      h("div", { class: "ctl-radar-header" }, [
-        h("h3", { text: t(radar.exitSelection ? "exitStopOnlyTitle" : "sectionStopLossRadar") }),
-        hasBag
-          ? h("span", { class: "ctl-radar-badge is-danger", text: t("badgeBagHoldingAlert") })
-          : null
-      ]),
-      h("div", { class: "ctl-radar-box" }, [
-        h("div", { class: "ctl-radar-primary" }, [
-          h("div", { class: "ctl-radar-decision", text: stopDecision(radar) }),
-          h("div", { class: "ctl-radar-label", text: t(noStopOptimal(radar) ? "radarInsuranceLabel" : "radarRecommendedLabel") }),
-          h("div", { class: "ctl-radar-value" }, [
-            h("span", { class: "ctl-radar-number", text: `${radar.recommendedRoe}%` }),
-            h("span", { class: "ctl-radar-unit", text: t("radarRoeUnit") })
-          ]),
-          h("div", { class: "ctl-radar-sub", text: t("radarEquivalentPrice", [radar.dominantLeverage, radar.recommendedPriceDrop]) }),
-          h("div", { class: "ctl-radar-direct-hint", text: t(noStopOptimal(radar) ? "radarOptionalInputHint" : "radarDirectInputHint", [radar.recommendedRoe]) }),
-          h("button", {
-            class: "ctl-radar-fill-btn",
-            type: "button",
-            onclick: (e) => {
-              const btn = e.currentTarget;
-              const filled = applyStopLossToBinanceInputs(radar.recommendedRoe);
-              if (filled) {
-                btn.textContent = `✓ ${t("inlineChipApplied", [radar.recommendedRoe])}`;
-                btn.classList.add("is-applied");
-                setTimeout(() => {
-                  btn.textContent = `⚡ ${applyLabel(radar)}`;
-                  btn.classList.remove("is-applied");
-                }, 2500);
-              } else {
-                navigator.clipboard?.writeText?.(String(radar.recommendedRoe));
-                btn.textContent = `✓ ${t("btnCopiedToClipboard", [radar.recommendedRoe])}`;
-                btn.classList.add("is-applied");
-                setTimeout(() => {
-                  btn.textContent = `📋 ${t("btnCopyToClipboard", [radar.recommendedRoe])}`;
-                  btn.classList.remove("is-applied");
-                }, 2500);
-              }
-            }
-          }, [
-            h("span", { text: location.href.includes("copy-setting")
-              ? `⚡ ${applyLabel(radar)}`
-              : `📋 ${t("btnCopyToClipboard", [radar.recommendedRoe])}`
-            })
-          ])
+    const jointSection = renderJointExits(radar, false, run.phase !== "ready" && run.streamingStage === "exits" && (run.exitProgress || true));
+    const hasSelection = Boolean(radar.exitSelection?.optimal);
+
+    const header = h("div", { class: "ctl-radar-header" }, [
+      h("h3", { text: t(hasSelection ? "exitStopOnlyTitle" : "sectionStopLossRadar") }),
+      hasBag ? h("span", { class: "ctl-radar-badge is-danger", text: t("badgeBagHoldingAlert") }) : null
+    ]);
+
+    const box = h("div", { class: "ctl-radar-box" }, [
+      h("div", { class: "ctl-radar-primary" }, [
+        h("div", { class: "ctl-radar-decision", text: stopDecision(radar) }),
+        h("div", { class: "ctl-radar-label", text: t(noStopOptimal(radar) ? "radarInsuranceLabel" : "radarRecommendedLabel") }),
+        h("div", { class: "ctl-radar-value" }, [
+          h("span", { class: "ctl-radar-number", text: `${radar.recommendedRoe}%` }),
+          h("span", { class: "ctl-radar-unit", text: t("radarRoeUnit") })
         ]),
-        h("div", { class: "ctl-radar-why" }, stopSummaryLines(radar).map((text) => h("p", { text }))),
-        stopModelDetails(radar),
-        stopPriceList(radar),
-        h("div", { class: "ctl-radar-grid" }, [
-          h("div", { class: "ctl-radar-stat" }, [
-            h("span", { text: t("radarWinRetention") }),
-            h("strong", { text: `${radar.winRetentionRate}%` })
-          ]),
-          h("div", { class: "ctl-radar-stat" }, [
-            h("span", { text: t("radarDominantLev") }),
-            h("strong", { text: `${radar.dominantLeverage}x` })
-          ]),
-          h("div", { class: "ctl-radar-stat" }, [
-            h("span", { text: t("radarWorstDrawdown") }),
-            h("strong", { class: hasBag ? "is-danger" : "", text: `-${radar.worstHistoricalRoeMae}%` })
-          ]),
-          radar.mfeStats ? h("div", { class: "ctl-radar-stat" }, [
-            h("span", { text: t("radarMfe") }),
-            h("strong", { text: `+${radar.mfeStats.max}%` })
-          ]) : null
+        h("div", { class: "ctl-radar-sub", text: t("radarEquivalentPrice", [radar.dominantLeverage, radar.recommendedPriceDrop]) }),
+        h("div", { class: "ctl-radar-direct-hint", text: t(noStopOptimal(radar) ? "radarOptionalInputHint" : "radarDirectInputHint", [radar.recommendedRoe]) }),
+        h("button", {
+          class: "ctl-radar-fill-btn",
+          type: "button",
+          onclick: (e) => {
+            const btn = e.currentTarget;
+            const filled = applyStopLossToBinanceInputs(radar.recommendedRoe);
+            if (filled) {
+              btn.textContent = `✓ ${t("inlineChipApplied", [radar.recommendedRoe])}`;
+              btn.classList.add("is-applied");
+              setTimeout(() => {
+                btn.textContent = `⚡ ${applyLabel(radar)}`;
+                btn.classList.remove("is-applied");
+              }, 2500);
+            } else {
+              navigator.clipboard?.writeText?.(String(radar.recommendedRoe));
+              btn.textContent = `✓ ${t("btnCopiedToClipboard", [radar.recommendedRoe])}`;
+              btn.classList.add("is-applied");
+              setTimeout(() => {
+                btn.textContent = `📋 ${t("btnCopyToClipboard", [radar.recommendedRoe])}`;
+                btn.classList.remove("is-applied");
+              }, 2500);
+            }
+          }
+        }, [
+          h("span", { text: location.href.includes("copy-setting")
+            ? `⚡ ${applyLabel(radar)}`
+            : `📋 ${t("btnCopyToClipboard", [radar.recommendedRoe])}`
+          })
         ])
       ]),
-      hasBag
-        ? h("div", { class: "ctl-radar-alert", text: t("radarSevereBagWarning", [radar.worstHistoricalRoeMae]) })
-        : null,
-      h("div", { class: "ctl-radar-notice", text: t("radarBinanceRoeNotice") })
+      h("div", { class: "ctl-radar-why" }, stopSummaryLines(radar).map((text) => h("p", { text }))),
+      stopModelDetails(radar),
+      stopPriceList(radar),
+      h("div", { class: "ctl-radar-grid" }, [
+        h("div", { class: "ctl-radar-stat" }, [
+          h("span", { text: t("radarWinRetention") }),
+          h("strong", { text: `${radar.winRetentionRate}%` })
+        ]),
+        h("div", { class: "ctl-radar-stat" }, [
+          h("span", { text: t("radarDominantLev") }),
+          h("strong", { text: `${radar.dominantLeverage}x` })
+        ]),
+        h("div", { class: "ctl-radar-stat" }, [
+          h("span", { text: t("radarWorstDrawdown") }),
+          h("strong", { class: hasBag ? "is-danger" : "", text: `-${radar.worstHistoricalRoeMae}%` })
+        ]),
+        radar.mfeStats ? h("div", { class: "ctl-radar-stat" }, [
+          h("span", { text: t("radarMfe") }),
+          h("strong", { text: `+${radar.mfeStats.max}%` })
+        ]) : null
+      ])
+    ]);
+
+    const alertBox = hasBag ? h("div", { class: "ctl-radar-alert", text: t("radarSevereBagWarning", [radar.worstHistoricalRoeMae]) }) : null;
+    const noticeBox = h("div", { class: "ctl-radar-notice", text: t("radarBinanceRoeNotice") });
+
+    if (hasSelection) {
+      return h("section", { class: "ctl-section ctl-radar-section" }, [
+        jointSection,
+        h("details", { class: "ctl-advisor-details", style: "margin-top: 16px;" }, [
+          h("summary", { class: "ctl-advisor-details-summary", text: "🔍 展開單一止損維度深度診斷與 95 個逐級梯度 ▾" }),
+          h("div", { class: "ctl-advisor-details-content", style: "padding-top: 12px;" }, [
+            header,
+            box,
+            alertBox,
+            noticeBox
+          ])
+        ])
+      ]);
+    }
+
+    return h("section", { class: "ctl-section ctl-radar-section" }, [
+      jointSection,
+      header,
+      box,
+      alertBox,
+      noticeBox
     ]);
   }
 
@@ -887,10 +961,18 @@
     }
     const selection = radar.exitSelection;
     const optimal = selection?.optimal || { stop: (noStopOptimal(radar) ? null : radar.recommendedRoe), takeProfit: null };
-    const stopValText = exitOptionLabel(optimal.stop);
-    const tpValText = exitOptionLabel(optimal.takeProfit);
-    const stopSub = optimal.stop === null ? t("radarDecisionOptional") : t("radarEquivalentPrice", [radar.dominantLeverage, (optimal.stop / radar.dominantLeverage).toFixed(2)]);
-    const tpSub = optimal.takeProfit === null ? t("advisorDisabledBadge") : `+${(optimal.takeProfit / radar.dominantLeverage).toFixed(2)}%`;
+    const hasBag = Boolean(radar.hasSevereBagHolding);
+    const isPromotedInsurance = hasBag && optimal.stop === null && Number.isInteger(radar.recommendedRoe);
+    const effectiveStop = isPromotedInsurance ? radar.recommendedRoe : optimal.stop;
+
+    const holdoutDelta = selection?.holdout?.fixed?.deltaMin;
+    const holdoutFailed = typeof holdoutDelta === "number" && holdoutDelta <= 0;
+    const effectiveTp = holdoutFailed ? null : optimal.takeProfit;
+
+    const stopValText = exitOptionLabel(effectiveStop);
+    const tpValText = exitOptionLabel(effectiveTp);
+    const stopSub = effectiveStop === null ? t("radarDecisionOptional") : t("radarEquivalentPrice", [radar.dominantLeverage, (effectiveStop / radar.dominantLeverage).toFixed(2)]);
+    const tpSub = effectiveTp === null ? (holdoutFailed ? "隨帶單員平倉（防過擬合）" : t("advisorDisabledBadge")) : `+${(effectiveTp / radar.dominantLeverage).toFixed(2)}%`;
 
     const deltaMin = selection?.deltaMin ?? (radar.tradeoff?.helpedUsdt ? (radar.tradeoff.helpedUsdt + radar.tradeoff.hurtUsdt) : 0);
     const deltaMax = selection?.deltaMax ?? deltaMin;
@@ -909,13 +991,17 @@
     const gainClass = deltaMin > 0 ? "is-green" : (deltaMax < 0 ? "is-danger" : "is-gold");
 
     const hasInsuranceNote = optimal.stop === null && Number.isInteger(radar.recommendedRoe);
+    const slippage = recommendSlippage(radar, raw);
 
     return h("div", {}, [
       // Hero Setting Card
       h("div", { class: "ctl-advisor-hero-card" }, [
         h("div", { class: "ctl-advisor-card-title" }, [
           h("span", { text: t("exitHistoricalLabel") }),
-          h("span", { class: "ctl-advisor-badge", text: t("advisorOptimalBadge") })
+          h("span", {
+            class: isPromotedInsurance ? "ctl-advisor-badge is-danger" : "ctl-advisor-badge",
+            text: isPromotedInsurance ? "🛡️ 防穿倉保險 (推薦)" : (effectiveStop !== null ? "🎯 兼顧收益與防守" : t("advisorOptimalBadge"))
+          })
         ]),
         h("div", { class: "ctl-advisor-pair-grid" }, [
           h("div", { class: "ctl-advisor-cell" }, [
@@ -929,13 +1015,18 @@
             h("span", { class: "ctl-advisor-val-sub", text: tpSub })
           ])
         ]),
-        hasInsuranceNote ? h("div", { class: "ctl-advisor-insurance-tip", text: t("advisorInsuranceNote", [radar.recommendedRoe, radar.winRetentionRate]) }) : null,
+        isPromotedInsurance ? h("div", {
+          class: "ctl-advisor-insurance-tip",
+          style: "margin: 8px 0 12px; font-size: 11.5px; line-height: 1.4; color: #f87171; background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 6px; padding: 8px 10px;",
+          text: `⚠️ 帶單員歷史最大浮虧達 -${radar.worstHistoricalRoeMae}%（死扛型），純收益極值為不設止損（0%），但實盤極易爆倉！強烈推薦設定 ${effectiveStop}% 止損防穿倉（勝率保留 ${radar.winRetentionRate}%）。`
+        }) : (hasInsuranceNote ? h("div", { class: "ctl-advisor-insurance-tip", text: t("advisorInsuranceNote", [radar.recommendedRoe, radar.winRetentionRate]) }) : null),
         h("button", {
           class: "ctl-primary ctl-advisor-apply-btn",
           type: "button",
           onclick: (e) => {
             const btn = e.currentTarget;
-            const filled = selection ? applyJointExitsToBinanceInputs(selection) : applyStopLossToBinanceInputs(radar.recommendedRoe);
+            const targetSelection = { optimal: { stop: effectiveStop, takeProfit: effectiveTp } };
+            const filled = applyJointExitsToBinanceInputs(targetSelection);
             btn.textContent = filled ? `✓ ${t("exitApplied")}` : t("exitInputUnavailable");
             btn.classList.toggle("is-applied", filled);
             setTimeout(() => {
@@ -965,6 +1056,17 @@
         h("div", { class: "ctl-advisor-kpi-card" }, [
           h("span", { class: "ctl-advisor-kpi-label", text: `⚡ ${t("radarDominantLev")}` }),
           h("strong", { class: "ctl-advisor-kpi-val is-gold", text: `${radar.dominantLeverage}x` })
+        ])
+      ]),
+
+      // Slippage Tolerance Recommendation
+      h("div", { class: "ctl-advisor-slippage-tip", style: "background: rgba(240, 185, 11, 0.08); border: 1px dashed rgba(240, 185, 11, 0.3); border-radius: 6px; padding: 10px 12px; font-size: 12px; color: #cbd5e1; margin: 12px 0 14px; line-height: 1.5;" }, [
+        h("div", { style: "font-weight: 600; color: #f0b90b; margin-bottom: 4px;" }, [
+          h("span", { text: "💡 幣安跟單設定 · 推薦滑點限制：" }),
+          h("strong", { text: slippage.pct, style: "font-size: 13px; color: #fff; background: rgba(240, 185, 11, 0.25); padding: 2px 6px; border-radius: 4px; margin-left: 4px;" })
+        ]),
+        h("div", { style: "color: #94a3b8; font-size: 11.5px;" }, [
+          h("span", { text: `根據該帶單員標的微結構診斷：${slippage.reason}` })
         ])
       ]),
 
