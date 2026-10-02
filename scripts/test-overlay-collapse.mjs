@@ -151,7 +151,7 @@ function loadPage(pathname = "/en/copy-trading/lead-details/p1") {
     walk(documentElement, (el) => { if (found === null && el.tag === "h2") found = el.textContent; });
     return found;
   };
-  return { fetches, fetchOptions, panel, find, click, collapseButton, shownName, pressed, documentListeners };
+  return { fetches, fetchOptions, panel, find, click, collapseButton, shownName, pressed, documentListeners, root: documentElement };
 }
 
 const tests = [];
@@ -289,21 +289,60 @@ test("a late marks event does not move the streaming banner back", async () => {
   assert.ok(text.includes("stageLoadedOrders"), `banner after orders then marks: ${text}`);
 });
 
-// A number worked out from half the history looks as true as one from all of it (a stop level of 10% shown while
-// the candles were still loading), so nothing but the loading view is drawn until the whole read is done.
-test("nothing computed from an unfinished read is drawn", async () => {
-  const page = loadPage();
-  for (const stage of ["detail", "positions", "marks", "orders"]) {
-    page.fetchOptions[0].onProgressive({ stage, raw: { name: "Trader" } });
-    assert.ok(page.find("ctl-loading"), `${stage}: the loading view stays up`);
-    for (const drawn of ["ctl-verdict", "ctl-radar-box", "ctl-advisor-hero", "ctl-grid"]) {
-      assert.equal(page.find(drawn), null, `${stage}: ${drawn} must not be drawn before the read is complete`);
+// A value is drawn when the pieces it is computed from have landed, and its place spins until then: the card fills in
+// as the read lands, and never shows a default or half-computed number (a stop level of 10% was visible while the
+// candles were still loading).
+function metricStates(page) {
+  const states = {};
+  const visit = (el) => {
+    if (!el || typeof el !== "object") return;
+    if (el.className?.split(" ").includes("ctl-metric")) {
+      const label = el.children[0]?.textContent;
+      states[label] = el.className.includes("is-streaming-metric") ? "loading" : "value";
     }
-  }
+    el.children.forEach(visit);
+  };
+  walk(page.root, visit);
+  return states;
+}
+
+test("the card fills in as the read lands and draws no value before its inputs have", async () => {
+  const page = loadPage();
+  const loaded = (extra) => ({ detail: true, positions: false, marks: false, orders: false, market: false, ...extra });
+  const send = (stage, flags) => page.fetchOptions[0].onProgressive({ stage, raw: { name: "Trader", loaded: loaded(flags) } });
+
+  assert.equal(page.find("ctl-grid"), null, "nothing has landed yet: only the loading view");
+  assert.ok(page.find("ctl-loading"));
+
+  send("detail", {});
+  let states = metricStates(page);
+  assert.equal(states.metricRestartCount, "value", "detail has landed: what comes from it is drawn");
+  assert.equal(states.metricWinRate, "loading", "positions have not");
+  assert.equal(states.metricAllPeriodRoi, "loading");
+  assert.ok(page.find("ctl-block-loading"), "the rating and the radar wait with their own placeholders");
+  assert.equal(page.find("ctl-radar-box"), null);
+
+  send("positions", { positions: true });
+  states = metricStates(page);
+  assert.equal(states.metricWinRate, "value", "positions landed: win rate appears");
+  assert.equal(states.metricAdverseAdd, "loading", "fills have not");
+  assert.equal(states.metricBiggestBet, "loading");
+
+  send("orders", { positions: true, orders: true });
+  states = metricStates(page);
+  assert.equal(states.metricAdverseAdd, "value");
+  assert.equal(states.metricAllPeriodRoi, "value");
+  assert.equal(states.metricBiggestBet, "loading", "the equity count-back needs the market history");
+  assert.ok(page.find("ctl-verdict").className.includes("ctl-block-loading"), "the rating still waits");
+
+  send("marks", { positions: true, orders: true, marks: true });
+  assert.ok(page.find("ctl-streaming-banner"), "the stage line stays while the read is not finished");
+
   page.fetches[0].resolve({ name: "Trader" });
   await tick();
-  assert.ok(page.find("ctl-verdict"), "the finished read is drawn");
-  assert.equal(page.find("ctl-loading"), null);
+  states = metricStates(page);
+  assert.ok(Object.values(states).every((state) => state === "value"), "the finished read has no placeholder left");
+  assert.equal(page.find("ctl-streaming-banner"), null);
 });
 
 let failed = 0;

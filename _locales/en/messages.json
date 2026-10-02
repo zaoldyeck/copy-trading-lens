@@ -818,6 +818,57 @@
   "radarInsuranceLabel": {
     "message": "If you still want a stop (cheapest)"
   },
+  "radarDecisionOptional": {
+    "message": "A stop-loss is optional here"
+  },
+  "radarDecisionStop": {
+    "message": "Set a {0}% stop-loss"
+  },
+  "radarWhyOptional": {
+    "message": "Backtested on this trader's last {0} closed positions: {1} winners dipped past {2}% before recovering, so a stop would have cut them short (from +{3}% on average to -{2}%), while the stop saves only {4} big losers. Overall, no stop averages +{5}% per position against +{6}% with a {2}% stop, so in this history leaving it off pays more."
+  },
+  "radarWhyNoCost": {
+    "message": "Backtested on this trader's last {0} closed positions: a {1}% stop would not have cut a single winner short and would have caught only {2} big losers; it averages +{3}% per position against +{4}% with no stop. It makes little difference; set one if you want the insurance."
+  },
+  "radarWhyStop": {
+    "message": "Backtested on this trader's last {0} closed positions: a {1}% stop would have stopped {2} positions that ended in big losses (from -{3}% on average to -{1}%) and cut only {4} winners short. Overall it averages +{5}% per position against +{6}% with no stop, so setting it pays more."
+  },
+  "radarInsurance": {
+    "message": "A stop-loss is really insurance against a loss bigger than anything in the history. This trader's worst position was {0} ({1}x leverage), which ended at -{2}%; with a {3}% stop it would have lost at most {3}%. If you want that insurance, {3}% costs the least."
+  },
+  "radarApplyOptional": {
+    "message": "Set one anyway: fill in {0}%"
+  },
+  "radarBandSentence": {
+    "message": "Any value from {0}% to {1}% backtests about as well as the best one."
+  },
+  "radarBacktestFootnote": {
+    "message": "The backtest uses closed positions only and does not predict the future; open positions are not counted. % is return on margin (ROE)."
+  },
+  "streamingHintPerformance": {
+    "message": "Loading performance data..."
+  },
+  "streamingVerdictLoading": {
+    "message": "Rating and strategy analysis, needs complete order and funds data..."
+  },
+  "streamingRadarLoading": {
+    "message": "Stop-loss radar, needs complete positions, fills and candles..."
+  },
+  "metricLoadingText": {
+    "message": "↻ Loading..."
+  },
+  "streamingHintPositions": {
+    "message": "Calculating closed PnL & holds..."
+  },
+  "streamingHintOrders": {
+    "message": "Analyzing deep order flow..."
+  },
+  "streamingHintTransfers": {
+    "message": "Verifying transfer deposits..."
+  },
+  "streamingHintEquity": {
+    "message": "Reconstructing equity & leverage..."
+  },
   "radarRoeUnit": {
     "message": "(Margin ROE)"
   },
@@ -850,15 +901,6 @@
   },
   "radarWorstDrawdown": {
     "message": "Worst Historical Drawdown"
-  },
-  "radarStableBandLabel": {
-    "message": "Stable range"
-  },
-  "radarStopOptionalNote": {
-    "message": "On this trader's history, a stop-loss is not shown to beat having none. If you still want one, {0}% costs the least."
-  },
-  "radarStopTradeoff": {
-    "message": "On this history a {0}% stop would trigger on {1} trades that ended in profit and {2} that ended in loss."
   },
   "radarSevereBagWarning": {
     "message": "⚠️ Warning: Trader had historical position drawdown reaching -{0}%! Strictly recommend stop-loss to avoid blowups."

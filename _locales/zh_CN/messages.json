@@ -818,6 +818,57 @@
   "radarInsuranceLabel": {
     "message": "若仍要设止损（代价最小）"
   },
+  "radarDecisionOptional": {
+    "message": "不一定要设止损"
+  },
+  "radarDecisionStop": {
+    "message": "建议设止损 {0}%"
+  },
+  "radarWhyOptional": {
+    "message": "用这位带单员过去 {0} 笔已平仓的单回测：其中 {1} 笔最后盈利的单，中途曾先浮亏超过 {2}% 才反弹，设止损会把它们提前砍掉（平均从赚 {3}% 变成亏 {2}%）；而止损真正救得下来的大亏单只有 {4} 笔。整体算下来，不设止损每笔平均赚 {5}%，设 {2}% 只赚 {6}%，所以这段历史里不设更划算。"
+  },
+  "radarWhyNoCost": {
+    "message": "用这位带单员过去 {0} 笔已平仓的单回测：设 {1}% 不会砍到任何一笔最后盈利的单，历史上也只拦下 {2} 笔大亏的单；每笔平均赚 {3}%（不设止损 {4}%）。设不设差别很小，想要保险就设。"
+  },
+  "radarWhyStop": {
+    "message": "用这位带单员过去 {0} 笔已平仓的单回测：设 {1}% 能拦下 {2} 笔最后大亏的单（平均从亏 {3}% 变成亏 {1}%），只多砍 {4} 笔最后盈利的单。整体算下来，每笔平均赚 {5}%，不设止损只赚 {6}%，所以设更划算。"
+  },
+  "radarInsurance": {
+    "message": "止损其实是一份保险：它保的是历史上还没出现过的更大暴亏。这位带单员过去最惨的一笔是 {0}（{1}x 杠杆），最后亏 {2}%；若当时设了 {3}%，最多只会亏 {3}%。想买这份保险，{3}% 是代价最小的选择。"
+  },
+  "radarApplyOptional": {
+    "message": "仍要设止损：填入 {0}%"
+  },
+  "radarBandSentence": {
+    "message": "{0}% 到 {1}% 之间的任何值，回测结果都和最佳值差不多。"
+  },
+  "radarBacktestFootnote": {
+    "message": "回测只用过去已平仓的单，不代表未来；持仓中的单不计入。「%」是保证金亏损比率（ROE）。"
+  },
+  "streamingHintPerformance": {
+    "message": "绩效数据载入中..."
+  },
+  "streamingVerdictLoading": {
+    "message": "综合评级与策略分析中，需要完整的订单与资金数据..."
+  },
+  "streamingRadarLoading": {
+    "message": "止损雷达计算中，需要完整的持仓、成交与 K 线数据..."
+  },
+  "metricLoadingText": {
+    "message": "↻ 载入中..."
+  },
+  "streamingHintPositions": {
+    "message": "统计平仓损益与持仓时间..."
+  },
+  "streamingHintOrders": {
+    "message": "深度订单流分析中..."
+  },
+  "streamingHintTransfers": {
+    "message": "比对转账入金记录..."
+  },
+  "streamingHintEquity": {
+    "message": "回溯账户净值与杠杆..."
+  },
   "radarRoeUnit": {
     "message": "(保证金亏损比率 ROE)"
   },
@@ -850,15 +901,6 @@
   },
   "radarWorstDrawdown": {
     "message": "历史最深持仓浮亏"
-  },
-  "radarStableBandLabel": {
-    "message": "稳定区间"
-  },
-  "radarStopOptionalNote": {
-    "message": "以这位带单员的历史数据，看不出设止损比不设更好；若仍要设，{0}% 是代价最小的选择。"
-  },
-  "radarStopTradeoff": {
-    "message": "以这段历史，设 {0}% 会触发止损的单子里，最后盈利的有 {1} 笔、最后亏损的有 {2} 笔。"
   },
   "radarSevereBagWarning": {
     "message": "⚠️ 警告：该带单员历史曾出现单笔 -{0}% 的严重死扛！强烈建议启用仓位止损以阻截黑天鹅爆仓。"

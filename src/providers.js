@@ -419,7 +419,11 @@
       transferHistory: [],
       positionMarks: null,
       marketHistory: null,
-      historyStatus: {}
+      historyStatus: {},
+      // Which pieces of the read have landed, set by the fetch that lands them. The UI draws a value only when the
+      // pieces it is computed from are loaded, and a loading placeholder otherwise; a read that never reports
+      // `loaded` (a cached snapshot) counts as complete.
+      loaded: { detail: true, positions: false, marks: false, orders: false, market: false }
     };
     const rawNow = () => ({
       id: portfolioId,
@@ -428,6 +432,7 @@
       visibleText,
       ...view,
       historyStatus: { ...view.historyStatus },
+      loaded: { ...view.loaded },
       endpointResults: { ...endpointResults }
     });
     const emit = (stage) => onProgressive?.({ stage, raw: rawNow() });
@@ -455,6 +460,7 @@
     const nowMs = Date.now();
 
     Object.assign(view, { livePositions: liveRows, positionHistory: positionRows });
+    view.loaded.positions = true;
     view.historyStatus.positionHistory = historyStatusOf(positionHistory, positionData);
     // Progressive update Stage 2: positions ready. The stop-loss radar already has a first
     // reading from fills and close prices; its mark-candle refinement lands as "marks" below.
@@ -464,6 +470,7 @@
     // transfer histories below are still paging. Lands as its own event.
     const marksRead = fetchBinancePositionMarks(positionRows, { waitUntilResumed }).then((positionMarks) => {
       view.positionMarks = positionMarks;
+      view.loaded.marks = true;
       endpointResults.positionMarks = {
         label: "positionMarks",
         ok: positionMarks.failed.length === 0,
@@ -500,6 +507,7 @@
     });
     view.historyStatus.orderHistory = historyStatusOf(orderHistory, orderData);
     view.historyStatus.transferHistory = historyStatusOf(transferHistory, transferData);
+    view.loaded.orders = true;
     // Progressive update Stage 3: orders & performance windows ready
     emit("orders");
 
@@ -518,6 +526,7 @@
     view.marketHistory = (touchedSymbols.length && startMs < nowMs)
       ? { nowMs, ...(await fetchBinanceMarketHistory(touchedSymbols, startMs, nowMs, { waitUntilResumed })) }
       : { nowMs, startMs: nowMs, endMs: nowMs, symbols: {}, failed: [] };
+    view.loaded.market = true;
 
     return rawNow();
   }

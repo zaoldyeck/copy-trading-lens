@@ -22,10 +22,10 @@ const template = `(function attachCopyTradingLensI18n(global) {
   function detectLocale() {
     try {
       const path = global.location?.pathname || "";
-      if (path.includes("/zh-TC") || path.includes("/zh-TW") || path.includes("/zh-HK") || path.includes("/zh-Hant")) {
+      if (path.includes("/zh-TC") || path.includes("/zh-TW") || path.includes("/zh-HK") || path.includes("/zh-Hant") || path.includes("/zh-MO")) {
         return "zh_TW";
       }
-      if (path.includes("/zh-CN") || path.includes("/zh-Hans") || path.includes("/zh/")) {
+      if (path.includes("/zh-CN") || path.includes("/zh-Hans") || path.includes("/zh-SG") || path.includes("/zh/")) {
         return "zh_CN";
       }
       if (path.includes("/ja")) {
@@ -36,24 +36,25 @@ const template = `(function attachCopyTradingLensI18n(global) {
       }
 
       const htmlLang = global.document?.documentElement?.lang || "";
-      if (/^zh-(?:TW|HK|MO|Hant)/i.test(htmlLang)) return "zh_TW";
-      if (/^zh/i.test(htmlLang)) return "zh_CN";
+      if (/^zh[-_](?:TW|HK|MO|Hant|TC)/i.test(htmlLang)) return "zh_TW";
+      if (/^zh[-_](?:CN|Hans|SG|SC)/i.test(htmlLang)) return "zh_CN";
       if (/^ja/i.test(htmlLang)) return "ja";
       if (/^en/i.test(htmlLang)) return "en";
 
       const rawCk = (global.document && global.document.cookie) || "";
-      const cookieMatch = rawCk.match(/(?:^|;\\s*)lang=([^;]+)/);
+      const cookieMatch = rawCk.match(/(?:^|;\\s*)(?:lang|bapi_lang)=([^;]+)/);
       if (cookieMatch) {
         const val = decodeURIComponent(cookieMatch[1]).toLowerCase();
-        if (val.includes("tc") || val.includes("tw") || val.includes("hk") || val.includes("hant")) return "zh_TW";
-        if (val.includes("cn") || val.includes("hans") || val === "zh") return "zh_CN";
+        if (val.includes("tc") || val.includes("tw") || val.includes("hk") || val.includes("hant") || val.includes("mo")) return "zh_TW";
+        if (val.includes("cn") || val.includes("hans") || val.includes("sg") || val === "zh") return "zh_CN";
         if (val.includes("ja")) return "ja";
         if (val.includes("en")) return "en";
       }
 
       const browserLang = global.chrome?.i18n?.getUILanguage?.() || global.navigator?.language || "";
-      if (/^zh-(?:TW|HK|MO|Hant)/i.test(browserLang)) return "zh_TW";
-      if (/^zh/i.test(browserLang)) return "zh_CN";
+      if (/^zh[-_](?:TW|HK|MO|Hant|TC)/i.test(browserLang)) return "zh_TW";
+      if (/^zh[-_](?:CN|Hans|SG|SC)/i.test(browserLang)) return "zh_CN";
+      if (/^zh/i.test(browserLang)) return "zh_TW"; // Default Chinese fallback to zh_TW
       if (/^ja/i.test(browserLang)) return "ja";
       if (/^en/i.test(browserLang)) return "en";
     } catch (_e) {}

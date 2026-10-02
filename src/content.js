@@ -72,12 +72,12 @@
 
   function paint() {
     if (!run) return clearRoot();
-    // Nothing computed from an unfinished read is shown: a stop level worked out from half the history looks
-    // exactly as true as one from all of it. Until the read is complete there is only the loading view.
     if (run.phase === "ready" && run.analysis?.stopLossRadar) mountInlineSettingHelper(run.analysis.stopLossRadar);
     if (collapsed) return renderLauncher(run.context);
     if (run.phase === "failed") return renderError(run.error);
-    if (run.phase !== "ready") return renderLoading(run.context);
+    // Nothing has landed yet: only the loading view. Once something has, the card fills in piece by piece, and each
+    // value waits for its own inputs (see landed()) instead of showing a default.
+    if (!run.analysis) return renderLoading(run.context);
 
     if (run.context?.pageType === "copy-setting" && settingModeView === "advisor") {
       return renderSettingAdvisor(run.context, run.raw, run.analysis);
@@ -284,25 +284,84 @@
     container.appendChild(chip);
   }
 
+  // Which pieces of the read have landed (providers.js `loaded`); a finished read has all of them. A value is drawn
+  // only when the pieces it is computed from are loaded; until then its own placeholder spins, so the card fills in
+  // as data arrives and never shows a default or half-computed number as if it were real.
+  function landed(...pieces) {
+    return run.phase === "ready" || pieces.every((piece) => run.raw?.loaded?.[piece]);
+  }
+
+  function loadingBlock(className, text) {
+    return h("div", { class: `${className} ctl-block-loading` }, [
+      h("span", { class: "ctl-mini-spinner" }),
+      h("span", { text })
+    ]);
+  }
+
+  function metricOrLoading(pieces, label, hintKey, build) {
+    return landed(...pieces) ? build() : metricLoadingCard(label, t(hintKey));
+  }
+
+  function metricLoadingCard(label, hint = "") {
+    return h("div", { class: "ctl-metric is-streaming-metric" }, [
+      h("span", { text: label }),
+      h("strong", { class: "ctl-loading-text" }, [
+        h("span", { class: "ctl-mini-spinner" }),
+        h("span", { text: t("metricLoadingText") })
+      ]),
+      hint ? h("small", { text: hint }) : null
+    ]);
+  }
+
   // The stop levels the data cannot tell apart from the best one, as the lowest and highest of them.
   function stableBand(radar) {
     const band = radar?.stopSelection?.band || [];
     return band.length ? { lo: Math.min(...band), hi: Math.max(...band) } : null;
   }
 
+  function stopDecision(radar) {
+    return radar.stopOptional ? t("radarDecisionOptional") : t("radarDecisionStop", [radar.recommendedRoe]);
+  }
+
+  // Why this answer, in the trader's own numbers: what the stop cuts, what it really saves, what each choice averages per
+  // position, and, when a stop is not shown to help, that a stop is insurance and which one is cheapest.
+  function stopExplanation(radar) {
+    const tradeoff = radar.tradeoff;
+    const stop = radar.recommendedRoe;
+    const digits = (value, places = 0) => value.toFixed(places);
+    const paragraphs = [];
+    if (radar.stopOptional) {
+      paragraphs.push(tradeoff.killedWins > 0
+        ? t("radarWhyOptional", [tradeoff.positions, tradeoff.killedWins, stop, digits(tradeoff.killedWinsAvgRoi), tradeoff.savedLosses, digits(tradeoff.meanRoeNone, 1), digits(tradeoff.meanRoeStop, 1)])
+        : t("radarWhyNoCost", [tradeoff.positions, stop, tradeoff.savedLosses, digits(tradeoff.meanRoeStop, 1), digits(tradeoff.meanRoeNone, 1)]));
+      const worst = tradeoff.worstLoss;
+      if (worst && worst.roiPct < -stop) paragraphs.push(t("radarInsurance", [worst.symbol, worst.leverage, digits(Math.abs(worst.roiPct)), stop]));
+    } else {
+      paragraphs.push(t("radarWhyStop", [tradeoff.positions, stop, tradeoff.savedLosses, digits(Math.abs(tradeoff.savedLossesAvgRoi)), tradeoff.killedWins, digits(tradeoff.meanRoeStop, 1), digits(tradeoff.meanRoeNone, 1)]));
+    }
+    const band = stableBand(radar);
+    if (band && band.lo !== band.hi) paragraphs.push(t("radarBandSentence", [band.lo, band.hi]));
+    paragraphs.push(t("radarBacktestFootnote"));
+    return paragraphs;
+  }
+
+  function applyLabel(radar) {
+    return radar.stopOptional ? t("radarApplyOptional", [radar.recommendedRoe]) : t("btnApplyToBinanceForm", [radar.recommendedRoe]);
+  }
+
   function renderStopLossRadar(radar) {
     if (!radar || radar.insufficientData) return null;
     const hasBag = radar.hasSevereBagHolding;
-    const band = stableBand(radar);
     return h("section", { class: "ctl-section ctl-radar-section" }, [
       h("div", { class: "ctl-radar-header" }, [
         h("h3", { text: t("sectionStopLossRadar") }),
         hasBag
           ? h("span", { class: "ctl-radar-badge is-danger", text: t("badgeBagHoldingAlert") })
-          : h("span", { class: "ctl-radar-badge is-safe", text: t("badgeMathOptimal") })
+          : null
       ]),
       h("div", { class: "ctl-radar-box" }, [
         h("div", { class: "ctl-radar-primary" }, [
+          h("div", { class: "ctl-radar-decision", text: stopDecision(radar) }),
           h("div", { class: "ctl-radar-label", text: t(radar.stopOptional ? "radarInsuranceLabel" : "radarRecommendedLabel") }),
           h("div", { class: "ctl-radar-value" }, [
             h("span", { class: "ctl-radar-number", text: `${radar.recommendedRoe}%` }),
@@ -320,7 +379,7 @@
                 btn.textContent = `✓ ${t("inlineChipApplied", [radar.recommendedRoe])}`;
                 btn.classList.add("is-applied");
                 setTimeout(() => {
-                  btn.textContent = `⚡ ${t("btnApplyToBinanceForm", [radar.recommendedRoe])}`;
+                  btn.textContent = `⚡ ${applyLabel(radar)}`;
                   btn.classList.remove("is-applied");
                 }, 2500);
               } else {
@@ -335,11 +394,12 @@
             }
           }, [
             h("span", { text: location.href.includes("copy-setting")
-              ? `⚡ ${t("btnApplyToBinanceForm", [radar.recommendedRoe])}`
+              ? `⚡ ${applyLabel(radar)}`
               : `📋 ${t("btnCopyToClipboard", [radar.recommendedRoe])}`
             })
           ])
         ]),
+        h("div", { class: "ctl-radar-why" }, stopExplanation(radar).map((text) => h("p", { text }))),
         h("div", { class: "ctl-radar-grid" }, [
           h("div", { class: "ctl-radar-stat" }, [
             h("span", { text: t("radarWinRetention") }),
@@ -352,21 +412,20 @@
           h("div", { class: "ctl-radar-stat" }, [
             h("span", { text: t("radarWorstDrawdown") }),
             h("strong", { class: hasBag ? "is-danger" : "", text: `-${radar.worstHistoricalRoeMae}%` })
-          ]),
-          h("div", { class: "ctl-radar-stat" }, [
-            h("span", { text: t("radarStableBandLabel") }),
-            h("strong", { text: band ? `${band.lo}–${band.hi}%` : "—" })
           ])
         ])
       ]),
-      h("div", { class: "ctl-radar-notice", text: t("radarStopTradeoff", [radar.recommendedRoe, radar.killedWinsCount, radar.stoppedLossesCount]) }),
-      radar.stopOptional
-        ? h("div", { class: "ctl-radar-notice", text: t("radarStopOptionalNote", [radar.stopSelection.bestStop]) })
-        : null,
       hasBag
         ? h("div", { class: "ctl-radar-alert", text: t("radarSevereBagWarning", [radar.worstHistoricalRoeMae]) })
         : null,
       h("div", { class: "ctl-radar-notice", text: t("radarBinanceRoeNotice") })
+    ]);
+  }
+
+  function renderRadarLoading() {
+    return h("section", { class: "ctl-section ctl-radar-section" }, [
+      h("div", { class: "ctl-radar-header" }, [h("h3", { text: t("sectionStopLossRadar") })]),
+      loadingBlock("ctl-radar-loading", t("streamingRadarLoading"))
     ]);
   }
 
@@ -443,7 +502,7 @@
     const radar = analysis?.stopLossRadar;
     const meta = analysis?.meta || {};
     const traderName = meta.name || context.id;
-    const leverage = radar?.dominantLeverage || 1;
+    const radarReady = landed("positions", "marks", "orders", "market");
 
     ensureRoot().replaceChildren(
       h("section", { class: "ctl-panel ctl-setting-card" }, [
@@ -451,53 +510,58 @@
           h("div", {}, [
             h("span", { class: "ctl-eyebrow", text: `Copy Trading Lens · ${context.platform}` }),
             h("h2", { text: t("settingAdvisorTitle") }),
-            h("p", { class: "ctl-advisor-subtitle", text: t("settingAdvisorSubtitle", [traderName, leverage]) })
+            h("p", { class: "ctl-advisor-subtitle", text: radar && !radar.insufficientData ? t("settingAdvisorSubtitle", [traderName, radar.dominantLeverage]) : traderName })
           ]),
           h("div", { class: "ctl-actions" }, [
             h("button", { class: "ctl-icon-btn", title: t("refreshTitle"), onclick: () => runAnalysis(true) }, "↻"),
             collapseButton()
           ])
         ]),
+        run.phase === "ready" ? null : renderStreamingBanner(run.streamingStage),
 
-        radar && !radar.insufficientData ? h("div", { class: "ctl-advisor-hero" }, [
-          h("div", { class: "ctl-advisor-hero-label", text: t(radar.stopOptional ? "radarInsuranceLabel" : "radarRecommendedLabel") }),
-          h("div", { class: "ctl-advisor-hero-val" }, [
-            h("span", { class: "ctl-advisor-num", text: `${radar.recommendedRoe}%` }),
-            h("span", { class: "ctl-advisor-unit", text: t("radarRoeUnit") })
-          ]),
-          h("div", { class: "ctl-advisor-sub", text: t("radarEquivalentPrice", [radar.dominantLeverage, radar.recommendedPriceDrop]) }),
-          h("button", {
-            class: "ctl-primary ctl-advisor-apply-btn",
-            type: "button",
-            onclick: (e) => {
-              const btn = e.currentTarget;
-              applyStopLossToBinanceInputs(radar.recommendedRoe);
-              btn.textContent = `✓ ${t("inlineChipApplied", [radar.recommendedRoe])}`;
-              btn.classList.add("is-applied");
-              setTimeout(() => {
-                btn.textContent = `⚡ ${t("btnApplyToBinanceForm", [radar.recommendedRoe])}`;
-                btn.classList.remove("is-applied");
-              }, 2500);
-            }
-          }, [
-            h("span", { text: `⚡ ${t("btnApplyToBinanceForm", [radar.recommendedRoe])}` })
-          ])
-        ]) : h("div", { class: "ctl-advisor-hero ctl-advisor-empty" }, [
-          h("div", { class: "ctl-advisor-hero-label", text: t("sectionStopLossRadar") }),
-          h("p", { class: "ctl-muted", style: "margin: 12px 0 16px; font-size: 13px; line-height: 1.5;", text: t("cautionThinClosedTrades", [raw?.positionHistory?.length || 0]) || t("payoffNoClosedTrades") }),
-          h("button", {
-            class: "ctl-primary ctl-advisor-apply-btn",
-            type: "button",
-            onclick: () => {
-              settingModeView = "full";
-              paint();
-            }
-          }, [
-            h("span", { text: t("btnViewFullAnalysis") })
-          ])
-        ]),
+        !radarReady
+          ? loadingBlock("ctl-advisor-hero ctl-advisor-empty", t("streamingRadarLoading"))
+          : (radar && !radar.insufficientData ? h("div", { class: "ctl-advisor-hero" }, [
+            h("div", { class: "ctl-advisor-decision", text: stopDecision(radar) }),
+            h("div", { class: "ctl-advisor-hero-label", text: t(radar.stopOptional ? "radarInsuranceLabel" : "radarRecommendedLabel") }),
+            h("div", { class: "ctl-advisor-hero-val" }, [
+              h("span", { class: "ctl-advisor-num", text: `${radar.recommendedRoe}%` }),
+              h("span", { class: "ctl-advisor-unit", text: t("radarRoeUnit") })
+            ]),
+            h("div", { class: "ctl-advisor-sub", text: t("radarEquivalentPrice", [radar.dominantLeverage, radar.recommendedPriceDrop]) }),
+            h("div", { class: "ctl-radar-why" }, stopExplanation(radar).map((text) => h("p", { text }))),
+            h("button", {
+              class: "ctl-primary ctl-advisor-apply-btn",
+              type: "button",
+              onclick: (e) => {
+                const btn = e.currentTarget;
+                applyStopLossToBinanceInputs(radar.recommendedRoe);
+                btn.textContent = `✓ ${t("inlineChipApplied", [radar.recommendedRoe])}`;
+                btn.classList.add("is-applied");
+                setTimeout(() => {
+                  btn.textContent = `⚡ ${applyLabel(radar)}`;
+                  btn.classList.remove("is-applied");
+                }, 2500);
+              }
+            }, [
+              h("span", { text: `⚡ ${applyLabel(radar)}` })
+            ])
+          ]) : h("div", { class: "ctl-advisor-hero ctl-advisor-empty" }, [
+            h("div", { class: "ctl-advisor-hero-label", text: t("sectionStopLossRadar") }),
+            h("p", { class: "ctl-muted", style: "margin: 12px 0 16px; font-size: 13px; line-height: 1.5;", text: t("cautionThinClosedTrades", [raw?.positionHistory?.length || 0]) || t("payoffNoClosedTrades") }),
+            h("button", {
+              class: "ctl-primary ctl-advisor-apply-btn",
+              type: "button",
+              onclick: () => {
+                settingModeView = "full";
+                paint();
+              }
+            }, [
+              h("span", { text: t("btnViewFullAnalysis") })
+            ])
+          ])),
 
-        radar && !radar.insufficientData ? h("div", { class: "ctl-value-pillars" }, [
+        radarReady && radar && !radar.insufficientData ? h("div", { class: "ctl-value-pillars" }, [
           h("div", { class: "ctl-pillar" }, [
             h("strong", {}, [
               h("span", { text: "🎯 " }),
@@ -520,20 +584,6 @@
             h("p", { text: t("settingValuePropStatsDesc", [radar.allStats.p50.toFixed(1), radar.allStats.p90.toFixed(1)]) })
           ])
         ]) : null,
-
-        radar && !radar.insufficientData && stableBand(radar) ? h("div", {
-          class: "ctl-advisor-range-tip"
-        }, [
-          h("span", { text: `💡 ${t("radarStableBandLabel")}: ${stableBand(radar).lo}–${stableBand(radar).hi}%` })
-        ]) : null,
-
-        radar && !radar.insufficientData
-          ? h("div", { class: "ctl-advisor-range-tip" }, [h("span", { text: `ℹ️ ${t("radarStopTradeoff", [radar.recommendedRoe, radar.killedWinsCount, radar.stoppedLossesCount])}` })])
-          : null,
-
-        radar && !radar.insufficientData && radar.stopOptional
-          ? h("div", { class: "ctl-advisor-range-tip" }, [h("span", { text: `⚠️ ${t("radarStopOptionalNote", [radar.stopSelection.bestStop])}` })])
-          : null,
 
         h("div", { class: "ctl-advisor-footer" }, [
           h("button", {
@@ -558,6 +608,7 @@
     const verdict = analysis.verdict;
     const strategy = analysis.strategy;
     const transfers = analysis.transfers;
+    const finished = landed("detail", "positions", "marks", "orders", "market");
 
     ensureRoot().replaceChildren(
       h("section", { class: "ctl-panel" }, [
@@ -569,6 +620,7 @@
             paint();
           }
         }, t("btnReturnToAdvisor")) : null,
+        run.phase === "ready" ? null : renderStreamingBanner(run.streamingStage),
         h("header", { class: "ctl-header" }, [
           h("div", {}, [
             h("span", { class: "ctl-eyebrow", text: `${context.platform} / ${meta.id} · ${meta.isPrivate ? t("badgePrivate") : t("badgePublic")}` }),
@@ -579,51 +631,54 @@
             collapseButton()
           ])
         ]),
-        verdict.alerts?.length
+        // The rating and the strategy label are read off everything: positions, fills, transfers, equity.
+        finished && verdict.alerts?.length
           ? h("div", { class: "ctl-alerts" }, verdict.alerts.map((alertText) => h("div", { class: "ctl-alert-badge", text: alertText })))
           : null,
-        h("div", { class: `ctl-verdict ${verdictClass(verdict.level)}` }, [
-          h("strong", { text: verdict.title }),
-          h("span", { text: strategy.family })
-        ]),
-        (strategy.labels?.length || verdict.momentumStatus) ? h("div", { class: "ctl-tags" }, [
+        finished
+          ? h("div", { class: `ctl-verdict ${verdictClass(verdict.level)}` }, [
+            h("strong", { text: verdict.title }),
+            h("span", { text: strategy.family })
+          ])
+          : loadingBlock("ctl-verdict", t("streamingVerdictLoading")),
+        finished && (strategy.labels?.length || verdict.momentumStatus) ? h("div", { class: "ctl-tags" }, [
           ...(verdict.momentumStatus === "active" ? [h("span", { class: "ctl-tag is-active-momentum", text: t("badgeActiveMomentum") })] : []),
           ...(verdict.momentumStatus === "stagnant" ? [h("span", { class: "ctl-tag is-stagnant", text: t("badgeStagnant") })] : []),
           ...(verdict.momentumStatus === "drawdown" ? [h("span", { class: "ctl-tag is-drawdown", text: t("badgeInDrawdown") })] : []),
           ...(strategy.labels || []).map((label) => h("span", { class: "ctl-tag", text: label }))
         ]) : null,
         h("div", { class: "ctl-grid" }, [
-          metricCard(t("metricAllPeriodRoi"), fmt.formatPct(meta.roi), meta.performanceSource || t("hintHistoryApi")),
-          metricCard(t("metricAnnualized"), fmt.formatPct(meta.annualizedReturn), meta.annualizedSource || "CAGR/APY"),
-          metricCard(t("metricMdd"), fmt.formatPct(meta.mdd), meta.primaryWindow ? t("hintMddWindowMax") : (meta.performanceQuality || t("colSource"))),
-          metricCard(t("metricAllPeriodPnl"), fmt.formatMoney(meta.pnl), t("hintCurrentCapitalFormula")),
+          metricOrLoading(["orders"], t("metricAllPeriodRoi"), "streamingHintPerformance", () => metricCard(t("metricAllPeriodRoi"), fmt.formatPct(meta.roi), meta.performanceSource || t("hintHistoryApi"))),
+          metricOrLoading(["orders"], t("metricAnnualized"), "streamingHintPerformance", () => metricCard(t("metricAnnualized"), fmt.formatPct(meta.annualizedReturn), meta.annualizedSource || "CAGR/APY")),
+          metricOrLoading(["orders"], t("metricMdd"), "streamingHintPerformance", () => metricCard(t("metricMdd"), fmt.formatPct(meta.mdd), meta.primaryWindow ? t("hintMddWindowMax") : (meta.performanceQuality || t("colSource")))),
+          metricOrLoading(["orders"], t("metricAllPeriodPnl"), "streamingHintPerformance", () => metricCard(t("metricAllPeriodPnl"), fmt.formatMoney(meta.pnl), t("hintCurrentCapitalFormula"))),
           metricCard(t("metricTradingDays"), meta.days ? t("daysValue", [meta.days.toFixed(0)]) : "N/A"),
           metricCard(t("metricCopierPnlAum"), meta.aum ? `${(meta.copierPnl / meta.aum * 100).toFixed(1)}%` : "N/A"),
-          metricCard(
+          metricOrLoading(["positions"], t("metricWinRate"), "streamingHintPositions", () => metricCard(
             t("metricWinRate"),
             fmt.formatPct(summary.winRate * 100),
             summary.openPositionsExcluded
               ? t("closedTradesOpenExcluded", [summary.closedTrades, summary.openPositionsExcluded])
               : t("closedTrades", [summary.closedTrades])
-          ),
-          metricCard(
+          )),
+          metricOrLoading(["positions"], t("metricPayoffRatio"), "streamingHintPositions", () => metricCard(
             t("metricPayoffRatio"),
             summary.payoffRatio === null ? "N/A" : summary.payoffRatio.toFixed(2),
             payoffUnavailableReason(summary)
-          ),
-          metricCard(t("metricLossHold"), fmt.formatHours(summary.avgLossHoldHours), t("longestHold", [fmt.formatHours(summary.maxLossHoldHours)])),
-          metricCard(t("metricAdverseAdd"), fmt.formatPct(orders.adverseAddRate * 100), `${orders.adverseAdds}/${orders.openOrders}`),
-          metricCard(t("metricFloatingLoss"), fmt.formatMoney(live.openUnrealizedLoss), t("marginPct", [(live.openUnrealizedLossToMargin * 100).toFixed(1)])),
-          metricCard(
+          )),
+          metricOrLoading(["positions"], t("metricLossHold"), "streamingHintPositions", () => metricCard(t("metricLossHold"), fmt.formatHours(summary.avgLossHoldHours), t("longestHold", [fmt.formatHours(summary.maxLossHoldHours)]))),
+          metricOrLoading(["orders"], t("metricAdverseAdd"), "streamingHintOrders", () => metricCard(t("metricAdverseAdd"), fmt.formatPct(orders.adverseAddRate * 100), `${orders.adverseAdds}/${orders.openOrders}`)),
+          metricOrLoading(["positions", "orders"], t("metricFloatingLoss"), "streamingHintOrders", () => metricCard(t("metricFloatingLoss"), fmt.formatMoney(live.openUnrealizedLoss), t("marginPct", [(live.openUnrealizedLossToMargin * 100).toFixed(1)]))),
+          metricOrLoading(["orders"], t("metricLossPeriodDeposit"), "streamingHintTransfers", () => metricCard(
             t("metricLossPeriodDeposit"),
             t("lossPeriodDepositCount", [transfers.lossPeriodDepositCount]),
             transfers.lossPeriodDepositCount > 0
               ? t("lossPeriodDepositHint", [fmt.formatMoney(transfers.lossPeriodDepositTotal), fmt.formatDateTime(transfers.lastLossPeriodDepositAt)])
               : t("lossPeriodDepositNone"),
             transfers.lossPeriodDepositCount > 0 ? "is-danger" : ""
-          ),
+          )),
           metricCard(t("metricRestartCount"), String(meta.closeLeadCount || 0), t("portfolioRestart")),
-          analysis.biggestBet
+          metricOrLoading(["market"], t("metricBiggestBet"), "streamingHintEquity", () => (analysis.biggestBet
             ? metricCard(
               t("metricBiggestBet"),
               t("biggestBetValue", [analysis.biggestBet.leverage.toFixed(1)]),
@@ -633,29 +688,29 @@
                 analysis.biggestBet.wipeOutMovePct.toFixed(1)
               ])
             )
-            : metricCard(t("metricBiggestBet"), "N/A")
+            : metricCard(t("metricBiggestBet"), "N/A")))
         ]),
-        h("section", { class: "ctl-section" }, [
+        finished ? h("section", { class: "ctl-section" }, [
           h("h3", { text: t("sectionRisks") }),
           bullets(verdict.cautions, t("noMajorRisks"))
-        ]),
-        h("section", { class: "ctl-section" }, [
+        ]) : null,
+        finished ? h("section", { class: "ctl-section" }, [
           h("h3", { text: t("sectionPositives") }),
           bullets(verdict.positives, t("noPositives"))
-        ]),
-        renderStopLossRadar(analysis.stopLossRadar),
-        h("section", { class: "ctl-section" }, [
+        ]) : null,
+        finished ? renderStopLossRadar(analysis.stopLossRadar) : renderRadarLoading(),
+        finished ? h("section", { class: "ctl-section" }, [
           h("h3", { text: t("sectionSettings") }),
           bullets(settingAdvice(analysis), "")
-        ]),
-        h("details", { class: "ctl-details" }, [
+        ]) : null,
+        finished ? h("details", { class: "ctl-details" }, [
           h("summary", { text: t("advancedData", [statusText(raw.endpointResults)]) }),
           h("h3", { text: t("advancedWindowCrossCheck") }),
           performanceWindowTable(meta, fmt),
           h("p", { class: "ctl-muted ctl-small-note", text: t("historyDataPrefix", [historyCompleteness(raw)]) }),
           endpointList(raw.endpointResults),
           h("pre", { text: JSON.stringify(analysis.rawCounts, null, 2) })
-        ]),
+        ]) : null,
         h("p", { class: "ctl-disclaimer", text: t("disclaimer") })
       ])
     );
@@ -700,12 +755,20 @@
         onProgress: (event) => {
           if (!superseded()) window.CopyTradingLensPositionsPanel?.setProgress(event);
         },
-        // The read lands in pieces, but nothing is analysed or drawn from an unfinished one; the events only
-        // move the stage text of the loading view. Marks can land after orders: keep the furthest stage reached.
+        // The read lands in pieces and the card fills in as each does. Marks can land after orders: keep the furthest
+        // stage reached. A partial analysis can fail on what has not landed; then nothing is drawn yet.
         onProgressive: (event) => {
           if (superseded()) return;
           const reached = (STAGE_ORDER[event.stage] ?? 0) >= (STAGE_ORDER[run.streamingStage] ?? -1) ? event.stage : run.streamingStage;
-          run = { ...run, streamingStage: reached };
+          let analysis = null;
+          try {
+            analysis = context.platform === "Binance"
+              ? window.CopyTradingLensAnalysis.analyzeBinance(event.raw)
+              : window.CopyTradingLensAnalysis.analyzeOkx(event.raw);
+          } catch (_error) {
+            analysis = null;
+          }
+          run = { ...run, streamingStage: reached, raw: event.raw, analysis };
           paint();
         }
       });

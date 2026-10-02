@@ -1274,7 +1274,12 @@
         strategy: inferStrategy(summary, global.CopyTradingLensStyle.classify(raw.orderHistory || [])),
         verdict: buildVerdict(meta, summary, orders, transfers, live, biggestBet)
       };
-    const stopLossRadar = global.CopyTradingLensStopLoss.analyzeStopLossRadar(raw.positionHistory || [], raw.orderHistory || [], raw.positionMarks, equity);
+    // The radar's number is only as true as everything behind it: positions, candles, fills for the entry path, and the
+    // equity count-back for the margin share. A read still landing has no radar yet (null), not a provisional one.
+    const radarInputsLoaded = !raw.loaded || (raw.loaded.positions && raw.loaded.marks && raw.loaded.orders && raw.loaded.market);
+    const stopLossRadar = radarInputsLoaded
+      ? global.CopyTradingLensStopLoss.analyzeStopLossRadar(raw.positionHistory || [], raw.orderHistory || [], raw.positionMarks, equity)
+      : null;
     return {
       platform: "Binance",
       generatedAt: new Date().toISOString(),

@@ -788,6 +788,60 @@
   100% { opacity: 0.85; }
 }
 
+/* A value waits for its own inputs; until they land its place spins. */
+.ctl-block-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #93c5fd;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ctl-verdict.ctl-block-loading,
+.ctl-radar-loading {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px dashed rgba(59, 130, 246, 0.35);
+}
+
+.ctl-advisor-hero.ctl-block-loading {
+  justify-content: center;
+  padding: 22px 14px;
+}
+
+.ctl-metric.is-streaming-metric strong.ctl-loading-text {
+  display: inline-flex;
+  align-items: center;
+  color: #93c5fd;
+  font-size: 13px;
+  animation: ctl-pulse 1.5s infinite;
+}
+
+/* The answer first, in words, then why. */
+.ctl-radar-decision,
+.ctl-advisor-decision {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.35;
+  margin-bottom: 6px;
+  color: #f0b90b;
+}
+
+.ctl-radar-why p {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #cbd5e1;
+}
+
+.ctl-radar-why p:last-child {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+
 @media (max-width: 560px) {
   #copy-trading-lens-root {
     left: 12px;

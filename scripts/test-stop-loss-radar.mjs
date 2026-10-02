@@ -203,6 +203,29 @@ const position = (extra) => ({ symbol: "XUSDT", side: "LONG", leverage: 10, avgC
   console.log("PASS: stop selection finds the known optimum, defers to 'no stop' when winners dip as deep, and punishes ruin");
 }
 
+// 5b. the card explains its answer in the trader's own numbers: what the shown stop cuts, saves and averages
+{
+  const wins = Array.from({ length: 40 }, (_, i) => position({ symbol: `W${i}USDT`, avgClosePrice: 100 - i * 0.3, closingPnl: 60, roi: 0.3 }));
+  const disaster = position({ symbol: "BRUSDT", avgClosePrice: 50, closingPnl: -780, roi: -3.9, leverage: 10 });
+  const radar = stoploss.analyzeStopLossRadar([...wins, disaster], [], null, { equityAt: () => 666.67 });
+  const t = radar.tradeoff;
+  const stop = radar.recommendedRoe;
+  assert.equal(t.stop, stop);
+  assert.equal(t.positions, 41);
+  assert.equal(t.wins, 40);
+  assert.equal(t.losses, 1);
+  // independent recount: winner i dips i x 3 ROE points (0.3% x 10x per step)
+  assert.equal(t.killedWins, wins.filter((_, i) => i * 3 >= stop).length, "winners whose dip reached the stop");
+  assert.equal(t.savedLosses, 1, "the -390% loser would have ended at -stop instead");
+  near(t.savedLossesAvgRoi, -390, 0.001, "what that loser really ended at");
+  near(t.killedWinsAvgRoi, t.killedWins ? 30 : 0, 0.001, "what the cut winners really ended at");
+  assert.deepEqual(plain(t.worstLoss), { symbol: "BRUSDT", leverage: 10, roiPct: -390, maeRoe: 500 });
+  const at = (level) => radar.stopSelection.curve.find((point) => point.stop === level).meanRoe;
+  near(t.meanRoeNone, at(null), 1e-9, "no stop averages what the curve says");
+  near(t.meanRoeStop, at(stop), 1e-9, "the shown stop averages what the curve says");
+  console.log("PASS: the trade-off behind the shown stop is counted from the trader's own positions");
+}
+
 // 6. Real cached lead traders: the same numbers as tools/research/stoploss-three.mjs (V2 = entry path +
 //    exact in-life minute marks). Skipped when the local research caches are absent.
 const cacheDir = path.join(root, "tools", "cache");

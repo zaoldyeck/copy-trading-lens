@@ -276,6 +276,23 @@
     "badgeBagHoldingAlert": "Deep Bag-Holding Warning",
     "radarRecommendedLabel": "Recommended Stop-Loss Setting",
     "radarInsuranceLabel": "If you still want a stop (cheapest)",
+    "radarDecisionOptional": "A stop-loss is optional here",
+    "radarDecisionStop": "Set a {0}% stop-loss",
+    "radarWhyOptional": "Backtested on this trader's last {0} closed positions: {1} winners dipped past {2}% before recovering, so a stop would have cut them short (from +{3}% on average to -{2}%), while the stop saves only {4} big losers. Overall, no stop averages +{5}% per position against +{6}% with a {2}% stop, so in this history leaving it off pays more.",
+    "radarWhyNoCost": "Backtested on this trader's last {0} closed positions: a {1}% stop would not have cut a single winner short and would have caught only {2} big losers; it averages +{3}% per position against +{4}% with no stop. It makes little difference; set one if you want the insurance.",
+    "radarWhyStop": "Backtested on this trader's last {0} closed positions: a {1}% stop would have stopped {2} positions that ended in big losses (from -{3}% on average to -{1}%) and cut only {4} winners short. Overall it averages +{5}% per position against +{6}% with no stop, so setting it pays more.",
+    "radarInsurance": "A stop-loss is really insurance against a loss bigger than anything in the history. This trader's worst position was {0} ({1}x leverage), which ended at -{2}%; with a {3}% stop it would have lost at most {3}%. If you want that insurance, {3}% costs the least.",
+    "radarApplyOptional": "Set one anyway: fill in {0}%",
+    "radarBandSentence": "Any value from {0}% to {1}% backtests about as well as the best one.",
+    "radarBacktestFootnote": "The backtest uses closed positions only and does not predict the future; open positions are not counted. % is return on margin (ROE).",
+    "streamingHintPerformance": "Loading performance data...",
+    "streamingVerdictLoading": "Rating and strategy analysis, needs complete order and funds data...",
+    "streamingRadarLoading": "Stop-loss radar, needs complete positions, fills and candles...",
+    "metricLoadingText": "↻ Loading...",
+    "streamingHintPositions": "Calculating closed PnL & holds...",
+    "streamingHintOrders": "Analyzing deep order flow...",
+    "streamingHintTransfers": "Verifying transfer deposits...",
+    "streamingHintEquity": "Reconstructing equity & leverage...",
     "radarRoeUnit": "(Margin ROE)",
     "radarEquivalentPrice": "At {0}x leverage, allows underlying price adverse move of {1}%",
     "radarDirectInputHint": "Enter {0} directly into Binance 'Position Stop-Loss' field",
@@ -287,9 +304,6 @@
     "radarWinRetention": "Win Retention Rate",
     "radarDominantLev": "Dominant Leverage",
     "radarWorstDrawdown": "Worst Historical Drawdown",
-    "radarStableBandLabel": "Stable range",
-    "radarStopOptionalNote": "On this trader's history, a stop-loss is not shown to beat having none. If you still want one, {0}% costs the least.",
-    "radarStopTradeoff": "On this history a {0}% stop would trigger on {1} trades that ended in profit and {2} that ended in loss.",
     "radarSevereBagWarning": "⚠️ Warning: Trader had historical position drawdown reaching -{0}%! Strictly recommend stop-loss to avoid blowups.",
     "radarBinanceRoeNotice": "💡 Binance Tip: 'Position Stop-Loss (0-95%)' input is Margin ROE %, NOT price change %. Setting 5-10% kills 50%+ of wins prematurely due to normal volatility! Follow the radar recommendation above. (Note: Stop-loss is triggered by Binance's backend ROE daemon rather than exchange book orders; table shows --/--, and blended entry price updates dynamically on scale-ins.)",
     "settingAdvisorTitle": "CopyLens Smart Stop-Loss Advisor",
@@ -308,7 +322,7 @@
     "stageLoadedPositions": "Core Win-Rate & Stop-Loss Radar",
     "stageLoadingOrders": "Deep Order Flow, Style Classification & Market Trends",
     "stageLoadedOrders": "Order Flow & Strategy Style",
-    "stageLoadingMarket": "Mark Price K-Lines & Precise MAE Excursions",
+    "stageLoadingMarket": "Mark Price K-Lines & Precise MAE Excursions"
   },
   "zh_TW": {
     "extensionName": "Copy Trading Lens",
@@ -584,6 +598,23 @@
     "badgeBagHoldingAlert": "高危死扛警告",
     "radarRecommendedLabel": "推薦填入「倉位止損」",
     "radarInsuranceLabel": "若仍要設止損（代價最小）",
+    "radarDecisionOptional": "不一定要設止損",
+    "radarDecisionStop": "建議設止損 {0}%",
+    "radarWhyOptional": "用這位帶單員過去 {0} 筆已平倉的單回測：其中 {1} 筆最後賺錢的單，中途曾先浮虧超過 {2}% 才反彈，設止損會把它們提前砍掉（平均從賺 {3}% 變成虧 {2}%）；而止損真正救得下來的大虧單只有 {4} 筆。整體算下來，不設止損每筆平均賺 {5}%，設 {2}% 只賺 {6}%，所以這段歷史裡不設比較划算。",
+    "radarWhyNoCost": "用這位帶單員過去 {0} 筆已平倉的單回測：設 {1}% 不會砍到任何一筆最後賺錢的單，歷史上也只擋下 {2} 筆大虧的單；每筆平均賺 {3}%（不設止損 {4}%）。設不設差別很小，想要保險就設。",
+    "radarWhyStop": "用這位帶單員過去 {0} 筆已平倉的單回測：設 {1}% 能擋下 {2} 筆最後大虧的單（平均從虧 {3}% 變成虧 {1}%），只多砍 {4} 筆最後賺錢的單。整體算下來，每筆平均賺 {5}%，不設止損只賺 {6}%，所以設比較划算。",
+    "radarInsurance": "止損其實是一份保險：它保的是歷史上還沒出現過的更大暴虧。這位帶單員過去最慘的一筆是 {0}（{1}x 槓桿），最後虧 {2}%；若當時設了 {3}%，最多只會虧 {3}%。想買這份保險，{3}% 是代價最小的選擇。",
+    "radarApplyOptional": "仍要設止損：填入 {0}%",
+    "radarBandSentence": "{0}% 到 {1}% 之間的任何值，回測結果都和最佳值差不多。",
+    "radarBacktestFootnote": "回測只用過去已平倉的單，不代表未來；開倉中的單不計入。「%」是保證金虧損比率（ROE）。",
+    "streamingHintPerformance": "績效數據載入中...",
+    "streamingVerdictLoading": "綜合評級與策略分析中，需要完整的訂單與資金資料...",
+    "streamingRadarLoading": "止損雷達計算中，需要完整的持倉、成交與 K 線資料...",
+    "metricLoadingText": "↻ 載入中...",
+    "streamingHintPositions": "統計平倉損益與持倉時間...",
+    "streamingHintOrders": "深度訂單流分析中...",
+    "streamingHintTransfers": "比對轉帳入金紀錄...",
+    "streamingHintEquity": "回溯帳戶淨值與槓桿...",
     "radarRoeUnit": "(保證金虧損比率 ROE)",
     "radarEquivalentPrice": "在 {0}x 槓桿下，相當於允許標的價格逆向波動 {1}%",
     "radarDirectInputHint": "在幣安「倉位止損」輸入框直接填入數值 {0} 即可",
@@ -595,9 +626,6 @@
     "radarWinRetention": "贏單保留率",
     "radarDominantLev": "帶單常用槓桿",
     "radarWorstDrawdown": "歷史最深持倉浮虧",
-    "radarStableBandLabel": "穩定區間",
-    "radarStopOptionalNote": "以這位帶單員的歷史資料，看不出設止損比不設更好；若仍要設，{0}% 是代價最小的選擇。",
-    "radarStopTradeoff": "以這段歷史，設 {0}% 會觸發止損的單子裡，最後賺錢的有 {1} 筆、最後虧損的有 {2} 筆。",
     "radarSevereBagWarning": "⚠️ 警告：該帶單員歷史曾出現單筆 -{0}% 的嚴重死扛！強烈建議啟用倉位止損以阻截黑天鵝爆倉。",
     "radarBinanceRoeNotice": "💡 幣安提示：幣安跟單的「倉位止損 (0-95%)」欄位是計算保證金虧損比率（ROE%），非標的跌幅。若設 5~10% 會因微小雜訊誤砍大批贏單！請按上述推薦值設定。（註：幣安止損由系統後台風控比對即時浮虧 ROE%，盤口不掛固定價委託，持倉表格顯示 --/--，加倉時均價自動動態重算）",
     "settingAdvisorTitle": "CopyLens 智能跟單止損顧問",
@@ -616,7 +644,7 @@
     "stageLoadedPositions": "核心勝率與止損雷達",
     "stageLoadingOrders": "深度訂單流、交易風格分類與標的走勢",
     "stageLoadedOrders": "訂單流與風格分類",
-    "stageLoadingMarket": "歷史標的 K 線與逐筆浮虧精算",
+    "stageLoadingMarket": "歷史標的 K 線與逐筆浮虧精算"
   },
   "zh_CN": {
     "extensionName": "Copy Trading Lens",
@@ -892,6 +920,23 @@
     "badgeBagHoldingAlert": "高危死扛警告",
     "radarRecommendedLabel": "推荐填入「仓位止损」",
     "radarInsuranceLabel": "若仍要设止损（代价最小）",
+    "radarDecisionOptional": "不一定要设止损",
+    "radarDecisionStop": "建议设止损 {0}%",
+    "radarWhyOptional": "用这位带单员过去 {0} 笔已平仓的单回测：其中 {1} 笔最后盈利的单，中途曾先浮亏超过 {2}% 才反弹，设止损会把它们提前砍掉（平均从赚 {3}% 变成亏 {2}%）；而止损真正救得下来的大亏单只有 {4} 笔。整体算下来，不设止损每笔平均赚 {5}%，设 {2}% 只赚 {6}%，所以这段历史里不设更划算。",
+    "radarWhyNoCost": "用这位带单员过去 {0} 笔已平仓的单回测：设 {1}% 不会砍到任何一笔最后盈利的单，历史上也只拦下 {2} 笔大亏的单；每笔平均赚 {3}%（不设止损 {4}%）。设不设差别很小，想要保险就设。",
+    "radarWhyStop": "用这位带单员过去 {0} 笔已平仓的单回测：设 {1}% 能拦下 {2} 笔最后大亏的单（平均从亏 {3}% 变成亏 {1}%），只多砍 {4} 笔最后盈利的单。整体算下来，每笔平均赚 {5}%，不设止损只赚 {6}%，所以设更划算。",
+    "radarInsurance": "止损其实是一份保险：它保的是历史上还没出现过的更大暴亏。这位带单员过去最惨的一笔是 {0}（{1}x 杠杆），最后亏 {2}%；若当时设了 {3}%，最多只会亏 {3}%。想买这份保险，{3}% 是代价最小的选择。",
+    "radarApplyOptional": "仍要设止损：填入 {0}%",
+    "radarBandSentence": "{0}% 到 {1}% 之间的任何值，回测结果都和最佳值差不多。",
+    "radarBacktestFootnote": "回测只用过去已平仓的单，不代表未来；持仓中的单不计入。「%」是保证金亏损比率（ROE）。",
+    "streamingHintPerformance": "绩效数据载入中...",
+    "streamingVerdictLoading": "综合评级与策略分析中，需要完整的订单与资金数据...",
+    "streamingRadarLoading": "止损雷达计算中，需要完整的持仓、成交与 K 线数据...",
+    "metricLoadingText": "↻ 载入中...",
+    "streamingHintPositions": "统计平仓损益与持仓时间...",
+    "streamingHintOrders": "深度订单流分析中...",
+    "streamingHintTransfers": "比对转账入金记录...",
+    "streamingHintEquity": "回溯账户净值与杠杆...",
     "radarRoeUnit": "(保证金亏损比率 ROE)",
     "radarEquivalentPrice": "在 {0}x 杠杆下，相当于允许标的价格逆向波动 {1}%",
     "radarDirectInputHint": "在币安「仓位止损」输入框直接填入数值 {0} 即可",
@@ -903,9 +948,6 @@
     "radarWinRetention": "赢单保留率",
     "radarDominantLev": "带单常用杠杆",
     "radarWorstDrawdown": "历史最深持仓浮亏",
-    "radarStableBandLabel": "稳定区间",
-    "radarStopOptionalNote": "以这位带单员的历史数据，看不出设止损比不设更好；若仍要设，{0}% 是代价最小的选择。",
-    "radarStopTradeoff": "以这段历史，设 {0}% 会触发止损的单子里，最后盈利的有 {1} 笔、最后亏损的有 {2} 笔。",
     "radarSevereBagWarning": "⚠️ 警告：该带单员历史曾出现单笔 -{0}% 的严重死扛！强烈建议启用仓位止损以阻截黑天鹅爆仓。",
     "radarBinanceRoeNotice": "💡 币安提示：币安跟单的「仓位止损 (0-95%)」栏位是计算保证金亏损比率（ROE%），非标的跌幅。若设 5~10% 会因微小杂讯误砍大批赢单！请按上述推荐值设置。（注：币安止损由系统后台风控比对即时浮亏 ROE%，盘口不挂固定价委托，持仓表格显示 --/--，加仓时均价自动动态重算）",
     "settingAdvisorTitle": "CopyLens 智能跟单止损顾问",
@@ -924,7 +966,7 @@
     "stageLoadedPositions": "核心胜率与止损雷达",
     "stageLoadingOrders": "深度订单流、交易风格分类与标的走势",
     "stageLoadedOrders": "订单流与风格分类",
-    "stageLoadingMarket": "历史标的 K 线与逐笔浮亏精算",
+    "stageLoadingMarket": "历史标的 K 线与逐笔浮亏精算"
   },
   "ja": {
     "extensionName": "Copy Trading Lens",
@@ -1200,6 +1242,23 @@
     "badgeBagHoldingAlert": "深追含み損警告",
     "radarRecommendedLabel": "推奨ポジション損切り設定",
     "radarInsuranceLabel": "設定する場合（コスト最小）",
+    "radarDecisionOptional": "損切りは必須ではありません",
+    "radarDecisionStop": "{0}% の損切りを推奨",
+    "radarWhyOptional": "このトレーダーの過去 {0} 件の決済済みポジションでバックテスト：最終的に利益になった {1} 件は途中で {2}% を超える含み損を抱えてから戻っており、損切りを入れるとそれらを途中で切ってしまいます（平均 +{3}% が -{2}% に）。一方、損切りで本当に救える大きな損失は {4} 件だけです。全体では、損切りなしが1件あたり平均 +{5}%、{2}% の損切りでは +{6}% で、この期間は入れない方が有利でした。",
+    "radarWhyNoCost": "このトレーダーの過去 {0} 件の決済済みポジションでバックテスト：{1}% の損切りは利益になった注文を1件も切らず、大きな損失も {2} 件しか止めません。1件あたり平均 +{3}%（損切りなしは +{4}%）で、差はわずかです。保険が欲しければ入れてください。",
+    "radarWhyStop": "このトレーダーの過去 {0} 件の決済済みポジションでバックテスト：{1}% の損切りで大きな損失に終わった {2} 件を止められ（平均 -{3}% が -{1}% に）、途中で切る利益注文は {4} 件だけです。全体では1件あたり平均 +{5}%、損切りなしは +{6}% で、入れた方が有利です。",
+    "radarInsurance": "損切りは、履歴にまだ現れていない大きな損失に備える保険です。このトレーダーの過去最悪は {0}（{1}倍レバレッジ）で、最終的に -{2}% でした。{3}% の損切りがあれば最大でも -{3}% で済みました。保険が欲しいなら、コストが最も小さいのは {3}% です。",
+    "radarApplyOptional": "それでも設定する：{0}% を入力",
+    "radarBandSentence": "{0}% から {1}% の間なら、どの値でも最良値とほぼ同じ結果です。",
+    "radarBacktestFootnote": "バックテストは決済済みのポジションのみで、将来を保証しません。保有中は含みません。「%」は証拠金に対する損益率（ROE）です。",
+    "streamingHintPerformance": "パフォーマンスデータを読み込み中...",
+    "streamingVerdictLoading": "総合評価と戦略を分析中。完全な注文・資金データが必要です...",
+    "streamingRadarLoading": "損切りレーダー計算中。完全なポジション・約定・ローソク足データが必要です...",
+    "metricLoadingText": "↻ 読み込み中...",
+    "streamingHintPositions": "決済損益と保有時間を集計中...",
+    "streamingHintOrders": "注文フローを分析中...",
+    "streamingHintTransfers": "入出金履歴を確認中...",
+    "streamingHintEquity": "資産残高とレバレッジを再計算中...",
     "radarRoeUnit": "(証拠金損失率 ROE)",
     "radarEquivalentPrice": "{0}倍レバレッジ時、原資産の逆行許容幅 {1}% に相当",
     "radarDirectInputHint": "バイナンスの「ポジション損切り」に直接 {0} を入力",
@@ -1211,9 +1270,6 @@
     "radarWinRetention": "勝トレード保持率",
     "radarDominantLev": "主たるレバレッジ",
     "radarWorstDrawdown": "過去最大含み損",
-    "radarStableBandLabel": "安定レンジ",
-    "radarStopOptionalNote": "このトレーダーの履歴では、ストップロスが無い場合より優れているとは言えません。設定するなら {0}% が最もコストの小さい選択です。",
-    "radarStopTradeoff": "この履歴では、{0}% に設定すると、発動する注文のうち最終的に利益だったものが {1} 件、損失だったものが {2} 件あります。",
     "radarSevereBagWarning": "⚠️ 警告：過去に単一ポジションで -{0}% の深刻な含み損を耐えた履歴があります。ロスカット設定を強く推奨します。",
     "radarBinanceRoeNotice": "💡 バイナンス注意事項：コピートレードの「ポジション損切り(0-95%)」は証拠金損失率(ROE%)であり、現物価格変動%ではありません。5〜10%にするとノイズで多くの利益ポジションが早期誤決済されます。上記推奨値をご利用ください。(注：損切りは板注文ではなくバックエンドのROE監視で判定され、ポジション一覧には--/--と表示され、ナンピン時に平均取得単価が自動更新されます)",
     "settingAdvisorTitle": "CopyLens 損切りアドバイザー",
@@ -1232,25 +1288,17 @@
     "stageLoadedPositions": "コア勝率と損切りレーダー",
     "stageLoadingOrders": "注文履歴、スタイル分類、相場推移",
     "stageLoadedOrders": "注文フローと取引スタイル",
-    "stageLoadingMarket": "マーク価格ローソク足と詳細な含み損精算",
-    "metricLoadingText": "↻ 読み込み中...",
-    "streamingHintOrders": "注文フローを分析中...",
-    "streamingHintTransfers": "入出金履歴を確認中...",
-    "streamingHintEquity": "資産残高とレバレッジを再計算中...",
-    "streamingHintPositions": "決済損益と保有時間を集計中...",
-    "streamingStrategyLoading": "取引スタイル分析中 ↻",
-    "radarPreciseBadge": "ローソク足計算中 ↻",
-    "settingValuePropStatsDescLoss": "負けトレード中央値 P50: -{0}% · 90パーセンタイル P90: -{1}%"
+    "stageLoadingMarket": "マーク価格ローソク足と詳細な含み損精算"
   }
 };
 
   function detectLocale() {
     try {
       const path = global.location?.pathname || "";
-      if (path.includes("/zh-TC") || path.includes("/zh-TW") || path.includes("/zh-HK") || path.includes("/zh-Hant")) {
+      if (path.includes("/zh-TC") || path.includes("/zh-TW") || path.includes("/zh-HK") || path.includes("/zh-Hant") || path.includes("/zh-MO")) {
         return "zh_TW";
       }
-      if (path.includes("/zh-CN") || path.includes("/zh-Hans") || path.includes("/zh/")) {
+      if (path.includes("/zh-CN") || path.includes("/zh-Hans") || path.includes("/zh-SG") || path.includes("/zh/")) {
         return "zh_CN";
       }
       if (path.includes("/ja")) {
@@ -1267,11 +1315,11 @@
       if (/^en/i.test(htmlLang)) return "en";
 
       const rawCk = (global.document && global.document.cookie) || "";
-      const cookieMatch = rawCk.match(/(?:^|;\s*)lang=([^;]+)/);
+      const cookieMatch = rawCk.match(/(?:^|;\s*)(?:lang|bapi_lang)=([^;]+)/);
       if (cookieMatch) {
         const val = decodeURIComponent(cookieMatch[1]).toLowerCase();
-        if (val.includes("tc") || val.includes("tw") || val.includes("hk") || val.includes("hant")) return "zh_TW";
-        if (val.includes("cn") || val.includes("hans") || val === "zh") return "zh_CN";
+        if (val.includes("tc") || val.includes("tw") || val.includes("hk") || val.includes("hant") || val.includes("mo")) return "zh_TW";
+        if (val.includes("cn") || val.includes("hans") || val.includes("sg") || val === "zh") return "zh_CN";
         if (val.includes("ja")) return "ja";
         if (val.includes("en")) return "en";
       }

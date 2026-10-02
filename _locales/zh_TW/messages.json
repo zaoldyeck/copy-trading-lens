@@ -818,6 +818,57 @@
   "radarInsuranceLabel": {
     "message": "若仍要設止損（代價最小）"
   },
+  "radarDecisionOptional": {
+    "message": "不一定要設止損"
+  },
+  "radarDecisionStop": {
+    "message": "建議設止損 {0}%"
+  },
+  "radarWhyOptional": {
+    "message": "用這位帶單員過去 {0} 筆已平倉的單回測：其中 {1} 筆最後賺錢的單，中途曾先浮虧超過 {2}% 才反彈，設止損會把它們提前砍掉（平均從賺 {3}% 變成虧 {2}%）；而止損真正救得下來的大虧單只有 {4} 筆。整體算下來，不設止損每筆平均賺 {5}%，設 {2}% 只賺 {6}%，所以這段歷史裡不設比較划算。"
+  },
+  "radarWhyNoCost": {
+    "message": "用這位帶單員過去 {0} 筆已平倉的單回測：設 {1}% 不會砍到任何一筆最後賺錢的單，歷史上也只擋下 {2} 筆大虧的單；每筆平均賺 {3}%（不設止損 {4}%）。設不設差別很小，想要保險就設。"
+  },
+  "radarWhyStop": {
+    "message": "用這位帶單員過去 {0} 筆已平倉的單回測：設 {1}% 能擋下 {2} 筆最後大虧的單（平均從虧 {3}% 變成虧 {1}%），只多砍 {4} 筆最後賺錢的單。整體算下來，每筆平均賺 {5}%，不設止損只賺 {6}%，所以設比較划算。"
+  },
+  "radarInsurance": {
+    "message": "止損其實是一份保險：它保的是歷史上還沒出現過的更大暴虧。這位帶單員過去最慘的一筆是 {0}（{1}x 槓桿），最後虧 {2}%；若當時設了 {3}%，最多只會虧 {3}%。想買這份保險，{3}% 是代價最小的選擇。"
+  },
+  "radarApplyOptional": {
+    "message": "仍要設止損：填入 {0}%"
+  },
+  "radarBandSentence": {
+    "message": "{0}% 到 {1}% 之間的任何值，回測結果都和最佳值差不多。"
+  },
+  "radarBacktestFootnote": {
+    "message": "回測只用過去已平倉的單，不代表未來；開倉中的單不計入。「%」是保證金虧損比率（ROE）。"
+  },
+  "streamingHintPerformance": {
+    "message": "績效數據載入中..."
+  },
+  "streamingVerdictLoading": {
+    "message": "綜合評級與策略分析中，需要完整的訂單與資金資料..."
+  },
+  "streamingRadarLoading": {
+    "message": "止損雷達計算中，需要完整的持倉、成交與 K 線資料..."
+  },
+  "metricLoadingText": {
+    "message": "↻ 載入中..."
+  },
+  "streamingHintPositions": {
+    "message": "統計平倉損益與持倉時間..."
+  },
+  "streamingHintOrders": {
+    "message": "深度訂單流分析中..."
+  },
+  "streamingHintTransfers": {
+    "message": "比對轉帳入金紀錄..."
+  },
+  "streamingHintEquity": {
+    "message": "回溯帳戶淨值與槓桿..."
+  },
   "radarRoeUnit": {
     "message": "(保證金虧損比率 ROE)"
   },
@@ -850,15 +901,6 @@
   },
   "radarWorstDrawdown": {
     "message": "歷史最深持倉浮虧"
-  },
-  "radarStableBandLabel": {
-    "message": "穩定區間"
-  },
-  "radarStopOptionalNote": {
-    "message": "以這位帶單員的歷史資料，看不出設止損比不設更好；若仍要設，{0}% 是代價最小的選擇。"
-  },
-  "radarStopTradeoff": {
-    "message": "以這段歷史，設 {0}% 會觸發止損的單子裡，最後賺錢的有 {1} 筆、最後虧損的有 {2} 筆。"
   },
   "radarSevereBagWarning": {
     "message": "⚠️ 警告：該帶單員歷史曾出現單筆 -{0}% 的嚴重死扛！強烈建議啟用倉位止損以阻截黑天鵝爆倉。"

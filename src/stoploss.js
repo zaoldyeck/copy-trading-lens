@@ -315,6 +315,33 @@
     };
   }
 
+  // What the shown stop would have done on this trader's own closed positions, in the terms the card explains it in:
+  // which winners it cuts short, which losers it really saves, and what each choice averages per position.
+  function tradeoffOf(rows, stop, selection) {
+    const wins = rows.filter((row) => row.closingPnl > 0);
+    const losses = rows.filter((row) => row.closingPnl < 0);
+    const killed = wins.filter((row) => row.maeRoe >= stop);
+    const stoppedLosses = losses.filter((row) => row.maeRoe >= stop);
+    // a stopped loser is only saved when it would have ended deeper than the stop
+    const saved = stoppedLosses.filter((row) => row.roiPct < -stop);
+    const worst = rows.reduce((deepest, row) => (!deepest || row.roiPct < deepest.roiPct ? row : deepest), null);
+    const meanRoeAt = (level) => selection.curve.find((point) => point.stop === level).meanRoe;
+    return {
+      stop,
+      positions: rows.length,
+      wins: wins.length,
+      killedWins: killed.length,
+      killedWinsAvgRoi: mean(killed.map((row) => row.roiPct)),
+      losses: losses.length,
+      savedLosses: saved.length,
+      savedLossesAvgRoi: mean(saved.map((row) => row.roiPct)),
+      worsenedLosses: stoppedLosses.length - saved.length,
+      meanRoeNone: meanRoeAt(null),
+      meanRoeStop: meanRoeAt(stop),
+      worstLoss: worst && { symbol: worst.symbol, leverage: worst.leverage, roiPct: worst.roiPct, maeRoe: worst.maeRoe }
+    };
+  }
+
   const stats = (values) => ({
     median: percentile(values, 50),
     p50: percentile(values, 50),
@@ -335,8 +362,7 @@
       recommendedPriceDrop: null,
       stopOptional: false,
       winRetentionRate: null,
-      killedWinsCount: null,
-      stoppedLossesCount: null,
+      tradeoff: null,
       hasSevereBagHolding: false,
       worstHistoricalRoeMae: null,
       allStats: null,
@@ -364,6 +390,7 @@
     const recommendedRoe = selection.optimal === null ? selection.bestStop : selection.optimal;
     const dominantLeverage = Math.round(percentile(rows.map((row) => row.leverage), 50)) || 5;
     const killedWins = wins.filter((row) => row.maeRoe >= recommendedRoe).length;
+    const tradeoff = tradeoffOf(rows, recommendedRoe, selection);
     const lossStats = stats(losses.map((row) => row.maeRoe));
     const marksCoverage = rows.filter((row) => row.marksUsed).length / rows.length;
 
@@ -376,8 +403,7 @@
       // the data cannot tell a stop from no stop: the optimum is "none", or "none" sits in the stable band
       stopOptional: selection.optimal === null || selection.bandIncludesNone,
       winRetentionRate: Number((wins.length ? ((wins.length - killedWins) / wins.length) * 100 : 100).toFixed(1)),
-      killedWinsCount: killedWins,
-      stoppedLossesCount: losses.filter((row) => row.maeRoe >= recommendedRoe).length,
+      tradeoff,
       hasSevereBagHolding: lossStats.max >= 100 || losses.some((row) => row.roiPct <= -100),
       worstHistoricalRoeMae: Number(lossStats.max.toFixed(1)),
       allStats: rounded(stats(rows.map((row) => row.maeRoe))),
