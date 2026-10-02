@@ -61,7 +61,7 @@ global.fetch = async (url, options) => {
 
 // Same scripts, same order, as manifest.json: analysis.js reads styles decided
 // by style.js, which rebuilds positions through positions.js.
-for (const file of ["src/i18n.js", "src/providers.js", "src/positions.js", "src/style.js", "src/equity.js", "src/analysis.js"]) {
+for (const file of ["src/i18n.js", "src/providers.js", "src/positions.js", "src/style.js", "src/equity.js", "src/stoploss.js", "src/analysis.js"]) {
   // eslint-disable-next-line no-eval
   eval(read(file));
 }

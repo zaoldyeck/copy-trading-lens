@@ -406,26 +406,34 @@
 
     const detailData = detailResult.ok ? (detailResult.data?.data || {}) : {};
 
-    // Progressive update Stage 1: detail metadata ready (~150ms)
-    onProgressive?.({
-      stage: "detail",
-      raw: {
-        id: portfolioId,
-        url: location.href,
-        pageTitle,
-        visibleText,
-        detail: detailData,
-        performanceWindows: {},
-        listItem: {},
-        livePositions: [],
-        positionHistory: [],
-        orderHistory: [],
-        transferHistory: [],
-        marketHistory: null,
-        historyStatus: {},
-        endpointResults: { ...endpointResults }
-      }
+    // What every progressive event carries: the read so far. Each piece lands in `view` as its
+    // fetch finishes, and an event is a snapshot of the whole view, so a slow piece finishing
+    // late can never overwrite a faster one with its old, emptier state.
+    const view = {
+      detail: detailData,
+      performanceWindows: {},
+      listItem: {},
+      livePositions: [],
+      positionHistory: [],
+      orderHistory: [],
+      transferHistory: [],
+      positionMarks: null,
+      marketHistory: null,
+      historyStatus: {}
+    };
+    const rawNow = () => ({
+      id: portfolioId,
+      url: location.href,
+      pageTitle,
+      visibleText,
+      ...view,
+      historyStatus: { ...view.historyStatus },
+      endpointResults: { ...endpointResults }
     });
+    const emit = (stage) => onProgressive?.({ stage, raw: rawNow() });
+
+    // Progressive update Stage 1: detail metadata ready (~150ms)
+    emit("detail");
 
     // Guard: pause check directly after detail (preserves test-fetch-pause.mjs invariant)
     await waitForResume(waitUntilResumed);
@@ -444,66 +452,26 @@
     const positionData = positionHistory.ok ? positionHistory.data : {};
     const positionRows = positionHistory.ok ? asArray(positionData.rows) : [];
     const liveRows = live.ok ? binanceDataList(live.data) : [];
-
-    // Extract symbols from positions and live exposure, prioritized by frequency
-    const posSymCounts = new Map();
-    for (const p of positionRows) {
-      if (p.symbol) posSymCounts.set(p.symbol, (posSymCounts.get(p.symbol) || 0) + 1);
-    }
-    for (const p of liveRows) {
-      if (p.symbol) posSymCounts.set(p.symbol, (posSymCounts.get(p.symbol) || 0) + 100);
-    }
-    const positionSymbols = [...posSymCounts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 25)
-      .map(([sym]) => sym);
-
-    const positionTimes = positionRows.map((r) => Number(r.opened || r.openTime)).filter((t) => t > 0);
     const nowMs = Date.now();
-    const positionStartMs = positionTimes.length ? Math.min(...positionTimes) : nowMs;
 
-    // Concurrently fetch mark candles for position symbols to enable instantaneous, accurate MAE (~200-400ms)
-    const markCandles = (positionSymbols.length && positionStartMs < nowMs)
-      ? await fetchBinanceMarkCandles(positionSymbols, positionStartMs, nowMs, { waitUntilResumed })
-      : { symbols: {}, failed: [] };
+    Object.assign(view, { livePositions: liveRows, positionHistory: positionRows });
+    view.historyStatus.positionHistory = historyStatusOf(positionHistory, positionData);
+    // Progressive update Stage 2: positions ready. The stop-loss radar already has a first
+    // reading from fills and close prices; its mark-candle refinement lands as "marks" below.
+    emit("positions");
 
-    const initialMarketHistory = {
-      nowMs,
-      startMs: positionStartMs,
-      endMs: nowMs,
-      symbols: markCandles.symbols,
-      failed: markCandles.failed
-    };
-
-    // Progressive update Stage 2: positions & real K-line marks ready (Enables Stop Loss Radar in under 1s!)
-    onProgressive?.({
-      stage: "positions",
-      raw: {
-        id: portfolioId,
-        url: location.href,
-        pageTitle,
-        visibleText,
-        detail: detailData,
-        performanceWindows: {},
-        listItem: {},
-        livePositions: liveRows,
-        positionHistory: positionRows,
-        orderHistory: [],
-        transferHistory: [],
-        marketHistory: initialMarketHistory,
-        historyStatus: {
-          positionHistory: positionHistory.ok ? {
-            total: positionData.total,
-            fetched: positionData.fetched,
-            pages: positionData.pages,
-            complete: positionData.complete,
-            duplicateRows: positionData.duplicateRows,
-            retryCount: positionData.retryCount,
-            lastRetryError: positionData.lastRetryError
-          } : { total: 0, fetched: 0, pages: 0, complete: false, error: positionHistory.error }
-        },
-        endpointResults: { ...endpointResults }
-      }
+    // Mark candles for every position's own life, every symbol, read while the long order and
+    // transfer histories below are still paging. Lands as its own event.
+    const marksRead = fetchBinancePositionMarks(positionRows, { waitUntilResumed }).then((positionMarks) => {
+      view.positionMarks = positionMarks;
+      endpointResults.positionMarks = {
+        label: "positionMarks",
+        ok: positionMarks.failed.length === 0,
+        data: { symbols: Object.keys(positionMarks.symbols).length },
+        ...(positionMarks.failed.length ? { error: `${positionMarks.failed.length} symbols failed: ${positionMarks.failed.map((entry) => entry.symbol).join(", ")}` } : {})
+      };
+      emit("marks");
+      return positionMarks;
     });
 
     // Concurrently fetch performance windows, orderHistory, and transferHistory
@@ -524,127 +492,48 @@
     const transferData = transferHistory.ok ? transferHistory.data : {};
     const orderRows = asArray(orderData.rows);
 
-    // Progressive update Stage 3: orders & performance windows ready
-    onProgressive?.({
-      stage: "orders",
-      raw: {
-        id: portfolioId,
-        url: location.href,
-        pageTitle,
-        visibleText,
-        detail: detailData,
-        performanceWindows: performance.windows,
-        listItem: performance.windows["30D"] || performance.windows["365D"] || {},
-        livePositions: liveRows,
-        positionHistory: positionRows,
-        orderHistory: orderRows,
-        transferHistory: asArray(transferData.rows),
-        marketHistory: initialMarketHistory,
-        historyStatus: {
-          positionHistory: positionHistory.ok ? {
-            total: positionData.total,
-            fetched: positionData.fetched,
-            pages: positionData.pages,
-            complete: positionData.complete,
-            duplicateRows: positionData.duplicateRows,
-            retryCount: positionData.retryCount,
-            lastRetryError: positionData.lastRetryError
-          } : { total: 0, fetched: 0, pages: 0, complete: false, error: positionHistory.error },
-          orderHistory: orderHistory.ok ? {
-            total: orderData.total,
-            fetched: orderData.fetched,
-            pages: orderData.pages,
-            complete: orderData.complete,
-            duplicateRows: orderData.duplicateRows,
-            retryCount: orderData.retryCount,
-            lastRetryError: orderData.lastRetryError
-          } : { total: 0, fetched: 0, pages: 0, complete: false, error: orderHistory.error },
-          transferHistory: transferHistory.ok ? {
-            total: transferData.total,
-            fetched: transferData.fetched,
-            pages: transferData.pages,
-            complete: transferData.complete,
-            duplicateRows: transferData.duplicateRows,
-            retryCount: transferData.retryCount,
-            lastRetryError: transferData.lastRetryError
-          } : { total: 0, fetched: 0, pages: 0, complete: false, error: transferHistory.error }
-        },
-        endpointResults: { ...endpointResults }
-      }
-    });
-
-    // Funding and mark prices for every symbol the fills and positions touched, from the
-    // oldest fill/position to now: what the account earned or paid between a fill and
-    // today beyond the fills themselves (src/equity.js), and exact candle MAE for stop-loss radar.
-    const fillTimes = orderRows.map(global.CopyTradingLensPositions.fillTimeOf).filter((time) => time > 0);
-    const allTimes = [...fillTimes, ...positionTimes];
-    // Symbols held open with no fill in the history are priced too.
-    const openSymbols = positionRows.filter((row) => !(Number(row.closed) > 0)).map((row) => row.symbol);
-
-    const allSymCounts = new Map();
-    for (const r of positionRows) {
-      if (r.symbol) allSymCounts.set(r.symbol, (allSymCounts.get(r.symbol) || 0) + 1);
-    }
-    for (const o of orderRows) {
-      if (o.symbol) allSymCounts.set(o.symbol, (allSymCounts.get(o.symbol) || 0) + 1);
-    }
-    for (const s of openSymbols) {
-      allSymCounts.set(s, 9999);
-    }
-    const prioritizedSymbols = [...allSymCounts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 20)
-      .map(([sym]) => sym);
-
-    const startMs = allTimes.length ? Math.min(...allTimes) : nowMs;
-    const marketHistory = (prioritizedSymbols.length && startMs < nowMs)
-      ? { nowMs, ...(await fetchBinanceMarketHistory(prioritizedSymbols, startMs, nowMs, { waitUntilResumed, existingSymbols: initialMarketHistory.symbols })) }
-      : initialMarketHistory;
-
-    return {
-      id: portfolioId,
-      url: location.href,
-      pageTitle,
-      visibleText,
-      detail: detailData,
+    Object.assign(view, {
       performanceWindows: performance.windows,
       listItem: performance.windows["30D"] || performance.windows["365D"] || {},
-      livePositions: live.ok ? binanceDataList(live.data) : [],
-      positionHistory: positionHistory.ok ? asArray(positionData.rows) : [],
-      orderHistory: orderHistory.ok ? asArray(orderData.rows) : [],
-      transferHistory: transferHistory.ok ? asArray(transferData.rows) : [],
-      marketHistory,
-      historyStatus: {
-        positionHistory: positionHistory.ok ? {
-          total: positionData.total,
-          fetched: positionData.fetched,
-          pages: positionData.pages,
-          complete: positionData.complete,
-          duplicateRows: positionData.duplicateRows,
-          retryCount: positionData.retryCount,
-          lastRetryError: positionData.lastRetryError
-        } : { total: 0, fetched: 0, pages: 0, complete: false, error: positionHistory.error },
-        orderHistory: orderHistory.ok ? {
-          total: orderData.total,
-          fetched: orderData.fetched,
-          pages: orderData.pages,
-          complete: orderData.complete,
-          duplicateRows: orderData.duplicateRows,
-          retryCount: orderData.retryCount,
-          lastRetryError: orderData.lastRetryError
-        } : { total: 0, fetched: 0, pages: 0, complete: false, error: orderHistory.error },
-        transferHistory: transferHistory.ok ? {
-          total: transferData.total,
-          fetched: transferData.fetched,
-          pages: transferData.pages,
-          complete: transferData.complete,
-          duplicateRows: transferData.duplicateRows,
-          retryCount: transferData.retryCount,
-          lastRetryError: transferData.lastRetryError
-        } : { total: 0, fetched: 0, pages: 0, complete: false, error: transferHistory.error }
-      },
-      endpointResults
-    };
+      orderHistory: orderRows,
+      transferHistory: asArray(transferData.rows)
+    });
+    view.historyStatus.orderHistory = historyStatusOf(orderHistory, orderData);
+    view.historyStatus.transferHistory = historyStatusOf(transferHistory, transferData);
+    // Progressive update Stage 3: orders & performance windows ready
+    emit("orders");
+
+    await marksRead;
+
+    // Funding and mark prices for EVERY symbol the fills and positions touched, from the oldest
+    // fill/position to now: what the account earned or paid between a fill and today beyond the
+    // fills themselves (src/equity.js). No cap on the symbol count: a trader of 50 symbols is read
+    // in full; fetchBinanceMarketHistory reads a few symbols at a time so a long list waits on
+    // 429 backoff instead of flooding it.
+    const fillTimes = orderRows.map(global.CopyTradingLensPositions.fillTimeOf).filter((time) => time > 0);
+    const positionTimes = positionRows.map((row) => Number(row.opened || row.openTime)).filter((time) => time > 0);
+    const allTimes = [...fillTimes, ...positionTimes];
+    const touchedSymbols = [...new Set([...positionRows, ...orderRows].map((row) => row.symbol).filter(Boolean))];
+    const startMs = allTimes.length ? Math.min(...allTimes) : nowMs;
+    view.marketHistory = (touchedSymbols.length && startMs < nowMs)
+      ? { nowMs, ...(await fetchBinanceMarketHistory(touchedSymbols, startMs, nowMs, { waitUntilResumed })) }
+      : { nowMs, startMs: nowMs, endMs: nowMs, symbols: {}, failed: [] };
+
+    return rawNow();
+  }
+
+  function historyStatusOf(result, data) {
+    return result.ok
+      ? {
+        total: data.total,
+        fetched: data.fetched,
+        pages: data.pages,
+        complete: data.complete,
+        duplicateRows: data.duplicateRows,
+        retryCount: data.retryCount,
+        lastRetryError: data.lastRetryError
+      }
+      : { total: 0, fetched: 0, pages: 0, complete: false, error: result.error };
   }
 
   // Binance values open futures positions on MARK price (fapi premiumIndex),
@@ -755,79 +644,136 @@
   // symbols are read a few at a time so a trader of hundreds of symbols waits
   // on 429 backoff instead of flooding it.
   const MARKET_HISTORY_CONCURRENCY = 4;
-  const MARK_CANDLES_CONCURRENCY = 6;
 
-  async function fetchBinanceMarkCandles(symbols, startMs, endMs, options = {}) {
+  // Mark-price candles for every position's own life, for every symbol the positions touched.
+  //
+  // The stop-loss radar needs each position's deepest adverse move while it was open, which no
+  // position or order row carries. Binance values positions on MARK price, so the series is
+  // /fapi/v1/markPriceKlines. Hourly candles with whole-candle overlap, what this used to read,
+  // are wrong for the traders it was built for: 玄冥二老 and 星辰社区-海 hold a median 1 minute
+  // (p90 11 and 45), so a position inherited its whole hour's extremes, and the radar was off by
+  // more than 10 ROE points in 31% / 23% of positions (reports/stoploss-review-three-2026-10-02.txt).
+  // A position is therefore read at the resolution of its own life:
+  //   held up to 6 h   1-minute candles over [opened, closed];
+  //   held longer      1-minute candles for the first and last partial hours, hourly candles
+  //                    for the whole hours between (an hour's high/low is exact over that hour).
+  // Windows of one symbol that overlap or sit within 5 minutes of each other share one request.
+  // A page asks for exactly the candles it needs (limit < 100 weighs 1, < 500 weighs 2, < 1000
+  // weighs 5, 1000+ weighs 10 of the 2400/min IP budget). Measured on the three traders reviewed
+  // 2026-10-02 (482 positions, one window each): weight stayed under 600 in total.
+  const MARK_CANDLES_CONCURRENCY = 6;
+  const MINUTE_MS = 60000;
+  const MINUTE_ONLY_MAX_MS = 6 * HOUR_MS;
+  const MINUTE_WINDOW_GAP_MS = 5 * MINUTE_MS;
+  const HOUR_WINDOW_GAP_MS = HOUR_MS;
+
+  function mergeWindows(windows, gapMs) {
+    const merged = [];
+    for (const [from, to] of [...windows].sort((x, y) => x[0] - y[0])) {
+      const last = merged[merged.length - 1];
+      if (last && from - last[1] <= gapMs) last[1] = Math.max(last[1], to);
+      else merged.push([from, to]);
+    }
+    return merged;
+  }
+
+  /**
+   * Candle-open-time windows (inclusive) to read per symbol. Rows are position-history rows; an open row
+   * (no close time) has no outcome for the radar to judge and is not planned.
+   * @returns {Map<string, {minutes: number[][], hours: number[][]}>}
+   */
+  function planMarkWindows(rows) {
+    const plan = new Map();
+    for (const row of asArray(rows)) {
+      const symbol = String(row?.symbol || "");
+      const opened = Number(row?.opened || row?.openTime);
+      const closedAt = Number(row?.closed);
+      if (!symbol || !(opened > 0) || !(closedAt >= opened)) continue;
+      const first = Math.floor(opened / MINUTE_MS) * MINUTE_MS;
+      const last = Math.floor(closedAt / MINUTE_MS) * MINUTE_MS;
+      const windows = plan.get(symbol) || { minutes: [], hours: [] };
+      plan.set(symbol, windows);
+      if (closedAt - opened <= MINUTE_ONLY_MAX_MS) {
+        windows.minutes.push([first, last]);
+        continue;
+      }
+      const headEnd = Math.ceil(opened / HOUR_MS) * HOUR_MS;
+      const tailStart = Math.floor(closedAt / HOUR_MS) * HOUR_MS;
+      if (headEnd > first) windows.minutes.push([first, headEnd - MINUTE_MS]);
+      windows.minutes.push([Math.max(first, tailStart), last]);
+      if (tailStart - headEnd >= HOUR_MS) windows.hours.push([headEnd, tailStart - HOUR_MS]);
+    }
+    for (const windows of plan.values()) {
+      windows.minutes = mergeWindows(windows.minutes, MINUTE_WINDOW_GAP_MS);
+      windows.hours = mergeWindows(windows.hours, HOUR_WINDOW_GAP_MS);
+    }
+    return plan;
+  }
+
+  // [openTime, high, low] of every candle opening in [fromMs, toMs].
+  async function markKlineRows(symbol, interval, stepMs, fromMs, toMs, waitUntilResumed) {
+    const rows = [];
+    let cursor = fromMs;
+    while (cursor <= toMs) {
+      const limit = Math.min(KLINE_PAGE_LIMIT, Math.floor((toMs - cursor) / stepMs) + 1);
+      const { value } = await untilAnswered(() => fetchJson(
+        `${BINANCE_BASE}/fapi/v1/markPriceKlines?symbol=${encodeURIComponent(symbol)}&interval=${interval}&startTime=${cursor}&endTime=${toMs}&limit=${limit}`,
+        { method: "GET", waitUntilResumed }
+      ), waitUntilResumed);
+      const page = asArray(value);
+      rows.push(...page.map((row) => [Number(row[0]), Number(row[2]), Number(row[3])]).filter(([time, high, low]) => time > 0 && high > 0 && low > 0));
+      if (page.length < limit) break;
+      cursor = Number(page[page.length - 1][0]) + stepMs;
+    }
+    return rows;
+  }
+
+  /**
+   * @returns {Promise<{symbols: Record<string, {minutes: number[][], hours: number[][]}>, failed: {symbol: string, error: string}[]}>}
+   *   symbols[s].minutes / .hours: [openTime, high, low] sorted by time; stoploss.js lifeCandles() reads them.
+   */
+  async function fetchBinancePositionMarks(rows, options = {}) {
     const waitUntilResumed = typeof options.waitUntilResumed === "function" ? options.waitUntilResumed : null;
-    const wanted = Array.from(new Set(asArray(symbols).map(String).filter(Boolean)));
-    const symbolsData = {};
-    const failed = [];
+    const symbols = {};
+    const failedBySymbol = new Map();
+    const jobs = [];
+    for (const [symbol, windows] of planMarkWindows(rows)) {
+      symbols[symbol] = { minutes: [], hours: [] };
+      for (const [from, to] of windows.minutes) jobs.push({ symbol, kind: "minutes", interval: "1m", stepMs: MINUTE_MS, from, to });
+      for (const [from, to] of windows.hours) jobs.push({ symbol, kind: "hours", interval: "1h", stepMs: HOUR_MS, from, to });
+    }
     let next = 0;
     const worker = async () => {
-      while (next < wanted.length) {
-        const symbol = wanted[next];
+      while (next < jobs.length) {
+        const job = jobs[next];
         next += 1;
-        const encoded = encodeURIComponent(symbol);
+        if (failedBySymbol.has(job.symbol)) continue;
         try {
-          const klines = await fapiPages(
-            (from) => `/fapi/v1/markPriceKlines?symbol=${encoded}&interval=1h&startTime=${from}&endTime=${endMs}&limit=${KLINE_PAGE_LIMIT}`,
-            (row) => Number(row[0]),
-            KLINE_PAGE_LIMIT,
-            Math.floor(startMs / HOUR_MS) * HOUR_MS,
-            endMs,
-            waitUntilResumed
-          );
-          symbolsData[symbol] = {
-            marks: klines.map((row) => [Number(row[0]), Number(row[1]), Number(row[6]), Number(row[4]), Number(row[2]), Number(row[3])])
-              .filter(([openTime, open, closeTime, close]) => openTime > 0 && open > 0 && closeTime > openTime && close > 0)
-          };
+          symbols[job.symbol][job.kind].push(...await markKlineRows(job.symbol, job.interval, job.stepMs, job.from, job.to, waitUntilResumed));
         } catch (error) {
-          failed.push({ symbol, error: error?.message || String(error) });
+          failedBySymbol.set(job.symbol, error?.message || String(error));
         }
       }
     };
-    await Promise.all(Array.from({ length: Math.min(MARK_CANDLES_CONCURRENCY, wanted.length) }, worker));
-    return { symbols: symbolsData, failed };
+    await Promise.all(Array.from({ length: Math.min(MARK_CANDLES_CONCURRENCY, jobs.length) }, worker));
+    for (const symbol of failedBySymbol.keys()) delete symbols[symbol];
+    for (const data of Object.values(symbols)) {
+      data.minutes.sort((x, y) => x[0] - y[0]);
+      data.hours.sort((x, y) => x[0] - y[0]);
+    }
+    return { symbols, failed: [...failedBySymbol].map(([symbol, error]) => ({ symbol, error })) };
   }
 
   async function fetchBinanceMarketHistory(symbols, startMs, endMs, options = {}) {
     const waitUntilResumed = typeof options.waitUntilResumed === "function" ? options.waitUntilResumed : null;
-    const existingSymbols = options.existingSymbols || {};
     const wanted = Array.from(new Set(asArray(symbols).map(String).filter(Boolean)));
-    const bySymbol = { ...existingSymbols };
+    const bySymbol = {};
     const failed = [];
     let next = 0;
     const worker = async () => {
       while (next < wanted.length) {
         const symbol = wanted[next];
         next += 1;
-        const encoded = encodeURIComponent(symbol);
-        const existing = bySymbol[symbol];
-        if (existing?.marks?.length && !existing?.funding) {
-          const result = await safeFetch(`funding:${symbol}`, () =>
-            fapiPages(
-              (from) => `/fapi/v1/fundingRate?symbol=${encoded}&startTime=${from}&endTime=${endMs}&limit=${FUNDING_PAGE_LIMIT}`,
-              (row) => Number(row.fundingTime),
-              FUNDING_PAGE_LIMIT,
-              startMs,
-              endMs,
-              waitUntilResumed
-            )
-          );
-          if (result.ok) {
-            bySymbol[symbol] = {
-              ...existing,
-              funding: asArray(result.data).map((row) => [Number(row.fundingTime), Number(row.fundingRate), Number(row.markPrice)])
-                .filter(([time, rate, mark]) => time > 0 && Number.isFinite(rate) && mark > 0)
-            };
-          } else {
-            failed.push({ symbol, error: result.error });
-          }
-          continue;
-        }
-        if (existing?.marks?.length && existing?.funding?.length) {
-          continue;
-        }
         const result = await safeFetch(`market:${symbol}`, () => fetchBinanceSymbolHistory(symbol, startMs, endMs, { waitUntilResumed }));
         if (result.ok) bySymbol[symbol] = result.data;
         else failed.push({ symbol, error: result.error });
@@ -1066,7 +1012,8 @@
     fetchLeadData,
     fetchBinanceListPage,
     fetchBinanceMarkPrices,
-    fetchBinanceMarkCandles,
+    fetchBinancePositionMarks,
+    planMarkWindows,
     fetchBinanceMarketHistory,
     rememberPressedCard,
     markNavigation

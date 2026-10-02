@@ -17,7 +17,7 @@ global.chrome = {
 
 // Same load order as manifest.json: analysis.js reads styles decided by
 // style.js, which rebuilds positions through positions.js.
-for (const file of ["i18n.js", "positions.js", "style.js", "equity.js", "analysis.js"]) {
+for (const file of ["i18n.js", "positions.js", "style.js", "equity.js", "stoploss.js", "analysis.js"]) {
   // eslint-disable-next-line no-eval
   eval(load(file));
 }

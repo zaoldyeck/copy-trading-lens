@@ -295,9 +295,16 @@
     container.appendChild(chip);
   }
 
+  // The stop levels the data cannot tell apart from the best one, as the lowest and highest of them.
+  function stableBand(radar) {
+    const band = radar?.stopSelection?.band || [];
+    return band.length ? { lo: Math.min(...band), hi: Math.max(...band) } : null;
+  }
+
   function renderStopLossRadar(radar) {
     if (!radar || radar.insufficientData) return null;
     const hasBag = radar.hasSevereBagHolding;
+    const band = stableBand(radar);
     return h("section", { class: "ctl-section ctl-radar-section" }, [
       h("div", { class: "ctl-radar-header" }, [
         h("h3", { text: t("sectionStopLossRadar") }),
@@ -364,11 +371,15 @@
             h("strong", { class: hasBag ? "is-danger" : "", text: `-${radar.worstHistoricalRoeMae}%` })
           ]),
           h("div", { class: "ctl-radar-stat" }, [
-            h("span", { text: t("radarConservative") }),
-            h("strong", { text: `${radar.conservativeRoe}%` })
+            h("span", { text: t("radarStableBandLabel") }),
+            h("strong", { text: band ? `${band.lo}–${band.hi}%` : "—" })
           ])
         ])
       ]),
+      h("div", { class: "ctl-radar-notice", text: t("radarStopTradeoff", [radar.recommendedRoe, radar.killedWinsCount, radar.stoppedLossesCount]) }),
+      radar.stopOptional
+        ? h("div", { class: "ctl-radar-notice", text: t("radarStopOptionalNote", [radar.stopSelection.bestStop]) })
+        : null,
       hasBag
         ? h("div", { class: "ctl-radar-alert", text: t("radarSevereBagWarning", [radar.worstHistoricalRoeMae]) })
         : null,
@@ -430,7 +441,7 @@
   function renderStreamingBanner(stage) {
     let loaded = t("stageLoadedDetail");
     let loading = t("stageLoadingPositions");
-    if (stage === "positions") {
+    if (stage === "positions" || stage === "marks") {
       loaded = t("stageLoadedPositions");
       loading = t("stageLoadingOrders");
     } else if (stage === "orders") {
@@ -555,15 +566,20 @@
           ])
         ]) : null,
 
-        radar && !radar.insufficientData ? h("div", {
+        radar && !radar.insufficientData && stableBand(radar) ? h("div", {
           class: "ctl-advisor-range-tip"
-        }, radar.isPreciseMae ? [
-          h("span", { text: `💡 ${t("radarConservative")}: ${radar.conservativeRoe}% · ${t("badgeMathOptimal")}: ${radar.recommendedRoe}%` })
-        ] : [
-          h("span", { text: `💡 ${t("radarConservative")}: ${radar.conservativeRoe}% · ${t("badgeMathOptimal")}: ${radar.recommendedRoe}% (` }),
-          h("span", { class: "ctl-mini-spinner", style: "border-top-color: #60a5fa; margin-right: 4px;" }),
-          h("span", { text: `${t("radarPreciseBadge").replace(/\s*↻\s*/, "")})` })
+        }, [
+          h("span", { text: `💡 ${t("radarStableBandLabel")}: ${stableBand(radar).lo}–${stableBand(radar).hi}%` }),
+          !radar.isPreciseMae ? h("span", { class: "ctl-mini-spinner", style: "border-top-color: #60a5fa; margin: 0 4px 0 6px;" }) : null
         ]) : null,
+
+        radar && !radar.insufficientData
+          ? h("div", { class: "ctl-advisor-range-tip" }, [h("span", { text: `ℹ️ ${t("radarStopTradeoff", [radar.recommendedRoe, radar.killedWinsCount, radar.stoppedLossesCount])}` })])
+          : null,
+
+        radar && !radar.insufficientData && radar.stopOptional
+          ? h("div", { class: "ctl-advisor-range-tip" }, [h("span", { text: `⚠️ ${t("radarStopOptionalNote", [radar.stopSelection.bestStop])}` })])
+          : null,
 
         h("div", { class: "ctl-advisor-footer" }, [
           h("button", {
@@ -710,6 +726,8 @@
     );
   }
 
+  const STAGE_ORDER = { detail: 0, positions: 1, marks: 1, orders: 2 };
+
   async function runAnalysis(force = false) {
     const context = window.CopyTradingLensProviders.detectLeadPage();
     if (!context) {
@@ -756,7 +774,8 @@
             run = {
               ...current,
               phase: "streaming",
-              streamingStage: event.stage,
+              // marks can land after orders: the banner shows the furthest stage reached, not the latest event
+              streamingStage: (STAGE_ORDER[event.stage] ?? 0) >= (STAGE_ORDER[run?.streamingStage] ?? -1) ? event.stage : run.streamingStage,
               raw: event.raw,
               analysis: partialAnalysis
             };

@@ -12,13 +12,16 @@
    - Equivalent underlying price drop: $\Delta P\% = \frac{\text{ROE}\%}{\text{Leverage}}$.
    - If a copier sets 5% or 10% under 10x leverage, positions stop out on a 0.5%~1% price noise tick, killing 50%+ of winning trades prematurely (Type I error).
 
-3. **Optimal Position Stop-Loss Radar (`src/analysis.js` & `src/content.js`)**:
-   - Uses Maximum Adverse Excursion (MAE) to evaluate the floating drawdown distribution across winning vs losing positions.
-   - Recommends mathematically optimal stop-loss thresholds $L^*$ (bounded in Binance's [30%, 85%] range) that preserve $\ge 90\% \sim 95\%$ of winning trades while cutting off tail catastrophic holding losses ($> 100\%$ ROE drawdowns).
+3. **Stop-Loss Radar (`src/stoploss.js`, shown by `src/content.js`)**:
+   - Per closed position, the deepest adverse ROE (price move x leverage) it went through while open, from MARK-price candles over its own life: 1-minute candles, and hourly candles only for the whole hours inside a hold longer than 6 h (`fetchBinancePositionMarks` in `src/providers.js`, `lifeCandles` in `src/stoploss.js`). Every symbol the positions touched is read; there is no symbol cap, and an hourly candle only partly inside a position is never counted (it lends the position its whole hour; traders like 玄冥二老 hold a median 1 minute).
+   - The drawdown is judged against the entry that held at each moment: fills are replayed (adds move the average, reductions do not). Binance keeps only ~2 months of order history, so older positions fall back to the final `avgCost`.
+   - Prices give the drawdown, `roi` gives the outcome. Binance's `closingPnl` (and so `roi`) is trade pnl PLUS funding, less fees, while a stop acts on price-only ROE. A row whose `roi` has the opposite sign from its prices is a correct row, not an error: 玄冥二老's TAIKOUSDT short (avgCost 0.290, avgClose 0.267, reported -52% / -91 USDT) paid 169 USDT of funding (nine hourly settlements at -0.4% to -2%) on top of +70 USDT of price pnl. Its 428% drawdown, a squeeze to 0.538, is real.
+   - The recommendation maximises expected log growth, `mean(log(1 + f x outcome))`, where a stop at L turns every position whose adverse ROE reached L into -L and leaves the rest at their `roi`, and f is the lead's own margin share of equity at entry (equity count-back; a fixed-ratio copier inherits it). Without the count-back the risk-neutral limit (mean outcome) is used and the result says so. Candidates: no stop, then 10..95 step 5 (Binance's 0-95% field). The result carries the optimum, the stable band (candidates that beat the optimum in at least 10% of 300 seeded bootstrap resamples), the agreement share and the cost of the best actual stop. `stopOptional` means the data cannot tell a stop from none; the card then says so and offers the cheapest stop.
+   - Never reintroduce a percentile rule (it maximised nothing: on 玄冥二老, 星辰社区-海 and 熬鹰资本 the old rule's stop cost 6.1 / 3.1 / 2.3 ROE points per position against no stop). Guarded by `scripts/test-stop-loss-radar.mjs` (known-optimum cases, corpus-measured parity numbers) and `scripts/test-position-marks.mjs`.
    - Dynamically translates the ROE % into equivalent price move % given the lead trader's dominant leverage.
 
 4. **Testing & Validation**:
-   - Run `npm test` and `npm run validate` before any delivery. All 13 test suites must pass.
+   - Run `npm test` and `npm run validate` before any delivery. Every suite listed in the `test` script must pass.
    - Commit locally; only execute `git push` once all tasks and tests are 100% complete and closed.
 
 5. **Binance Copy Setting Page Support & Input Injection**:
@@ -31,14 +34,16 @@
 
 6. **Progressive Incremental Streaming Pipeline (`src/providers.js` & `src/content.js`)**:
    - Network reads must never force users to wait for the entire depth (65+ pages of order history) before rendering.
-   - `fetchBinanceLead` emits staged events via `onProgressive`:
-     - Stage 1 (~150ms): `detail` metadata & live exposure.
-     - Stage 2 (~300-500ms): `positionHistory` returns AND concurrently triggers `fetchBinanceMarkCandles` across position symbols. This provides true empirical 1-hour K-line Maximum Adverse Excursion (MAE) in under 600ms without blocking on order history or using static 50% fallbacks.
-     - Stage 3 (~1-10s): background `orderHistory`, `transferHistory`, and funding rates finish and seamlessly update strategy classification (Martingale/Grid), adverse add rate, and biggest bet without blocking the UI.
+   - `fetchBinanceLead` keeps one accumulating `view` and emits a snapshot of it per stage via `onProgressive`, so a slow piece finishing late can never overwrite a faster one with older state:
+     - `detail`: metadata (~150ms).
+     - `positions`: live exposure and position history; the radar already has a first reading from fills and close prices.
+     - `marks`: mark candles for every position's own life, all symbols, read while the long histories below are still paging; the radar becomes precise.
+     - `orders`: `orderHistory`, `transferHistory`, performance windows (strategy classification, entry-path replay for the radar).
+     - the final return adds funding and hourly marks for EVERY symbol (equity count-back, biggest bet, the radar's margin share), read a few symbols at a time. No symbol caps anywhere: a cap silently drops the long tail of symbols, which on 玄冥二老 (52 symbols) hid a position from the worst-drawdown figure.
 
 7. **Dedicated Copy Setting Advisor View (`src/content.js`)**:
    - On `copy-setting` pages (`context.pageType === "copy-setting"`), the overlay defaults to a compact, non-intrusive **Stop-Loss Advisor Card** (`ctl-setting-card`) instead of the full dashboard.
-   - Provides instant decision value: Recommended ROE %, Equivalent underlying price drop %, Win retention %, Worst historical drawdown cut-off, and 1-Click React input injection.
+   - Provides instant decision value: Recommended ROE %, Equivalent underlying price drop %, the stable band, Win retention %, Worst historical drawdown cut-off, a note when the data cannot show a stop beats none or when position rows contradict themselves, and 1-Click React input injection.
    - Preserves an explicit toggle button `[🔍 查看帶單員完整分析報告 ▾]` so users can expand to the full report on demand, and return at will.
 
 8. **Scale-in & Martingale Mechanics in Binance Copy Stop-Loss**:

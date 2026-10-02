@@ -931,8 +931,9 @@
     sizeAfterEachFill,
     leverageFor,
     fillTimeOf,
+    bucketKeyOf,
+    symbolOfKey,
     // exported for tests
-    replayFills,
-    bucketKeyOf
+    replayFills
   };
 })(typeof window !== "undefined" ? window : globalThis);

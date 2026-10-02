@@ -277,6 +277,18 @@ test("card presses are remembered on copy-management only, in the capture phase"
   assert.deepEqual(lead.pressed, [], "clicks elsewhere are never inspected");
 });
 
+// providers.js reads marks while the order histories are still paging, so the "marks" event can land after "orders":
+// the banner shows the furthest stage reached, never goes back.
+test("a late marks event does not move the streaming banner back", async () => {
+  const page = loadPage();
+  page.fetchOptions[0].onProgressive({ stage: "orders", raw: { name: "Trader" } });
+  page.fetchOptions[0].onProgressive({ stage: "marks", raw: { name: "Trader" } });
+  const banner = page.find("ctl-streaming-banner");
+  assert.ok(banner, "the streaming banner is shown while the read is not finished");
+  const text = banner.children.map((child) => (typeof child === "string" ? child : child.textContent)).join("");
+  assert.ok(text.includes("stageLoadedOrders"), `banner after orders then marks: ${text}`);
+});
+
 let failed = 0;
 for (const [name, fn] of tests) {
   try {

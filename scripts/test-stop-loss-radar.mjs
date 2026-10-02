@@ -30,103 +30,208 @@ vm.createContext(sandbox);
 loadScript("src/positions.js", sandbox);
 loadScript("src/style.js", sandbox);
 loadScript("src/equity.js", sandbox);
+loadScript("src/stoploss.js", sandbox);
 loadScript("src/analysis.js", sandbox);
 loadScript("src/providers.js", sandbox);
 
-const analysis = sandbox.window.CopyTradingLensAnalysis;
+const stoploss = sandbox.window.CopyTradingLensStopLoss;
 const providers = sandbox.window.CopyTradingLensProviders;
-assert.ok(typeof analysis.analyzeStopLossRadar === "function", "analyzeStopLossRadar is exported");
+assert.ok(typeof stoploss.analyzeStopLossRadar === "function", "analyzeStopLossRadar is exported");
 assert.ok(typeof providers.detectLeadPage === "function", "detectLeadPage is exported");
-assert.ok(typeof providers.fetchBinanceMarkCandles === "function", "fetchBinanceMarkCandles is exported");
+assert.ok(typeof providers.fetchBinancePositionMarks === "function", "fetchBinancePositionMarks is exported");
 
 console.log("=== RUNNING UNIT TESTS FOR STOP LOSS RADAR ===");
 
-// 1. Edge Case: Insufficient data (< 3 positions)
+const MIN = 60000;
+const HOUR = 3600000;
+const T0 = Date.UTC(2026, 8, 1, 10, 0, 0);
+// objects built inside the vm sandbox have another realm's prototypes; compare their JSON
+const plain = (value) => JSON.parse(JSON.stringify(value));
+const near = (actual, want, tolerance, message) => assert.ok(Math.abs(actual - want) <= tolerance, `${message}: got ${actual}, want ${want} +/- ${tolerance}`);
+// a closed long on a 10x symbol: price excursion in %, realised ROI as a fraction of margin
+const position = (extra) => ({ symbol: "XUSDT", side: "LONG", leverage: 10, avgCost: 100, avgClosePrice: 100, closingPnl: 1, roi: 0.01, opened: T0, closed: T0 + 10 * MIN, ...extra });
+
+// 1. fewer than 3 closed positions: nothing to select from
 {
-  const result = analysis.analyzeStopLossRadar([{ avgCost: 100, avgClosePrice: 105, closingPnl: 5, leverage: 5 }]);
+  const result = stoploss.analyzeStopLossRadar([position()]);
   assert.equal(result.insufficientData, true, "fewer than 3 positions returns insufficientData");
   console.log("PASS: handles insufficient positions gracefully");
 }
 
-// 2. Synthetic controlled positions test
+// 2. life candles: minutes that overlap, hours only when fully inside
 {
-  const positions = [
-    // 4 wins: slight floating dip then win
-    { symbol: "BTCUSDT", avgCost: 100, avgClosePrice: 110, closingPnl: 10, leverage: 10, side: "LONG", roi: 1.0 },
-    { symbol: "ETHUSDT", avgCost: 200, avgClosePrice: 210, closingPnl: 10, leverage: 10, side: "LONG", roi: 0.5 },
-    { symbol: "SOLUSDT", avgCost: 50, avgClosePrice: 52, closingPnl: 4, leverage: 10, side: "LONG", roi: 0.4 },
-    { symbol: "DOGEUSDT", avgCost: 10, avgClosePrice: 11, closingPnl: 1, leverage: 10, side: "LONG", roi: 1.0 },
-    // 1 severe loss: dipped to 50 on avgCost 100 (50% price drop = 500% ROE loss)
-    { symbol: "XRPUSDT", avgCost: 100, avgClosePrice: 50, closingPnl: -50, leverage: 10, side: "LONG", roi: -5.0 }
-  ];
-
-  const radar = analysis.analyzeStopLossRadar(positions, [], {}, null);
-  assert.equal(radar.insufficientData, false);
-  assert.equal(radar.dominantLeverage, 10);
-  assert.equal(radar.hasSevereBagHolding, true, "flags XRPUSDT as severe bag holding (-500% ROE)");
-  assert.equal(radar.worstHistoricalRoeMae, 500);
-  assert.ok(radar.recommendedRoe >= 30 && radar.recommendedRoe <= 85, "recommendedRoe is bounded between 30 and 85");
-  assert.equal(radar.recommendedPriceDrop, Number((radar.recommendedRoe / 10).toFixed(1)));
-  assert.ok(radar.winRetentionRate >= 90, "preserves at least 90% of winning trades");
-  assert.equal(radar.lossStats.median, 500, "lossStats has median property");
-  assert.equal(radar.lossStats.p50, 500, "lossStats has p50 property matching median");
-  assert.equal(radar.isPreciseMae, false, "without market candles isPreciseMae is false");
-  assert.equal(radar.pendingKlines, true, "without market candles pendingKlines is true");
-  assert.ok(radar.allStats !== undefined, "allStats is defined");
-  console.log("PASS: synthetic controlled positions verify MAE and bag holding detection");
+  const marks = {
+    minutes: [[T0 - 2 * MIN, 1, 1], [T0 - MIN, 2, 2], [T0, 3, 3], [T0 + 5 * MIN, 4, 4], [T0 + 10 * MIN, 5, 5], [T0 + 11 * MIN, 6, 6]],
+    hours: [[T0 - HOUR, 7, 7], [T0, 8, 8], [T0 + HOUR, 9, 9]]
+  };
+  // life [T0 + 30 s, T0 + 10 min + 10 s]: the minute opening at T0 holds its first 30 s; the one opening at
+  // T0 + 10 min holds its last 10 s; nothing opening before T0 or after T0 + 10 min counts; no hour is fully inside.
+  const short = stoploss.lifeCandles(marks, T0 + 30000, T0 + 10 * MIN + 10000);
+  assert.deepEqual(plain(short.map((c) => c.time)), [T0, T0 + 5 * MIN, T0 + 10 * MIN], "minute candles overlapping the life, none from outside");
+  const ext = stoploss.lifeExtremes(marks, T0 + 30000, T0 + 10 * MIN + 10000);
+  assert.deepEqual(plain(ext), { high: 5, low: 3 });
+  // life T0 .. T0 + 3 h: the hour at T0 and at T0 + 1 h are fully inside, the one before is not
+  const long = stoploss.lifeCandles({ minutes: [], hours: marks.hours }, T0, T0 + 3 * HOUR);
+  assert.deepEqual(plain(long.map((c) => c.time)), [T0, T0 + HOUR]);
+  assert.equal(stoploss.lifeExtremes({ minutes: [], hours: [] }, T0, T0 + HOUR), null, "no candles, no extremes");
+  console.log("PASS: life candles clip minutes to the position's own life and admit only whole hours");
 }
 
-// 2b. Binance's position-history `roi` is a FRACTION of initial margin ("1.2" = +120%), at any
-//     magnitude. Checked 2026-10-02 on 184,135 cached positions: 97.7% satisfy
-//     roi == closingPnl / (peak qty x avgCost / leverage), 15 satisfy it in percent units; 6,209 of the
-//     6,463 positions with |roi| >= 1 are fractions. A magnitude-based unit guess reads +120% as +1.2%.
+// 3. the entry as it was: a low reached BEFORE an add is judged against the entry then, not the final average
 {
-  const positions = [
-    { symbol: "AUSDT", avgCost: 100, avgClosePrice: 112, closingPnl: 12, leverage: 10, side: "LONG", roi: 1.2 },
-    { symbol: "BUSDT", avgCost: 100, avgClosePrice: 105, closingPnl: 5, leverage: 10, side: "LONG", roi: 0.5 },
-    { symbol: "CUSDT", avgCost: 100, avgClosePrice: 99, closingPnl: -1, leverage: 10, side: "LONG", roi: -0.1 }
+  const marks = { minutes: [[T0, 101, 99], [T0 + MIN, 100, 85], [T0 + 2 * MIN, 92, 90], [T0 + 3 * MIN, 96, 94]], hours: [] };
+  const fills = [
+    { symbol: "XUSDT", side: "BUY", executedQty: 1, avgPrice: 100, orderUpdateTime: T0 },
+    { symbol: "XUSDT", side: "BUY", executedQty: 3, avgPrice: 90, orderUpdateTime: T0 + 2 * MIN },
+    { symbol: "XUSDT", side: "SELL", executedQty: 4, avgPrice: 95, orderUpdateTime: T0 + 3 * MIN }
   ];
-  const radar = analysis.analyzeStopLossRadar(positions, [], {}, null);
-  const atLoose = radar.simResults.find((row) => row.threshold === 90);
-  // nobody reaches a 90% ROE adverse move: gross win 120 + 50, gross loss 10
-  assert.ok(Math.abs(atLoose.simulatedProfitFactor - 17) < 0.01, `profit factor must read +120% as 120, got ${atLoose.simulatedProfitFactor}`);
+  const row = position({ avgCost: 92.5, avgClosePrice: 95, closingPnl: 10, roi: 0.27, closed: T0 + 3 * MIN });
+  const [path] = stoploss.positionExcursions([row], fills, { symbols: { XUSDT: marks }, failed: [] });
+  near(path.maeRoe, 150, 0.01, "low 85 against the entry of 100 (15% x 10x) before the add at 90");
+  assert.equal(path.entryPathUsed, true);
+  const [finalCost] = stoploss.positionExcursions([row], [], { symbols: { XUSDT: marks }, failed: [] });
+  near(finalCost.maeRoe, (92.5 - 85) / 92.5 * 100 * 10, 0.01, "without fills the final average cost is all there is");
+  assert.equal(finalCost.entryPathUsed, false);
+  // history that begins mid-position (first fill is a reduction) cannot be replayed
+  const [midway] = stoploss.positionExcursions([row], [fills[2]], { symbols: { XUSDT: marks }, failed: [] });
+  assert.equal(midway.entryPathUsed, false);
+  console.log("PASS: the entry that held at each moment decides the drawdown, the final average only when fills are missing");
+}
+
+// 4. roi is a FRACTION of initial margin at any magnitude ("1.2" = +120%): the outcome of a position
+//    the stop never touches is its ROI in percent. Corpus check 2026-10-02: 184,135 cached positions,
+//    97.7% satisfy roi == closingPnl / (peak qty x avgCost / leverage); 6,209 of the 6,463 with |roi| >= 1 are fractions.
+{
+  const rows = [
+    position({ symbol: "AUSDT", avgClosePrice: 112, closingPnl: 12, roi: 1.2 }),
+    position({ symbol: "BUSDT", avgClosePrice: 105, closingPnl: 5, roi: 0.5 }),
+    position({ symbol: "CUSDT", avgClosePrice: 99, closingPnl: -1, roi: -0.1 })
+  ];
+  const { curve } = stoploss.selectStop(stoploss.positionExcursions(rows, [], null), null);
+  const at90 = curve.find((c) => c.stop === 90);
+  near(at90.meanRoe, (120 + 50 - 10) / 3, 0.01, "+120% is 120, not 1.2");
   console.log("PASS: roi >= 100% is read as a fraction of margin, not as a percent");
 }
 
-// 3. Real Cached Lead Traders Parity
+// 4b. prices give the drawdown, roi gives the outcome: closingPnl (and so roi) is trade pnl PLUS funding, less fees,
+//     so a row whose roi has the opposite sign from its prices is a correct row. 玄冥二老's TAIKOUSDT short
+//     (avgCost 0.290 -> avgClose 0.267, 5x) reports -52% / -91 USDT: +70 USDT on price, -169 USDT of funding over
+//     nine hourly settlements at -0.4% to -2% (tools/cache/market funding history), and the price really did spike
+//     to 0.538. Its drawdown is the squeeze, not an artefact.
+{
+  const spike = { symbols: { XUSDT: { minutes: [[T0, 101, 99], [T0 + MIN, 400, 99]], hours: [] } }, failed: [] };
+  const fundingLoser = position({ side: "SHORT", avgCost: 100, avgClosePrice: 90, closingPnl: -52, roi: -0.52, closed: T0 + 2 * MIN });
+  const [row] = stoploss.positionExcursions([fundingLoser], [], spike);
+  near(row.maeRoe, 3000, 0.01, "the squeeze is the drawdown: (400 - 100) / 100 x 10x");
+  near(row.roiPct, -52, 0.01, "the reported outcome is kept as it is");
+  console.log("PASS: a position that lost to funding keeps its price drawdown and its reported outcome");
+}
+
+// 4c. fills become positions in src/positions.js: hedge books stay apart and a flipping fill is split
+{
+  const hedgeMarks = { symbols: { XUSDT: { minutes: [[T0, 101, 99], [T0 + MIN, 100, 98], [T0 + 2 * MIN, 99, 85], [T0 + 3 * MIN, 96, 94]], hours: [] } }, failed: [] };
+  const hedgeFills = [
+    { symbol: "XUSDT", side: "BUY", positionSide: "LONG", executedQty: 1, avgPrice: 100, orderUpdateTime: T0 },
+    { symbol: "XUSDT", side: "SELL", positionSide: "SHORT", executedQty: 1, avgPrice: 100, orderUpdateTime: T0 + MIN },
+    { symbol: "XUSDT", side: "SELL", positionSide: "LONG", executedQty: 1, avgPrice: 95, orderUpdateTime: T0 + 3 * MIN }
+  ];
+  const longRow = position({ avgCost: 100, avgClosePrice: 95, closingPnl: -5, roi: -0.5, closed: T0 + 3 * MIN });
+  const [longPath] = stoploss.positionExcursions([longRow], hedgeFills, hedgeMarks);
+  near(longPath.maeRoe, 150, 0.01, "the short book's SELL must not shut the long's path early: low 85 against 100 at 10x");
+  assert.equal(longPath.entryPathUsed, true);
+
+  // one-way: a SELL of 3 closes a long of 1 and opens a short of 2; the short's first entry weighs 2, not 3
+  const flipMarks = { symbols: { XUSDT: { minutes: [[T0 + 2 * MIN, 101, 99], [T0 + 3 * MIN, 105, 99], [T0 + 4 * MIN, 130, 99], [T0 + 5 * MIN, 95, 90]], hours: [] } }, failed: [] };
+  const flipFills = [
+    { symbol: "XUSDT", side: "BUY", positionSide: "BOTH", executedQty: 1, avgPrice: 100, orderUpdateTime: T0 },
+    { symbol: "XUSDT", side: "SELL", positionSide: "BOTH", executedQty: 3, avgPrice: 100, orderUpdateTime: T0 + 2 * MIN },
+    { symbol: "XUSDT", side: "SELL", positionSide: "BOTH", executedQty: 2, avgPrice: 110, orderUpdateTime: T0 + 4 * MIN },
+    { symbol: "XUSDT", side: "BUY", positionSide: "BOTH", executedQty: 4, avgPrice: 90, orderUpdateTime: T0 + 5 * MIN }
+  ];
+  const shortRow = position({ side: "SHORT", avgCost: 105, avgClosePrice: 90, closingPnl: 80, roi: 0.8, opened: T0 + 2 * MIN, closed: T0 + 5 * MIN });
+  const [shortPath] = stoploss.positionExcursions([shortRow], flipFills, flipMarks);
+  near(shortPath.maeRoe, (130 - 105) / 105 * 100 * 10, 0.5, "entry 105 = (2 x 100 + 2 x 110) / 4 once the flip is split (unsplit it would read 104 and 250); 130 is the worst print");
+  assert.equal(shortPath.entryPathUsed, true);
+  console.log("PASS: hedge books and flipping fills are replayed by positions.js, not guessed from BUY/SELL");
+}
+
+// 4d. marks that were read are precise even when the exchange refused a symbol (a delisted one fails on every request)
+{
+  const rows = [position({ symbol: "AUSDT" }), position({ symbol: "BUSDT" }), position({ symbol: "DEADUSDT" })];
+  const radar = stoploss.analyzeStopLossRadar(rows, [], { symbols: { AUSDT: { minutes: [[T0, 101, 99]], hours: [] } }, failed: [{ symbol: "DEADUSDT", error: "-1121" }] }, null);
+  assert.equal(radar.isPreciseMae, true, "a refused symbol must not keep the 'still calculating' state forever");
+  assert.ok(radar.marksCoverage < 1, "the gap shows in coverage instead");
+  assert.equal(stoploss.analyzeStopLossRadar(rows, [], null, null).isPreciseMae, false, "no marks yet: still calculating");
+  console.log("PASS: isPreciseMae means the marks were read; refused symbols show as coverage");
+}
+
+// 5. synthetic traders whose best stop is known by construction
+{
+  const excursion = (maeRoe, roiPct, equity = 1000) => ({ maeRoe, roiPct, closingPnl: roiPct, margin: 200, opened: T0, closed: T0 + MIN, entryPathUsed: false, marksUsed: true, leverage: 10 });
+  const sizing = { equityAt: () => 1000 }; // margin 200 of 1000: f = 20%
+
+  // 40 winners that dip at most 39% ROE and 3 disasters at 200%: the tightest stop that spares every winner
+  const disasters = [...Array.from({ length: 40 }, (_, i) => excursion(i, 20)), ...Array.from({ length: 3 }, () => excursion(200, -150))];
+  const a = stoploss.selectStop(disasters, sizing);
+  assert.equal(a.objective, "growth");
+  assert.equal(a.optimal, 40, "the smallest candidate above every winner's 39% dip");
+  assert.equal(a.curve.find((c) => c.stop === 40).killedWins, 0);
+  assert.equal(a.curve.find((c) => c.stop === 40).stoppedLosses, 3);
+
+  // winners dip as deep as 117% and one loss is -150%: every stop kills more than it saves
+  const tail = [...Array.from({ length: 40 }, (_, i) => excursion(i * 3, 30)), excursion(200, -150)];
+  const b = stoploss.selectStop(tail, { equityAt: () => 10000 }); // f = 2%
+  assert.equal(b.optimal, null, "no stop is the optimum when winners dip as deep as the disaster");
+  assert.ok(b.bestStop >= 10 && b.costOfBestStop > 0, "the best stop that exists costs something");
+
+  // without sizing the answer is the risk-neutral one and says so
+  const c = stoploss.selectStop(disasters, null);
+  assert.equal(c.objective, "meanRoe");
+  assert.deepEqual(plain(c.sizing), { source: "none" });
+
+  // same positions, same stability figure
+  assert.equal(stoploss.selectStop(tail, sizing).bootstrapAgreement, stoploss.selectStop(tail, sizing).bootstrapAgreement);
+
+  // growth punishes the tail that mean ROE forgives: -390% on 30% of equity wipes the account out
+  const ruin = [...Array.from({ length: 40 }, (_, i) => excursion(i * 3, 30)), excursion(500, -390)];
+  const fat = { equityAt: () => 666.67 }; // margin 200 of ~667: f = 30%
+  assert.notEqual(stoploss.selectStop(ruin, fat).optimal, null, "a position that wipes out equity must be stopped");
+  assert.equal(stoploss.selectStop(ruin, null).optimal, null, "mean ROE alone would keep the winners and ignore the wipe-out");
+  console.log("PASS: stop selection finds the known optimum, defers to 'no stop' when winners dip as deep, and punishes ruin");
+}
+
+// 6. Real cached lead traders: the same numbers as tools/research/stoploss-three.mjs (V2 = entry path +
+//    exact in-life minute marks). Skipped when the local research caches are absent.
 const cacheDir = path.join(root, "tools", "cache");
-if (fs.existsSync(path.join(cacheDir, "raw_4908633203782592768.json"))) {
-  const rawXuanMing = JSON.parse(fs.readFileSync(path.join(cacheDir, "raw_4908633203782592768.json"), "utf8"));
-  const radarXM = analysis.analyzeStopLossRadar(rawXuanMing.positionHistory, rawXuanMing.orderHistory, rawXuanMing.meta, rawXuanMing.marketHistory);
-
-  assert.equal(radarXM.dominantLeverage, 5, "玄冥二老 dominant leverage is 5x");
-  assert.ok(radarXM.recommendedRoe >= 45 && radarXM.recommendedRoe <= 85, "玄冥二老 recommended stop-loss is bounded in range");
-  assert.ok(radarXM.winRetentionRate >= 94, "玄冥二老 win retention rate is >= 94%");
-  assert.equal(radarXM.isPreciseMae, true, "玄冥二老 with marketHistory is precise");
-  console.log(`PASS: 玄冥二老 verified (Lev: ${radarXM.dominantLeverage}x, Rec: ${radarXM.recommendedRoe}%, PriceDrop: ${radarXM.recommendedPriceDrop}%, WinRet: ${radarXM.winRetentionRate}%)`);
-}
-
-if (fs.existsSync(path.join(cacheDir, "raw_5075281354358777856.json"))) {
-  const rawAoYing = JSON.parse(fs.readFileSync(path.join(cacheDir, "raw_5075281354358777856.json"), "utf8"));
-  const radarAY = analysis.analyzeStopLossRadar(rawAoYing.positionHistory, rawAoYing.orderHistory, rawAoYing.meta, null);
-
-  assert.equal(radarAY.dominantLeverage, 10, "熬鹰资本 dominant leverage is 10x");
-  assert.equal(radarAY.hasSevereBagHolding, true, "熬鹰资本 flags severe bag holding");
-  assert.equal(radarAY.worstHistoricalRoeMae, 156.7, "熬鹰资本 worst historical drawdown is -156.7% ROE");
-  assert.ok(radarAY.lossStats.p90 > 30, "熬鹰资本 loss P90 reflects deep holding");
-  console.log(`PASS: 熬鹰资本 verified (Lev: ${radarAY.dominantLeverage}x, Rec: ${radarAY.recommendedRoe}%, BagAlert: ${radarAY.hasSevereBagHolding}, WorstDD: -${radarAY.worstHistoricalRoeMae}%)`);
-}
-
-if (fs.existsSync(path.join(cacheDir, "raw_5131925334830383361.json"))) {
-  const rawHai = JSON.parse(fs.readFileSync(path.join(cacheDir, "raw_5131925334830383361.json"), "utf8"));
-  const radarHai = analysis.analyzeStopLossRadar(rawHai.positionHistory, rawHai.orderHistory, rawHai.meta, rawHai.marketHistory);
-
-  assert.equal(radarHai.dominantLeverage, 10, "星辰社区-海 dominant leverage is 10x");
-  assert.equal(radarHai.hasSevereBagHolding, true, "星辰社区-海 flags severe bag holding");
-  assert.ok(radarHai.worstHistoricalRoeMae > 600, "星辰社区-海 worst historical drawdown > 600% ROE");
-  assert.ok(radarHai.recommendedRoe >= 50 && radarHai.recommendedRoe <= 75, "星辰社区-海 recommended stop loss is ~55-75% ROE");
-  assert.ok(radarHai.winRetentionRate >= 93, "星辰社区-海 win retention rate >= 93%");
-  console.log(`PASS: 星辰社区-海 verified (Lev: ${radarHai.dominantLeverage}x, Rec: ${radarHai.recommendedRoe}%, BagAlert: ${radarHai.hasSevereBagHolding}, WorstDD: -${radarHai.worstHistoricalRoeMae}%)`);
+const realTraders = [
+  // 玄冥二老's 428.4% is the TAIKOUSDT short squeezed to 0.538 (funding then made it a -52% row): a real drawdown
+  { id: "4908633203782592768", name: "玄冥二老", winnersP95: 91.4, worstLoss: 428.4 },
+  { id: "5131925334830383361", name: "星辰社区-海", winnersP95: 84.8, worstLoss: 652.4 },
+  { id: "5075281354358777856", name: "熬鹰资本", winnersP95: 30.0, worstLoss: 194.2 }
+];
+for (const trader of realTraders) {
+  const rawFile = path.join(cacheDir, `raw_${trader.id}.json`);
+  const marksFile = path.join(cacheDir, "mark1m", `${trader.id}.json`);
+  if (!fs.existsSync(rawFile) || !fs.existsSync(marksFile)) continue;
+  const raw = JSON.parse(fs.readFileSync(rawFile, "utf8"));
+  const windows = JSON.parse(fs.readFileSync(marksFile, "utf8"));
+  const symbols = {};
+  for (const [key, rows] of Object.entries(windows)) {
+    const symbol = key.split("|")[0];
+    (symbols[symbol] ||= { minutes: [], hours: [] }).minutes.push(...rows.map((r) => [r[0], r[2], r[3]]));
+  }
+  for (const marks of Object.values(symbols)) {
+    marks.minutes.sort((x, y) => x[0] - y[0]);
+    marks.minutes = marks.minutes.filter((row, i, all) => i === 0 || row[0] !== all[i - 1][0]);
+  }
+  const radar = stoploss.analyzeStopLossRadar(raw.positionHistory, raw.orderHistory, { symbols, failed: [] }, null);
+  near(radar.winStats.p95, trader.winnersP95, 0.5, `${trader.name} winners' MAE p95`);
+  near(radar.lossStats.max, trader.worstLoss, 0.5, `${trader.name} worst loss MAE`);
+  assert.equal(radar.stopSelection.objective, "meanRoe");
+  assert.equal(radar.isPreciseMae, true);
+  assert.ok(radar.recommendedRoe >= 10 && radar.recommendedRoe <= 95);
+  if (trader.name !== "熬鹰资本") assert.equal(radar.stopSelection.optimal, null, `${trader.name}: no stop beats every stop in-sample`);
+  console.log(`PASS: ${trader.name} (winners p95 ${radar.winStats.p95}, worst loss ${radar.lossStats.max}, optimal ${radar.stopSelection.optimal ?? "none"}, best stop ${radar.stopSelection.bestStop}, entry path ${radar.entryPathPositions}/${radar.positionCount})`);
 }
 
 // 4. Binance copy-setting URL detection test

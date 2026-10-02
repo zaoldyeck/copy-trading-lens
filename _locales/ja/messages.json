@@ -848,8 +848,14 @@
   "radarWorstDrawdown": {
     "message": "過去最大含み損"
   },
-  "radarConservative": {
-    "message": "保守的損切り設定"
+  "radarStableBandLabel": {
+    "message": "安定レンジ"
+  },
+  "radarStopOptionalNote": {
+    "message": "このトレーダーの履歴では、ストップロスが無い場合より優れているとは言えません。設定するなら {0}% が最もコストの小さい選択です。"
+  },
+  "radarStopTradeoff": {
+    "message": "この履歴では、{0}% に設定すると、発動する注文のうち最終的に利益だったものが {1} 件、損失だったものが {2} 件あります。"
   },
   "radarSevereBagWarning": {
     "message": "⚠️ 警告：過去に単一ポジションで -{0}% の深刻な含み損を耐えた履歴があります。ロスカット設定を強く推奨します。"

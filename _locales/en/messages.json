@@ -848,8 +848,14 @@
   "radarWorstDrawdown": {
     "message": "Worst Historical Drawdown"
   },
-  "radarConservative": {
-    "message": "Conservative Setting"
+  "radarStableBandLabel": {
+    "message": "Stable range"
+  },
+  "radarStopOptionalNote": {
+    "message": "On this trader's history, a stop-loss is not shown to beat having none. If you still want one, {0}% costs the least."
+  },
+  "radarStopTradeoff": {
+    "message": "On this history a {0}% stop would trigger on {1} trades that ended in profit and {2} that ended in loss."
   },
   "radarSevereBagWarning": {
     "message": "⚠️ Warning: Trader had historical position drawdown reaching -{0}%! Strictly recommend stop-loss to avoid blowups."

@@ -638,9 +638,11 @@
   // not reach: equity then is the equity when the fills begin, less the
   // closingPnl of rows closed in between and the transfers in between. Price
   // moves and funding on positions held before the fills are not visible.
-  function biggestBetOf({ orders, allPositions, betRows, transfers, marginBalance, roundStart, market }) {
+  // The account's equity at any moment of the fetched fills (src/equity.js), counted back from today's
+  // margin balance; null without a margin balance or market data. biggestBetOf and the stop-loss
+  // radar both read it, so it is built once per analysis.
+  function equityOf({ orders, allPositions, transfers, marginBalance, market }) {
     if (!(marginBalance > 0)) return null;
-    const { fillTimeOf, leverageFor } = global.CopyTradingLensPositions;
     const flows = transfers
       .filter((item) => String(item.coin || "USDT").toUpperCase() === "USDT")
       .map((item) => {
@@ -649,8 +651,12 @@
         return { time: num(firstDefined(item.time, item.ts, item.cTime), 0), amount: sign * amount };
       })
       .filter((flow) => flow.time > 0 && flow.amount !== 0);
-    const equity = global.CopyTradingLensEquity.equityCountBack({ orders, positionHistory: allPositions, flows, marginBalance, market });
+    return global.CopyTradingLensEquity.equityCountBack({ orders, positionHistory: allPositions, flows, marginBalance, market });
+  }
+
+  function biggestBetOf({ orders, allPositions, betRows, equity, roundStart }) {
     if (!equity) return null;
+    const { fillTimeOf, leverageFor } = global.CopyTradingLensPositions;
     const historyStart = orders.reduce((oldest, order) => Math.min(oldest, fillTimeOf(order) || Infinity), Infinity);
 
     let biggest = null;
@@ -903,266 +909,6 @@
       dominantSymbolShare: dominantSymbol ? safeDivide(dominantSymbol[1], closed.length, 0) : 0,
       tpMedianBps: median(priceMoves.filter((value) => value > 0)),
       lossMoveP90Bps: percentile(priceMoves.filter((value) => value < 0).map(Math.abs), 90)
-    };
-  }
-
-  function analyzeStopLossRadar(positions, orders = [], meta = {}, marketHistory = null) {
-    const list = Array.isArray(positions) ? positions : [];
-    if (list.length < 3) {
-      return {
-        insufficientData: true,
-        dominantLeverage: 1,
-        recommendedRoe: 50,
-        recommendedPriceDrop: 50,
-        conservativeRoe: 75,
-        aggressiveRoe: 30,
-        winRetentionRate: 100,
-        killedWinsCount: 0,
-        savedDisastersCount: 0,
-        hasSevereBagHolding: false,
-        worstHistoricalRoeMae: 0,
-        allStats: { median: 0, p50: 0, p75: 0, p90: 0, p95: 0, max: 0 },
-        winStats: { median: 0, p50: 0, p75: 0, p90: 0, p95: 0, max: 0 },
-        lossStats: { median: 0, p50: 0, p90: 0, max: 0 },
-        isPreciseMae: false,
-        simResults: []
-      };
-    }
-
-    const evaluated = [];
-    const leverages = [];
-
-    const fillsBySymbol = new Map();
-    for (const order of orders || []) {
-      const sym = String(order.symbol || "");
-      if (!sym) continue;
-      if (!fillsBySymbol.has(sym)) fillsBySymbol.set(sym, []);
-      fillsBySymbol.get(sym).push(order);
-    }
-
-    for (const p of list) {
-      const avgCost = num(p.avgCost, 0);
-      const avgClosePrice = num(p.avgClosePrice, 0);
-      const leverage = Math.max(1, num(p.leverage, num(p.lever, 1)));
-      leverages.push(leverage);
-      const side = String(p.side || (num(p.pnl, 0) < 0 ? "LONG" : "LONG")).toUpperCase();
-      const isShort = side.includes("SHORT");
-      const closingPnl = num(firstDefined(p.closingPnl, p.pnl), 0);
-      const roi = num(p.roi, 0);
-
-      if (!(avgCost > 0)) continue;
-
-      let priceMaePct = 0;
-      if (avgClosePrice > 0) {
-        priceMaePct = isShort
-          ? Math.max(0, (avgClosePrice - avgCost) / avgCost * 100)
-          : Math.max(0, (avgCost - avgClosePrice) / avgCost * 100);
-      }
-
-      const opened = num(firstDefined(p.opened, p.openTime), 0);
-      const closed = num(firstDefined(p.closed, p.uTime, p.closeTime), 0);
-      const sym = String(firstDefined(p.symbol, p.instId, ""));
-
-      // Intermediary adverse fills
-      const orderFills = fillsBySymbol.get(sym);
-      if (orderFills && opened > 0 && closed >= opened) {
-        for (const o of orderFills) {
-          const t = global.CopyTradingLensPositions?.fillTimeOf
-            ? global.CopyTradingLensPositions.fillTimeOf(o)
-            : num(firstDefined(o.fillTime, o.cTime), 0);
-          if (t >= opened && t <= closed) {
-            const price = num(firstDefined(o.avgPrice, o.fillPx, o.price), 0);
-            if (price > 0) {
-              const adverse = isShort
-                ? ((price - avgCost) / avgCost) * 100
-                : ((avgCost - price) / avgCost) * 100;
-              if (adverse > priceMaePct) priceMaePct = adverse;
-            }
-          }
-        }
-      }
-
-      // Public market mark candles
-      const historyMarks = marketHistory?.symbols?.[sym]?.marks;
-      const effectiveClose = closed > 0 ? closed : (opened > 0 ? (marketHistory?.nowMs || Date.now()) : 0);
-      if (Array.isArray(historyMarks) && opened > 0 && effectiveClose >= opened) {
-        for (const m of historyMarks) {
-          const mOpen = num(m[0], 0);
-          const mClose = num(m[2], 0);
-          if (mOpen <= effectiveClose && mClose >= opened) {
-            const high = num(m[4], num(m[3], avgCost));
-            const low = num(m[5], num(m[3], avgCost));
-            if (isShort && high > avgCost) {
-              const adverse = ((high - avgCost) / avgCost) * 100;
-              if (adverse > priceMaePct) priceMaePct = adverse;
-            } else if (!isShort && low < avgCost && low > 0) {
-              const adverse = ((avgCost - low) / avgCost) * 100;
-              if (adverse > priceMaePct) priceMaePct = adverse;
-            }
-          }
-        }
-      }
-
-      const roeMaePct = priceMaePct * leverage;
-      evaluated.push({
-        symbol: sym,
-        side,
-        leverage,
-        closingPnl,
-        // `roi` is a fraction of initial margin at any magnitude ("1.2" = +120%); see
-        // scripts/test-stop-loss-radar.mjs for the corpus check behind this.
-        roiPct: roi * 100,
-        priceMaePct,
-        roeMaePct,
-        isWin: closingPnl > 0,
-        isLoss: closingPnl < 0
-      });
-    }
-
-    if (!evaluated.length) {
-      return {
-        insufficientData: true,
-        dominantLeverage: 1,
-        recommendedRoe: 50,
-        recommendedPriceDrop: 50,
-        conservativeRoe: 75,
-        aggressiveRoe: 30,
-        winRetentionRate: 100,
-        killedWinsCount: 0,
-        savedDisastersCount: 0,
-        hasSevereBagHolding: false,
-        worstHistoricalRoeMae: 0,
-        winStats: { median: 0, p75: 0, p90: 0, p95: 0, max: 0 },
-        lossStats: { median: 0, p90: 0, max: 0 },
-        simResults: []
-      };
-    }
-
-    const wins = evaluated.filter((e) => e.isWin);
-    const losses = evaluated.filter((e) => e.isLoss);
-
-    const dominantLeverage = Math.round(median(leverages)) || 5;
-
-    const winRoeMae = wins.map((w) => w.roeMaePct);
-    const lossRoeMae = losses.map((l) => l.roeMaePct);
-    const allRoeMae = evaluated.map((e) => e.roeMaePct);
-
-    const allStats = {
-      median: percentile(allRoeMae, 50),
-      p50: percentile(allRoeMae, 50),
-      p75: percentile(allRoeMae, 75),
-      p90: percentile(allRoeMae, 90),
-      p95: percentile(allRoeMae, 95),
-      max: allRoeMae.length ? Math.max(...allRoeMae) : 0
-    };
-
-    const winStats = {
-      median: percentile(winRoeMae, 50),
-      p50: percentile(winRoeMae, 50),
-      p75: percentile(winRoeMae, 75),
-      p90: percentile(winRoeMae, 90),
-      p95: percentile(winRoeMae, 95),
-      max: winRoeMae.length ? Math.max(...winRoeMae) : 0
-    };
-
-    const lossStats = {
-      median: percentile(lossRoeMae, 50),
-      p50: percentile(lossRoeMae, 50),
-      p75: percentile(lossRoeMae, 75),
-      p90: percentile(lossRoeMae, 90),
-      p95: percentile(lossRoeMae, 95),
-      max: lossRoeMae.length ? Math.max(...lossRoeMae) : 0
-    };
-
-    const isPreciseMae = Boolean(marketHistory && Object.keys(marketHistory.symbols || {}).length > 0);
-
-    const hasSevereBagHolding = lossStats.max >= 100 || losses.some((l) => l.roiPct <= -100);
-
-    const candidateThresholds = [15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95];
-    const simResults = [];
-
-    for (const L of candidateThresholds) {
-      const killedWins = wins.filter((w) => w.roeMaePct >= L).length;
-      const winRetentionRate = wins.length ? ((wins.length - killedWins) / wins.length) * 100 : 100;
-      const savedDisasters = losses.filter((l) => l.roeMaePct >= L && l.roeMaePct > L * 1.2).length;
-
-      let grossWin = 0;
-      let grossLoss = 0;
-      for (const t of evaluated) {
-        if (t.roeMaePct >= L) {
-          grossLoss += L;
-        } else if (t.isWin) {
-          grossWin += Math.max(t.roiPct, 0);
-        } else {
-          grossLoss += Math.abs(t.roiPct);
-        }
-      }
-      const simulatedProfitFactor = grossLoss > 0 ? grossWin / grossLoss : 99;
-
-      simResults.push({
-        threshold: L,
-        winRetentionRate,
-        killedWins,
-        savedDisasters,
-        simulatedProfitFactor
-      });
-    }
-
-    let rawRec;
-    if (winStats.p95 > 0) {
-      rawRec = Math.round(winStats.p95 / 5) * 5;
-    } else if (lossStats.p90 > 0) {
-      // Data-driven fallback keyed off trader's actual loss cutoff threshold rather than an ungrounded magic number
-      rawRec = Math.min(85, Math.max(30, Math.round(lossStats.p90 / 5) * 5 + 10));
-    } else {
-      rawRec = 40;
-    }
-
-    const recommendedRoe = Math.min(85, Math.max(30, rawRec));
-    const conservativeRoe = Math.min(95, Math.max(recommendedRoe + 10, 75));
-    const aggressiveRoe = Math.max(20, Math.min(recommendedRoe - 10, 40));
-
-    const recSim = simResults.find((s) => s.threshold === recommendedRoe) || simResults[0];
-
-    return {
-      insufficientData: false,
-      dominantLeverage,
-      recommendedRoe,
-      recommendedPriceDrop: Number((recommendedRoe / dominantLeverage).toFixed(1)),
-      conservativeRoe,
-      aggressiveRoe,
-      winRetentionRate: Number(recSim.winRetentionRate.toFixed(1)),
-      killedWinsCount: recSim.killedWins,
-      savedDisastersCount: recSim.savedDisasters,
-      hasSevereBagHolding,
-      worstHistoricalRoeMae: Number(lossStats.max.toFixed(1)),
-      isPreciseMae,
-      pendingKlines: !isPreciseMae,
-      allStats: {
-        median: Number(allStats.p50.toFixed(1)),
-        p50: Number(allStats.p50.toFixed(1)),
-        p75: Number(allStats.p75.toFixed(1)),
-        p90: Number(allStats.p90.toFixed(1)),
-        p95: Number(allStats.p95.toFixed(1)),
-        max: Number(allStats.max.toFixed(1))
-      },
-      winStats: {
-        median: Number(winStats.p50.toFixed(1)),
-        p50: Number(winStats.p50.toFixed(1)),
-        p75: Number(winStats.p75.toFixed(1)),
-        p90: Number(winStats.p90.toFixed(1)),
-        p95: Number(winStats.p95.toFixed(1)),
-        max: Number(winStats.max.toFixed(1))
-      },
-      lossStats: {
-        median: Number(lossStats.p50.toFixed(1)),
-        p50: Number(lossStats.p50.toFixed(1)),
-        p75: Number(lossStats.p75.toFixed(1)),
-        p90: Number(lossStats.p90.toFixed(1)),
-        p95: Number(lossStats.p95.toFixed(1)),
-        max: Number(lossStats.max.toFixed(1))
-      },
-      simResults: simResults.filter((s) => [20, 35, 50, 75, 90].includes(s.threshold))
     };
   }
 
@@ -1507,14 +1253,19 @@
     // deposit was sized against an account the count-back cannot see (a 60M
     // USDT portfolio read a pre-start BTC short as 3x, bound by leverage).
     const openedInRound = roundStart ? roundPositions.filter((row) => positionOpenedAt(row) >= roundStart) : roundPositions;
+    const equity = equityOf({
+      orders: raw.orderHistory || [],
+      allPositions: raw.positionHistory || [],
+      transfers: raw.transferHistory || [],
+      marginBalance: meta.marginBalance,
+      market: raw.marketHistory
+    });
     const biggestBet = biggestBetOf({
       orders: raw.orderHistory || [],
       allPositions: raw.positionHistory || [],
       betRows: openedInRound,
-      transfers: raw.transferHistory || [],
-      marginBalance: meta.marginBalance,
-      roundStart,
-      market: raw.marketHistory
+      equity,
+      roundStart
     });
     const gaps = binanceDataGaps(raw);
     const { strategy, verdict } = gaps.length
@@ -1523,7 +1274,7 @@
         strategy: inferStrategy(summary, global.CopyTradingLensStyle.classify(raw.orderHistory || [])),
         verdict: buildVerdict(meta, summary, orders, transfers, live, biggestBet)
       };
-    const stopLossRadar = analyzeStopLossRadar(raw.positionHistory || [], raw.orderHistory || [], meta, raw.marketHistory);
+    const stopLossRadar = global.CopyTradingLensStopLoss.analyzeStopLossRadar(raw.positionHistory || [], raw.orderHistory || [], raw.positionMarks, equity);
     return {
       platform: "Binance",
       generatedAt: new Date().toISOString(),
@@ -1635,7 +1386,6 @@
     const { strategy, verdict } = gaps.length
       ? incompleteAnalysis(gaps)
       : { strategy: inferStrategy(summary, styleFromPositionRows(summary)), verdict: buildVerdict(meta, summary, orders, transfers, live) };
-    const stopLossRadar = analyzeStopLossRadar(raw.positionHistory || [], [], meta, null);
     return {
       platform: "OKX",
       generatedAt: new Date().toISOString(),
@@ -1646,7 +1396,6 @@
       live,
       // OKX serves no transfer history, so the account behind a bet is unknown.
       biggestBet: null,
-      stopLossRadar,
       strategy,
       verdict,
       rawCounts: {
@@ -1661,7 +1410,6 @@
   global.CopyTradingLensAnalysis = {
     analyzeBinance,
     analyzeOkx,
-    analyzeStopLossRadar,
     binanceDataGaps,
     inferStrategy,
     buildVerdict,

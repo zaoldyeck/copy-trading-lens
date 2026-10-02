@@ -848,8 +848,14 @@
   "radarWorstDrawdown": {
     "message": "历史最深持仓浮亏"
   },
-  "radarConservative": {
-    "message": "保守型止损建议"
+  "radarStableBandLabel": {
+    "message": "稳定区间"
+  },
+  "radarStopOptionalNote": {
+    "message": "以这位带单员的历史数据，看不出设止损比不设更好；若仍要设，{0}% 是代价最小的选择。"
+  },
+  "radarStopTradeoff": {
+    "message": "以这段历史，设 {0}% 会触发止损的单子里，最后盈利的有 {1} 笔、最后亏损的有 {2} 笔。"
   },
   "radarSevereBagWarning": {
     "message": "⚠️ 警告：该带单员历史曾出现单笔 -{0}% 的严重死扛！强烈建议启用仓位止损以阻截黑天鹅爆仓。"

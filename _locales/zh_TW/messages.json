@@ -848,8 +848,14 @@
   "radarWorstDrawdown": {
     "message": "歷史最深持倉浮虧"
   },
-  "radarConservative": {
-    "message": "保守型止損建議"
+  "radarStableBandLabel": {
+    "message": "穩定區間"
+  },
+  "radarStopOptionalNote": {
+    "message": "以這位帶單員的歷史資料，看不出設止損比不設更好；若仍要設，{0}% 是代價最小的選擇。"
+  },
+  "radarStopTradeoff": {
+    "message": "以這段歷史，設 {0}% 會觸發止損的單子裡，最後賺錢的有 {1} 筆、最後虧損的有 {2} 筆。"
   },
   "radarSevereBagWarning": {
     "message": "⚠️ 警告：該帶單員歷史曾出現單筆 -{0}% 的嚴重死扛！強烈建議啟用倉位止損以阻截黑天鵝爆倉。"
