@@ -1009,7 +1009,9 @@
         side,
         leverage,
         closingPnl,
-        roiPct: Math.abs(roi) < 1 && closingPnl !== 0 ? roi * 100 : roi,
+        // `roi` is a fraction of initial margin at any magnitude ("1.2" = +120%); see
+        // scripts/test-stop-loss-radar.mjs for the corpus check behind this.
+        roiPct: roi * 100,
         priceMaePct,
         roeMaePct,
         isWin: closingPnl > 0,

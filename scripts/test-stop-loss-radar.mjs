@@ -76,6 +76,23 @@ console.log("=== RUNNING UNIT TESTS FOR STOP LOSS RADAR ===");
   console.log("PASS: synthetic controlled positions verify MAE and bag holding detection");
 }
 
+// 2b. Binance's position-history `roi` is a FRACTION of initial margin ("1.2" = +120%), at any
+//     magnitude. Checked 2026-10-02 on 184,135 cached positions: 97.7% satisfy
+//     roi == closingPnl / (peak qty x avgCost / leverage), 15 satisfy it in percent units; 6,209 of the
+//     6,463 positions with |roi| >= 1 are fractions. A magnitude-based unit guess reads +120% as +1.2%.
+{
+  const positions = [
+    { symbol: "AUSDT", avgCost: 100, avgClosePrice: 112, closingPnl: 12, leverage: 10, side: "LONG", roi: 1.2 },
+    { symbol: "BUSDT", avgCost: 100, avgClosePrice: 105, closingPnl: 5, leverage: 10, side: "LONG", roi: 0.5 },
+    { symbol: "CUSDT", avgCost: 100, avgClosePrice: 99, closingPnl: -1, leverage: 10, side: "LONG", roi: -0.1 }
+  ];
+  const radar = analysis.analyzeStopLossRadar(positions, [], {}, null);
+  const atLoose = radar.simResults.find((row) => row.threshold === 90);
+  // nobody reaches a 90% ROE adverse move: gross win 120 + 50, gross loss 10
+  assert.ok(Math.abs(atLoose.simulatedProfitFactor - 17) < 0.01, `profit factor must read +120% as 120, got ${atLoose.simulatedProfitFactor}`);
+  console.log("PASS: roi >= 100% is read as a fraction of margin, not as a percent");
+}
+
 // 3. Real Cached Lead Traders Parity
 const cacheDir = path.join(root, "tools", "cache");
 if (fs.existsSync(path.join(cacheDir, "raw_4908633203782592768.json"))) {
