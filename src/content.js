@@ -847,7 +847,19 @@
 
     const deltaMin = selection?.deltaMin ?? (radar.tradeoff?.helpedUsdt ? (radar.tradeoff.helpedUsdt + radar.tradeoff.hurtUsdt) : 0);
     const deltaMax = selection?.deltaMax ?? deltaMin;
-    const gainText = deltaMin > 0 ? `+${exitMoneyRange(deltaMin, deltaMax)} USDT` : (deltaMin === 0 && deltaMax === 0 ? t("advisorKpiGainNone") : `${exitMoneyRange(deltaMin, deltaMax)} USDT`);
+    const baseline = selection?.baselinePnl ?? radar.tradeoff?.pnlNone;
+    let pctSuffix = "";
+    if (Number.isFinite(baseline) && Math.abs(baseline) > 0) {
+      const pLow = ((deltaMin / Math.abs(baseline)) * 100).toFixed(1);
+      const pHigh = ((deltaMax / Math.abs(baseline)) * 100).toFixed(1);
+      const signL = deltaMin > 0 ? "+" : "";
+      const signH = deltaMax > 0 ? "+" : "";
+      pctSuffix = deltaMin === deltaMax ? ` (${signL}${pLow}%)` : ` (${signL}${pLow}%～${signH}${pHigh}%)`;
+    }
+    const gainText = deltaMin > 0
+      ? `+${exitMoneyRange(deltaMin, deltaMax)} USDT${pctSuffix}`
+      : (deltaMin === 0 && deltaMax === 0 ? `${t("advisorKpiGainNone")}${pctSuffix || " (+0.0%)"}` : `${exitMoneyRange(deltaMin, deltaMax)} USDT${pctSuffix}`);
+    const gainClass = deltaMin > 0 ? "is-green" : (deltaMax < 0 ? "is-danger" : "is-gold");
 
     const hasInsuranceNote = optimal.stop === null && Number.isInteger(radar.recommendedRoe);
 
@@ -901,7 +913,7 @@
         ]),
         h("div", { class: "ctl-advisor-kpi-card" }, [
           h("span", { class: "ctl-advisor-kpi-label", text: `💰 ${t("advisorKpiGain")}` }),
-          h("strong", { class: "ctl-advisor-kpi-val is-green", text: gainText })
+          h("strong", { class: `ctl-advisor-kpi-val ${gainClass}`, text: gainText })
         ]),
         h("div", { class: "ctl-advisor-kpi-card" }, [
           h("span", { class: "ctl-advisor-kpi-label", text: `⚡ ${t("radarDominantLev")}` }),
